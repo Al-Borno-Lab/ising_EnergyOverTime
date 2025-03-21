@@ -69,11 +69,22 @@ for file in "$DIR"/*.mat; do
                 --truncate_idx "$high_idx" \
                 --confidence 0.8
             
-            # If phase CSV exists, append to the combined CSV (without header)
-            phase_csv="${phase_output_dir}/critical_values.csv"
-            if [ -f "$phase_csv" ]; then
-                tail -n +2 "$phase_csv" >> "$combined_csv"
-            fi
+            # Copy the phase-specific critical values to the combined CSV (without header)
+            # This replaces the old code that was causing duplication
+            # phase_csv="${phase_output_dir}/critical_values.csv"
+            # if [ -f "$phase_csv" ]; then
+            #     # Extract just the phase name from the suffix
+            #     phase_name="$suffix"
+                
+            #     # Get the values from the phase CSV (skipping header)
+            #     values=$(tail -n +2 "$phase_csv")
+                
+            #     # Only add to combined CSV if values exist
+            #     if [ -n "$values" ]; then
+            #         # Add to combined CSV with correct phase name
+            #         echo "$phase_name,$(echo "$values" | cut -d',' -f2-)" >> "$combined_csv"
+            #     fi
+            # fi
         done
         
         echo "Completed processing for $file"
