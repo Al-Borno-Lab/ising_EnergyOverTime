@@ -7,6 +7,8 @@ This module contains functions for analyzing energy patterns and correlations.
 """
 
 import numpy as np
+import pandas as pd
+import os
 from scipy.interpolate import CubicSpline
 from coniii.utils import k_corr
 import matplotlib.pyplot as plt
@@ -68,7 +70,7 @@ def evaluate_model_quality(original_data, model_samples, max_corr_order=6):
     
     return correlation_results
 
-def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_energy, energy_temp_spline=None):
+def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_energy, energy_temp_spline=None, output_dir=None):
     """
     Analyze neural stimuli data with respect to the Ising model.
     
@@ -84,6 +86,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
         Critical energy from phase transition analysis
     energy_temp_spline : CubicSpline, optional
         Spline function mapping temperature to energy
+    output_dir : str, optional
+        Directory to save analysis results
         
     Returns:
     --------
@@ -115,16 +119,58 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
         'critical_energy': critical_energy
     }
     
+    # If output directory is provided, save additional analysis data
+    if output_dir:
+        # Save neural stimuli data summary
+        stim_summary = {
+            'Stim_Index': range(3),
+            'Stim_Type': ['Stim_0', 'Stim_1', 'Stim_2'],
+            'Num_Trials': [neural_0.shape[0], neural_1.shape[0], neural_2.shape[0]],
+            'Num_Timepoints': [neural_0.shape[1], neural_1.shape[1], neural_2.shape[1]],
+            'Num_Neurons': [neural_0.shape[2], neural_1.shape[2], neural_2.shape[2]],
+            'Mean_Energy': [np.mean(e_0), np.mean(e_1), np.mean(e_2)],
+            'Min_Energy': [np.min(e_0), np.min(e_1), np.min(e_2)],
+            'Max_Energy': [np.max(e_0), np.max(e_1), np.max(e_2)]
+        }
+        pd.DataFrame(stim_summary).to_csv(os.path.join(output_dir, "neural_stimuli_summary.csv"), index=False)
+    
     # If spline function is provided, calculate effective temperatures
-    if energy_temp_spline is not None:
-        # This would map energy back to temperature for interpretation
+    if energy_temp_spline is not None and output_dir:
+        # Try to map energy back to temperature for interpretation
         # Note: This is an approximation and may not be valid for all energy values
-        # We would need to handle values outside the interpolation range
-        pass
+        # We need to handle values outside the interpolation range
+        try:
+            # Get the valid range for the spline
+            spline_x_min = energy_temp_spline.x[0]
+            spline_x_max = energy_temp_spline.x[-1]
+            
+            # Function to map energy to temperature within valid range
+            def energy_to_temp(energy):
+                # Clip energy values to the valid range for the spline
+                clipped_energy = np.clip(energy, spline_x_min, spline_x_max)
+                # Find temperature values through inverse lookup
+                temps = np.linspace(0.1, 2.0, 100)  # Temperature range
+                spline_energies = energy_temp_spline(temps)
+                # Find closest temperature for each energy
+                return [temps[np.abs(spline_energies - e).argmin()] for e in clipped_energy]
+            
+            # Calculate effective temperature for mean energy of each stimulus
+            mean_energies = [np.mean(e_0), np.mean(e_1), np.mean(e_2)]
+            effective_temps = energy_to_temp(mean_energies)
+            
+            # Save to CSV
+            temp_mapping = {
+                'Stim_Type': ['Stim_0', 'Stim_1', 'Stim_2'],
+                'Mean_Energy': mean_energies,
+                'Effective_Temperature': effective_temps
+            }
+            pd.DataFrame(temp_mapping).to_csv(os.path.join(output_dir, "energy_temperature_mapping.csv"), index=False)
+        except Exception as e:
+            print(f"Warning: Could not map energy to temperature: {e}")
     
     return results
 
-def calculate_statistics_across_trials(analysis_results, confidence=0.8):
+def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_dir=None):
     """
     Calculate statistics across trials for both kinematic and neural data.
     
@@ -134,6 +180,8 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8):
         Results from the analyze_neural_stimuli function
     confidence : float, optional
         Confidence level for intervals (default=0.8)
+    output_dir : str, optional
+        Directory to save statistics results
         
     Returns:
     --------
@@ -178,13 +226,34 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8):
             'lower': energy_lower,
             'upper': energy_upper
         })
+        
+        # Save statistics to CSV if output directory is provided
+        if output_dir:
+            # Kinematics statistics
+            time_points = list(range(len(kin_mean)))
+            kin_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': kin_mean,
+                'Lower_CI': kin_lower,
+                'Upper_CI': kin_upper
+            })
+            kin_stats_df.to_csv(os.path.join(output_dir, f"kinematics_stats_stim_{i}.csv"), index=False)
+            
+            # Energy statistics
+            energy_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': energy_mean,
+                'Lower_CI': energy_lower,
+                'Upper_CI': energy_upper
+            })
+            energy_stats_df.to_csv(os.path.join(output_dir, f"energy_stats_stim_{i}.csv"), index=False)
     
     return {
         'kinematics': kinematics_stats,
         'energy': energy_stats
     }
 
-def identify_transition_points(energy_data, kinematic_data, threshold=0.2):
+def identify_transition_points(energy_data, kinematic_data, threshold=0.2, output_dir=None, stim_idx=0):
     """
     Identify potential transition points in neural activity based on energy changes.
     
@@ -196,6 +265,10 @@ def identify_transition_points(energy_data, kinematic_data, threshold=0.2):
         Kinematic values over time
     threshold : float, optional
         Threshold for identifying significant changes (default=0.2)
+    output_dir : str, optional
+        Directory to save transition points data
+    stim_idx : int, optional
+        Stimulus index for file naming
         
     Returns:
     --------
@@ -219,5 +292,18 @@ def identify_transition_points(energy_data, kinematic_data, threshold=0.2):
         if point > 0 and point < len(kinematic_deriv) - 1:
             if np.abs(kinematic_deriv[point]) > np.std(kinematic_deriv):
                 transition_points.append(point)
+    
+    # Save transition points data to CSV if output directory is provided
+    if output_dir:
+        # Create a dataframe with all analysis data
+        transition_df = pd.DataFrame({
+            'Time_Index': range(len(energy_data)),
+            'Energy': energy_data,
+            'Energy_Derivative': energy_deriv,
+            'Kinematics': kinematic_data,
+            'Kinematics_Derivative': kinematic_deriv,
+            'Is_Transition_Point': [1 if i in transition_points else 0 for i in range(len(energy_data))]
+        })
+        transition_df.to_csv(os.path.join(output_dir, f"transition_analysis_stim_{stim_idx}.csv"), index=False)
     
     return transition_points

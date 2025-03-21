@@ -9,6 +9,7 @@ This module contains functions for creating and saving plots of model results.
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from scipy.interpolate import CubicSpline
 
 def create_output_directory(output_dir):
@@ -44,7 +45,8 @@ def plot_phase_transition(results, output_dir):
         
     Returns:
     --------
-    None
+    CubicSpline
+        Spline function that maps temperature to energy
     """
     # Extract data from results
     temp_range = results['temp_range']
@@ -74,6 +76,14 @@ def plot_phase_transition(results, output_dir):
     plt.savefig(os.path.join(output_dir, "avg_spin_vs_temp.png"))
     plt.close()
     
+    # Save data to CSV
+    spin_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Spin': pos_avg_pos,
+        'Negative_Initialization_Spin': neg_avg_pos
+    })
+    spin_df.to_csv(os.path.join(output_dir, "avg_spin_vs_temp.csv"), index=False)
+    
     # Plot 2: Heat capacity
     plt.figure(figsize=(10, 6))
     plt.title("Heat Capacity vs Temperature")
@@ -91,6 +101,14 @@ def plot_phase_transition(results, output_dir):
     plt.grid(alpha=0.3)
     plt.savefig(os.path.join(output_dir, "heat_capacity.png"))
     plt.close()
+    
+    # Save data to CSV
+    heat_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Heat_Capacity': avg_heat_capacity_pos,
+        'Negative_Initialization_Heat_Capacity': avg_heat_capacity_neg
+    })
+    heat_df.to_csv(os.path.join(output_dir, "heat_capacity.csv"), index=False)
     
     # Plot 3: Energy vs temperature
     plt.figure(figsize=(10, 6))
@@ -113,7 +131,37 @@ def plot_phase_transition(results, output_dir):
     plt.savefig(os.path.join(output_dir, "energy_vs_temp.png"))
     plt.close()
     
-    print(f"Phase transition plots saved to {output_dir}")
+    # Save data to CSV
+    energy_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Energy': pos_avg_energy,
+        'Negative_Initialization_Energy': neg_avg_energy
+    })
+    energy_df.to_csv(os.path.join(output_dir, "energy_vs_temp.csv"), index=False)
+    
+    # Save critical values to their own CSV
+    critical_df = pd.DataFrame({
+        'Phase': [os.path.basename(output_dir)],
+        'Critical_Temperature': [c_temp],
+        'Critical_Energy': [critical_energy]
+    })
+    
+    # Determine if it's a reach phase directory
+    base_dir = os.path.dirname(output_dir)
+    csv_path = os.path.join(base_dir, "critical_values.csv")
+    
+    # If the CSV exists, append to it, otherwise create it
+    if os.path.exists(csv_path):
+        existing_df = pd.read_csv(csv_path)
+        combined_df = pd.concat([existing_df, critical_df], ignore_index=True)
+        combined_df.to_csv(csv_path, index=False)
+    else:
+        critical_df.to_csv(csv_path, index=False)
+    
+    # Also save to the phase directory
+    critical_df.to_csv(os.path.join(output_dir, "critical_values.csv"), index=False)
+    
+    print(f"Phase transition plots and CSVs saved to {output_dir}")
     
     return CubicSpline(temp_range, pos_avg_energy)
 
@@ -205,8 +253,43 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"))
         plt.close()
+        
+        # Save data to CSV
+        time_points = list(range(len(kin['mean'])))
+        
+        # Kinematics CSV
+        kin_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Position': kin['mean'],
+            'Upper_CI': kin['upper'],
+            'Lower_CI': kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_kin in enumerate(kinematics):
+            if j != i and len(other_kin['mean']) == len(kin['mean']):
+                kin_df[f'Mean_Position_Stim_{j}'] = other_kin['mean']
+        
+        kin_df.to_csv(os.path.join(output_dir, f"kinematics_stim_{i}.csv"), index=False)
+        
+        # Energy CSV
+        eng_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Energy': eng['mean'],
+            'Upper_CI': eng['upper'],
+            'Lower_CI': eng['lower'],
+            'Critical_Energy': [critical_energy] * len(eng['mean']),
+            'Mean_Energy_Overall': [np.mean(eng['mean'])] * len(eng['mean'])
+        })
+        
+        # Add other stim means for comparison
+        for j, other_eng in enumerate(energy):
+            if j != i and len(other_eng['mean']) == len(eng['mean']):
+                eng_df[f'Mean_Energy_Stim_{j}'] = other_eng['mean']
+        
+        eng_df.to_csv(os.path.join(output_dir, f"energy_stim_{i}.csv"), index=False)
     
-    print(f"Energy and kinematic plots saved to {output_dir}")
+    print(f"Energy and kinematic plots and CSVs saved to {output_dir}")
 
 def plot_transition_points(energy_data, kinematic_data, transition_points, output_dir, stim_idx=0):
     """
@@ -263,7 +346,23 @@ def plot_transition_points(energy_data, kinematic_data, transition_points, outpu
     plt.savefig(os.path.join(output_dir, f"transition_points_stim_{stim_idx}.png"))
     plt.close()
     
-    print(f"Transition points plot saved to {output_dir}")
+    # Save data to CSV
+    time_points = list(range(len(kinematic_data)))
+    
+    # Create a dataframe with time, kinematic data, and energy data
+    transitions_df = pd.DataFrame({
+        'Time': time_points,
+        'Kinematic_Data': kinematic_data,
+        'Energy_Data': energy_data,
+    })
+    
+    # Add a column indicating if the point is a transition point
+    transitions_df['Is_Transition_Point'] = [1 if i in transition_points else 0 for i in time_points]
+    
+    # Save to CSV
+    transitions_df.to_csv(os.path.join(output_dir, f"transition_points_stim_{stim_idx}.csv"), index=False)
+    
+    print(f"Transition points plot and CSV saved to {output_dir}")
 
 def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0, bins=50):
     """
@@ -290,6 +389,7 @@ def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0
     plt.title(f"Distribution of Neural Energy Values, Stim_{stim_idx}")
     
     # Plot histogram
+    hist, bin_edges = np.histogram(energy_values, bins=bins, density=True)
     plt.hist(energy_values, bins=bins, alpha=0.7, color='steelblue', density=True)
     
     # Mark critical energy
@@ -309,7 +409,23 @@ def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0
     plt.savefig(os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.png"))
     plt.close()
     
-    print(f"Energy histogram saved to {output_dir}")
+    # Save histogram data to CSV
+    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+    hist_df = pd.DataFrame({
+        'Bin_Center': bin_centers,
+        'Density': hist,
+        'Bin_Left_Edge': bin_edges[:-1],
+        'Bin_Right_Edge': bin_edges[1:],
+    })
+    
+    # Add critical and mean energy values
+    hist_df['Critical_Energy'] = critical_energy
+    hist_df['Mean_Energy'] = mean_energy
+    
+    # Save to CSV
+    hist_df.to_csv(os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.csv"), index=False)
+    
+    print(f"Energy histogram and CSV saved to {output_dir}")
 
 def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=6):
     """
@@ -357,5 +473,13 @@ def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=
         
         plt.savefig(os.path.join(output_dir, f"correlation_order_{i}.png"))
         plt.close()
+        
+        # Save correlation data to CSV
+        corr_df = pd.DataFrame({
+            'Original_Correlation': original_corr,
+            'Model_Correlation': model_corr
+        })
+        corr_df['Correlation_Coefficient'] = corr_coef
+        corr_df.to_csv(os.path.join(output_dir, f"correlation_order_{i}.csv"), index=False)
     
-    print(f"Model quality plots saved to {output_dir}")
+    print(f"Model quality plots and CSVs saved to {output_dir}")

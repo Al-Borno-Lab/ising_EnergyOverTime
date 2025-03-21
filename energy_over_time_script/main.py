@@ -10,6 +10,7 @@ This script ties together the functionality from the other modules to:
 3. Analyze phase transitions in the model
 4. Calculate energy for neural states
 5. Generate visualizations of the results
+6. Output data to CSV files for further analysis
 
 Usage:
     python main.py --matlab_file path/to/file.mat [--options]
@@ -20,6 +21,7 @@ import argparse
 import numpy as np
 import time
 import matplotlib.pyplot as plt
+import pandas as pd
 from os.path import basename, splitext
 
 # Import custom modules
@@ -112,6 +114,16 @@ def run_analysis(args):
     N = bin_cat_p.shape[1]
     print(f"Number of neurons: {N}")
     
+    # Save preprocessing info to CSV
+    preprocessing_info = {
+        'Number_of_Neurons': N,
+        'Bin_Size': args.bin_size,
+        'Truncate_Index_Lower': args.truncate_idx_l,
+        'Truncate_Index_Upper': args.truncate_idx,
+        'Reach_Phase': os.path.basename(output_dir)
+    }
+    pd.DataFrame([preprocessing_info]).to_csv(os.path.join(output_dir, "preprocessing_info.csv"), index=False)
+    
     # Fit Ising model
     print("Fitting Ising model...")
     multipliers, solver = fit_ising_model(
@@ -121,6 +133,26 @@ def run_analysis(args):
         max_iter=args.max_iter,
         eta=args.eta
     )
+    
+    # Save model parameters to CSV
+    h_params = multipliers[:N]
+    J_params = multipliers[N:]
+    
+    model_params_df = pd.DataFrame({
+        'h_values': h_params
+    })
+    model_params_df.to_csv(os.path.join(output_dir, "h_parameters.csv"), index=False)
+    
+    # Create a dataframe for J parameters (coupling matrix)
+    J_dict = {}
+    k = 0
+    for i in range(N-1):
+        for j in range(i+1, N):
+            J_dict[f'J_{i+1}_{j+1}'] = J_params[k]
+            k += 1
+    
+    J_params_df = pd.DataFrame([J_dict])
+    J_params_df.to_csv(os.path.join(output_dir, "J_parameters.csv"), index=False)
     
     # Evaluate model quality
     print("Evaluating model quality...")
@@ -187,6 +219,13 @@ def run_analysis(args):
             # Get mean energy and kinematics
             mean_energy = np.mean(energy_data, axis=0)
             mean_kinematics = np.mean(analysis_results['x_stim_data'][i], axis=0)
+            
+            # Save raw data
+            raw_energy_df = pd.DataFrame(energy_data)
+            raw_energy_df.to_csv(os.path.join(output_dir, f"raw_energy_stim_{i}.csv"), index=False)
+            
+            raw_kinematics_df = pd.DataFrame(analysis_results['x_stim_data'][i])
+            raw_kinematics_df.to_csv(os.path.join(output_dir, f"raw_kinematics_stim_{i}.csv"), index=False)
             
             # Identify transition points
             transition_points = identify_transition_points(mean_energy, mean_kinematics)

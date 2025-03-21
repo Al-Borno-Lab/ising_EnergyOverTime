@@ -37,6 +37,10 @@ for file in "$DIR"/*.mat; do
         
         echo "Processing file: $file"
         
+        # Initialize combined CSV for critical values
+        combined_csv="${base_output_folder}/critical_values.csv"
+        echo "Phase,Critical_Temperature,Critical_Energy" > "$combined_csv"
+        
         # Process each phase of the reach
         for phase in "${REACH_PHASES[@]}"; do
             # Split the phase info
@@ -64,10 +68,17 @@ for file in "$DIR"/*.mat; do
                 --truncate_idx_l "$low_idx" \
                 --truncate_idx "$high_idx" \
                 --confidence 0.8
+            
+            # If phase CSV exists, append to the combined CSV (without header)
+            phase_csv="${phase_output_dir}/critical_values.csv"
+            if [ -f "$phase_csv" ]; then
+                tail -n +2 "$phase_csv" >> "$combined_csv"
+            fi
         done
         
         echo "Completed processing for $file"
         echo "Results saved to $base_output_folder"
+        echo "Critical values combined in $combined_csv"
         echo "-------------------------"
     fi
 done
