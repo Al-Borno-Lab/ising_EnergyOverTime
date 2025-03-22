@@ -51,7 +51,7 @@ if __name__ == "__main__":
         if args.TIME_SEG == 'pre':
             print("Using pre-reach time segment\n")
             save_path = f'{args.MODEL_SAVE_FILE_DIR}/{args.MOUSE}/pre_reach/session_{file[0:4]}_{N}_P_Cells/stim0/job_{args.JOB_NUM}'
-            
+
             for reach in range(len(spike_data[0])):
                 spike_data[0][reach] = spike_data[0][reach][:451, :]
         elif args.TIME_SEG == 'active':
@@ -77,7 +77,7 @@ if __name__ == "__main__":
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
-        np.save(f'{save_path}/full_reach_{args.JOB_NUM}.npy', stim_multipliers)
+        np.save(f'{save_path}/{args.TIME_SEG}_reach_{args.JOB_NUM}.npy', stim_multipliers)
 
 
 
