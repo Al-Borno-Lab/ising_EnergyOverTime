@@ -239,6 +239,7 @@ def load_data(b):
     return neural_stim, continuous_stim
 
 def ising_model_multipliers(spikes: np.ndarray,
+                            N: int,
                             save_dir: str):
     BIN_SIZE = 1
     SAMPLE_SIZE = 100000
@@ -246,15 +247,7 @@ def ising_model_multipliers(spikes: np.ndarray,
     MAX_ITER = 75
     ETA = 1e-3
 
-    stim_0 = spikes
-
-    # Concatenate all reaches together
-    bin_cat = np.vstack(stim_0)
-
-    bin_cat_p = preprocessingSpikes(bin_cat, BIN_SIZE)
-    bin_cat_p = 2 * bin_cat_p - 1
-
-    N = bin_cat_p.shape[1]
+    bin_cat_p = spikes
 
     solver = MCH(bin_cat_p,
                  sample_size=SAMPLE_SIZE,

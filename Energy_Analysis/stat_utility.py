@@ -165,12 +165,20 @@ def phase_graph(spins: np.ndarray, multipliers: list, n: int):
 
     avg_energy_c = []
 
-    temperature_range = np.arange(0.1, 3, 0.05)
+    temperature_range = []
     spins = spins.reshape(1, n)
-    for temp in temperature_range:
+    temp = 0.1
+    while temp < 3:
         print(f"temp: {temp}")
-
+        temperature_range.append(temp)
         _, net_spin, net_energy = metropolis(spins, multipliers, 1/temp)
+
+        if temp < 0.7:
+            temp += 0.1
+        elif temp < 1.7:
+            temp += 0.01
+        else:
+            temp += 0.1
 
         avg_spin += [net_spin]
 
