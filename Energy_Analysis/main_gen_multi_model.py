@@ -55,16 +55,19 @@ if __name__ == "__main__":
             for reach in range(len(spike_data[0])):
                 spike_data[0][reach] = spike_data[0][reach][:451, :]
         elif args.TIME_SEG == 'active':
+            print("Using active-reach time segment\n")
             save_path = f'{args.MODEL_SAVE_FILE_DIR}/{args.MOUSE}/active_reach/session_{file[0:4]}_{N}_P_Cells/stim0/job_{args.JOB_NUM}'
 
             for reach in range(len(spike_data[0])):
                 spike_data[0][reach] = spike_data[0][reach][451:, :]
         elif args.TIME_SEG == 'mid':
+            print("Using mid-reach time segment\n")
             save_path = f'{args.MODEL_SAVE_FILE_DIR}/{args.MOUSE}/mid_reach/session_{file[0:4]}_{N}_P_Cells/stim0/job_{args.JOB_NUM}'
 
             for reach in range(len(spike_data[0])):
                 spike_data[0][reach] = spike_data[0][reach][451:601, :]
         else:
+            print("Using full-reach time segment\n")
             save_path = f'{args.MODEL_SAVE_FILE_DIR}/{args.MOUSE}/full_reach/session_{file[0:4]}_{N}_P_Cells/stim0/job_{args.JOB_NUM}'
 
         cat_spikes = np.vstack(spike_data[0])
