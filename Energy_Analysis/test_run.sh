@@ -9,13 +9,12 @@ source /home/austin/Research_Projects/Inverse-Ising-solver-main/Abigail/Analysis
 
 for mouse in $MICE
 do
-	for i in {1..101}
+	for i in {1..11}
 	do
 		python3 main_gen_multi_model.py --DATA_LOAD_FILE_DIR "$DATA_LOAD_PATH" --MODEL_SAVE_FILE_DIR "$MODEL_SAVE_PATH" --JOB_NUM "$i" --MOUSE "$mouse" --TIME_SEG "pre"
 		python3 main_gen_multi_model.py --DATA_LOAD_FILE_DIR "$DATA_LOAD_PATH" --MODEL_SAVE_FILE_DIR "$MODEL_SAVE_PATH" --JOB_NUM "$i" --MOUSE "$mouse" --TIME_SEG "mid"
 		python3 main_gen_multi_model.py --DATA_LOAD_FILE_DIR "$DATA_LOAD_PATH" --MODEL_SAVE_FILE_DIR "$MODEL_SAVE_PATH" --JOB_NUM "$i" --MOUSE "$mouse" --TIME_SEG "active"
 		python3 main_gen_multi_model.py --DATA_LOAD_FILE_DIR "$DATA_LOAD_PATH" --MODEL_SAVE_FILE_DIR "$MODEL_SAVE_PATH" --JOB_NUM "$i" --MOUSE "$mouse" --TIME_SEG "full"
-		(i++)
 	done
 done
 
