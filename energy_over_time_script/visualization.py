@@ -267,6 +267,8 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             for trial in neural_data[i]:
                 # Calculate time-dependent firing rate
                 rate = calculate_time_dependent_firing_rate(trial, window_size)
+                # Ensure rate is 1-dimensional
+                rate = np.squeeze(rate)
                 firing_rates.append(rate)
             
             # Calculate mean and confidence intervals
@@ -274,6 +276,10 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             mean_firing = np.mean(firing_rates, axis=0)
             std_firing = np.std(firing_rates, axis=0)
             ci_firing = 1.96 * std_firing / np.sqrt(firing_rates.shape[0])
+            
+            # Ensure all arrays are 1-dimensional
+            mean_firing = np.squeeze(mean_firing)
+            ci_firing = np.squeeze(ci_firing)
             
             # Plot mean firing rate and confidence intervals
             plt.plot(mean_firing, '-r', label='mean')
