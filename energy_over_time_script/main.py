@@ -71,6 +71,8 @@ def parse_arguments():
                         help='Confidence level for statistical intervals (default: 0.8)')
     parser.add_argument('--skip_phase_analysis', action='store_true',
                         help='Skip phase transition analysis (useful for quick testing)')
+    parser.add_argument('--firing_rate_window', type=int, default=10,
+                        help='Window size for time-dependent firing rate calculation (default: 10)')
     
     return parser.parse_args()
 
@@ -209,7 +211,9 @@ def run_analysis(args):
         trial_statistics, 
         critical_energy, 
         output_dir,
-        title_prefix="Full Reach"
+        title_prefix="Full Reach",
+        neural_data=analysis_results['neural_binary'],
+        window_size=args.firing_rate_window
     )
     
     # Look for transition points in the first stimulus

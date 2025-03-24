@@ -10,6 +10,9 @@ fi
 DIR=$1
 NUM_REPETITIONS=$2
 
+# Default window size for firing rate calculation
+WINDOW_SIZE=10
+
 # Check if directory exists
 if [ ! -d "$DIR" ]; then
     echo "Error: Directory $DIR does not exist"
@@ -74,7 +77,8 @@ for file in "$DIR"/*.mat; do
                     --metropolis_samples 1000000 \
                     --truncate_idx_l "$low_idx" \
                     --truncate_idx "$high_idx" \
-                    --confidence 0.8
+                    --confidence 0.8 \
+                    --firing_rate_window "$WINDOW_SIZE"
             done
         done
         

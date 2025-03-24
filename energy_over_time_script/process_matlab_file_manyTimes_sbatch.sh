@@ -57,6 +57,7 @@ MATLAB_FILE=$1
 OUTPUT_DIR=$2
 LOW_IDX=$3
 HIGH_IDX=$4
+WINDOW_SIZE=$5
 
 # Create output directory if it doesn't exist
 mkdir -p "$OUTPUT_DIR"
@@ -76,7 +77,8 @@ singularity exec CONTAINER_PATH python main.py \
     --metropolis_samples 1000000 \
     --truncate_idx_l "$LOW_IDX" \
     --truncate_idx "$HIGH_IDX" \
-    --confidence 0.8
+    --confidence 0.8 \
+    --firing_rate_window "$WINDOW_SIZE"
 
 echo "Task completed for $OUTPUT_DIR"
 EOF
@@ -113,7 +115,7 @@ for file in "$DIR"/*.mat; do
                 echo "    Submitting job for repetition $rep of $NUM_REPETITIONS"
                 
                 # Submit the job
-                sbatch job_template.sh "$file" "$rep_output_dir" "$low_idx" "$high_idx"
+                sbatch job_template.sh "$file" "$rep_output_dir" "$low_idx" "$high_idx" "$WINDOW_SIZE"
                 
                 # Add a small delay to avoid overwhelming the scheduler
                 sleep 0.5

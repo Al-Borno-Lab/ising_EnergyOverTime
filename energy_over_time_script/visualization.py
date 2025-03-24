@@ -11,6 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.interpolate import CubicSpline
+from utils import calculate_time_dependent_firing_rate
 
 def create_output_directory(output_dir):
     """
@@ -165,7 +166,7 @@ def plot_phase_transition(results, output_dir):
     
     return CubicSpline(temp_range, pos_avg_energy)
 
-def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True):
+def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True, neural_data=None, window_size=10):
     """
     Plot energy and kinematic data across time.
     
@@ -181,6 +182,10 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         Prefix for plot titles (default="")
     show_mid_point : bool, optional
         Whether to mark the middle point (default=True)
+    neural_data : list, optional
+        List of neural data arrays for calculating firing rates (default=None)
+    window_size : int, optional
+        Size of the sliding window for firing rate calculation (default=10)
         
     Returns:
     --------
@@ -190,10 +195,12 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     energy = stats['energy']
     
     for i, (kin, eng) in enumerate(zip(kinematics, energy)):
-        plt.figure(figsize=(12, 10))
+        # Create figure with three subplots if neural data is provided
+        n_subplots = 3 if neural_data is not None else 2
+        plt.figure(figsize=(12, 4*n_subplots))
         
         # Top subplot for kinematics
-        plt.subplot(2, 1, 1)
+        plt.subplot(n_subplots, 1, 1)
         plt.title(f"{title_prefix} Kinematic Component Over Time, Stim_{i}")
         
         plt.plot(kin['mean'], '-r', label='mean')
@@ -220,8 +227,8 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.legend()
         plt.grid(alpha=0.3)
         
-        # Bottom subplot for energy
-        plt.subplot(2, 1, 2)
+        # Middle subplot for energy
+        plt.subplot(n_subplots, 1, 2)
         plt.title(f"{title_prefix} Energy of Neural Activity Over Time, Stim_{i}")
         
         # Fill between confidence intervals
@@ -249,6 +256,52 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.ylabel("Energy")
         plt.legend()
         plt.grid(alpha=0.3)
+        
+        # Bottom subplot for firing rates if neural data is provided
+        if neural_data is not None:
+            plt.subplot(n_subplots, 1, 3)
+            plt.title(f"{title_prefix} Time-Dependent Firing Rate (window={window_size}), Stim_{i}")
+            
+            # Calculate firing rates for each trial
+            firing_rates = []
+            for trial in neural_data[i]:
+                # Calculate time-dependent firing rate
+                rate = calculate_time_dependent_firing_rate(trial, window_size)
+                firing_rates.append(rate)
+            
+            # Calculate mean and confidence intervals
+            firing_rates = np.array(firing_rates)
+            mean_firing = np.mean(firing_rates, axis=0)
+            std_firing = np.std(firing_rates, axis=0)
+            ci_firing = 1.96 * std_firing / np.sqrt(firing_rates.shape[0])
+            
+            # Plot mean firing rate and confidence intervals
+            plt.plot(mean_firing, '-r', label='mean')
+            plt.fill_between(range(len(mean_firing)), 
+                           mean_firing - ci_firing,
+                           mean_firing + ci_firing,
+                           color='k', alpha=0.15)
+            
+            # Mark midpoint if requested
+            if show_mid_point and len(mean_firing) > 100:
+                mid_point = len(mean_firing) // 2
+                plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7)
+                plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+            
+            plt.xlabel("Time")
+            plt.ylabel("Firing Rate")
+            plt.legend()
+            plt.grid(alpha=0.3)
+            
+            # Save firing rate data to CSV
+            firing_df = pd.DataFrame({
+                'Time': range(len(mean_firing)),
+                'Mean_Firing_Rate': mean_firing,
+                'Upper_CI': mean_firing + ci_firing,
+                'Lower_CI': mean_firing - ci_firing,
+                'Window_Size': [window_size] * len(mean_firing)
+            })
+            firing_df.to_csv(os.path.join(output_dir, f"firing_rates_stim_{i}.csv"), index=False)
         
         plt.tight_layout()
         plt.savefig(os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"))

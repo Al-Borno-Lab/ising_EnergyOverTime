@@ -307,3 +307,38 @@ def calculate_statistics_with_ci(data, axis=1, confidence=0.8):
         upper_bounds.append(mu)
         
     return mean_values, lower_bounds, upper_bounds
+
+def calculate_time_dependent_firing_rate(spikes, window_size=10):
+    """
+    Calculate time-dependent firing rate using a sliding window.
+    
+    Parameters:
+    -----------
+    spikes : ndarray
+        Binary spike data (0 or 1)
+    window_size : int, optional
+        Size of the sliding window for rate calculation (default=10)
+        
+    Returns:
+    --------
+    ndarray
+        Time-dependent firing rate
+    """
+    # Ensure spikes are binary
+    if np.min(spikes) < 0:
+        spikes = (spikes > 0).astype(int)
+    
+    # Calculate firing rate using sliding window
+    firing_rate = np.zeros_like(spikes, dtype=float)
+    half_window = window_size // 2
+    
+    for t in range(spikes.shape[0]):
+        # Define window boundaries
+        start_idx = max(0, t - half_window)
+        end_idx = min(spikes.shape[0], t + half_window + 1)
+        
+        # Calculate rate in window
+        window_spikes = spikes[start_idx:end_idx]
+        firing_rate[t] = np.mean(window_spikes)
+    
+    return firing_rate
