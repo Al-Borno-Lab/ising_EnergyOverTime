@@ -212,7 +212,7 @@ def run_analysis(args):
         critical_energy, 
         output_dir,
         title_prefix="Full Reach",
-        neural_data=analysis_results['neural_binary'],
+        neural_data=neural_stim,
         window_size=args.firing_rate_window
     )
     

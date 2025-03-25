@@ -183,7 +183,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     show_mid_point : bool, optional
         Whether to mark the middle point (default=True)
     neural_data : list, optional
-        List of neural data arrays for calculating firing rates (default=None)
+        List of neural data arrays where each stimulus contains trials of binary spike vectors (default=None)
     window_size : int, optional
         Size of the sliding window for firing rate calculation (default=10)
         
@@ -262,17 +262,21 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             plt.subplot(n_subplots, 1, 3)
             plt.title(f"{title_prefix} Time-Dependent Firing Rate (window={window_size}), Stim_{i}")
             
-            # Calculate firing rates for each trial
+            # Calculate firing rates for each trial in the current stimulus
             firing_rates = []
             for trial in neural_data[i]:
-                # Calculate time-dependent firing rate
+                # Calculate time-dependent firing rate for this trial
+                # trial shape is (time_bins, num_neurons)
+                # We want the mean firing rate across all neurons
                 rate = calculate_time_dependent_firing_rate(trial, window_size)
                 # Ensure rate is 1-dimensional
                 rate = np.squeeze(rate)
                 firing_rates.append(rate)
             
-            # Calculate mean and confidence intervals
+            # Convert to numpy array for easier computation
             firing_rates = np.array(firing_rates)
+            
+            # Calculate mean and confidence intervals across trials
             mean_firing = np.mean(firing_rates, axis=0)
             std_firing = np.std(firing_rates, axis=0)
             ci_firing = 1.96 * std_firing / np.sqrt(firing_rates.shape[0])

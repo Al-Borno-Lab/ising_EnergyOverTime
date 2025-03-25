@@ -315,21 +315,21 @@ def calculate_time_dependent_firing_rate(spikes, window_size=10):
     Parameters:
     -----------
     spikes : ndarray
-        Binary spike data (0 or 1)
+        Binary spike data (0 or 1) with shape (time_bins, num_neurons)
     window_size : int, optional
         Size of the sliding window for rate calculation (default=10)
         
     Returns:
     --------
     ndarray
-        Time-dependent firing rate
+        Time-dependent firing rate averaged across neurons
     """
     # Ensure spikes are binary
     if np.min(spikes) < 0:
         spikes = (spikes > 0).astype(int)
     
     # Calculate firing rate using sliding window
-    firing_rate = np.zeros_like(spikes, dtype=float)
+    firing_rate = np.zeros(spikes.shape[0], dtype=float)
     half_window = window_size // 2
     
     for t in range(spikes.shape[0]):
@@ -337,8 +337,9 @@ def calculate_time_dependent_firing_rate(spikes, window_size=10):
         start_idx = max(0, t - half_window)
         end_idx = min(spikes.shape[0], t + half_window + 1)
         
-        # Calculate rate in window
+        # Calculate rate in window for each neuron
         window_spikes = spikes[start_idx:end_idx]
+        # Average across neurons
         firing_rate[t] = np.mean(window_spikes)
     
     return firing_rate
