@@ -41,11 +41,15 @@ for file in "$DIR"/*.mat; do
         # Get the filename without path and extension
         filename=$(basename "$file" .mat)
         
-        # Create a main folder for this file's outputs
-        base_output_folder="${DIR}/${filename}_results"
+        # Extract experiment name (assuming it's the first part of the filename before any special characters)
+        experiment_name=$(echo "$filename" | cut -d'_' -f1)
+        
+        # Create a main folder for this experiment's outputs
+        base_output_folder="${DIR}/${experiment_name}_results"
         mkdir -p "$base_output_folder"
         
         echo "Processing file: $file"
+        echo "Experiment name: $experiment_name"
         
         # Process each phase of the reach
         for phase in "${REACH_PHASES[@]}"; do
@@ -56,8 +60,8 @@ for file in "$DIR"/*.mat; do
             
             # Run the analysis N times for this phase
             for (( rep=1; rep<=$NUM_REPETITIONS; rep++ )); do
-                # Create repetition-specific output directory
-                rep_output_dir="${base_output_folder}/${suffix}_rep${rep}"
+                # Create repetition-specific output directory with experiment name
+                rep_output_dir="${base_output_folder}/${experiment_name}_rep${rep}/${suffix}"
                 mkdir -p "$rep_output_dir"
                 
                 echo "    Repetition $rep of $NUM_REPETITIONS"
