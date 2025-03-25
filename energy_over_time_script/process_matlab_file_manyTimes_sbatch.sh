@@ -48,8 +48,8 @@ cat > job_template.sh << 'EOF'
 #SBATCH --nodes=1
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=16G
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=256G
 #SBATCH --output=ising_task_%j.log
 
 # Arguments passed to this script
