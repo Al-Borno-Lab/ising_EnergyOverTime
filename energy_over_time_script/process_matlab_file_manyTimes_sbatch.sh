@@ -19,6 +19,9 @@ fi
 DIR=$1
 NUM_REPETITIONS=$2
 
+# Define window size for firing rate calculation
+WINDOW_SIZE=10
+
 # Check if directory exists
 if [ ! -d "$DIR" ]; then
     echo "Error: Directory $DIR does not exist"
