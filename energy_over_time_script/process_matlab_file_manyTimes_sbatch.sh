@@ -7,7 +7,7 @@
 #SBATCH --output=ising_master_%j.log
 
 # Path to your singularity container
-CONTAINER="~/projectDir/singularity-env/inverseIsing.sif"
+CONTAINER="~/projectDir/singularity-env/inverse-ising-arm.sif"
 
 # Check if directory and number of repetitions are provided
 if [ $# -lt 2 ]; then
@@ -63,12 +63,12 @@ WINDOW_SIZE=$5
 mkdir -p "$OUTPUT_DIR"
 
 # Run the Python script inside the singularity container
-singularity exec CONTAINER_PATH python main.py \
+singularity exec CONTAINER_PATH /entrypoint.sh python main.py \
     --matlab_file "$MATLAB_FILE" \
     --output_dir "$OUTPUT_DIR" \
     --bin_size 1 \
     --sample_size 10000 \
-    --n_cpus 8 \
+    --n_cpus 64 \
     --max_iter 75 \
     --eta 1e-3 \
     --temp_min 0.1 \
