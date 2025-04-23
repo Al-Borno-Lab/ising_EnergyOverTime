@@ -91,12 +91,26 @@ def identifyReactiveTScore(neural_stim, continuous_stim, window_size):
 
 def average_position(position_matrix):
     min_time_points = min(matrix.shape[0] for matrix in position_matrix)
+    temp_pos = []
+    for reach in range(len(position_matrix)):
+        temp_pos += [position_matrix[reach][:min_time_points, 0]]
 
-    truncated_matrices = [matrix[:min_time_points, :] for matrix in position_matrix]
+    avg_position = np.mean(temp_pos, axis=0)
+    std_position = np.std(temp_pos, axis=0)
 
-    avg_position = np.mean(np.stack(truncated_matrices), axis=0)
+    return avg_position, std_position
 
-    return avg_position
+def average_velocity(velocity_matrix):
+    min_time_points = min(matrix.shape[0] for matrix in velocity_matrix)
+    temp_pos = []
+    for reach in range(len(velocity_matrix)):
+        temp_pos += [velocity_matrix[reach][:min_time_points, 4]]
+
+    avg_velocity = np.mean(temp_pos, axis=0)
+    std_velocity = np.std(temp_pos, axis=0)
+
+    return avg_velocity, std_velocity
+
 
 def rolling_average_firing_rate_2d_per_cell_all_reach(spike_matrix, window_size):
     reaches = len(spike_matrix)
@@ -120,6 +134,33 @@ def rolling_average_firing_rate_2d_per_cell_all_reach(spike_matrix, window_size)
     avg_firing_rate = np.mean(np.stack(firing_rate_matrices), axis=0)  # Use np.stack to enforce uniform shape
 
     return avg_firing_rate
+
+
+def rolling_avg_fr_pre_reach(spike_matrix, reach_onset, window_size):
+    num_neurons = spike_matrix.shape[1]
+    firing_rate_matrix = np.zeros_like(spike_matrix[:reach_onset], dtype=float)
+
+    for neuron in range(num_neurons):
+        spike_vector = spike_matrix[:reach_onset, neuron]
+        cumsum = np.cumsum(np.insert(spike_vector, 0, 0))
+        rolling_sum = cumsum[window_size:] - cumsum[:-window_size]
+        firing_rate = rolling_sum / window_size
+        firing_rate_matrix[:, neuron] = np.concatenate((np.zeros(window_size - 1), firing_rate))
+
+    return firing_rate_matrix
+
+def rolling_avg_fr_reach(spike_matrix, reach_onset, window_size):
+    num_neurons = spike_matrix.shape[1]
+    firing_rate_matrix = np.zeros_like(spike_matrix[reach_onset:reach_onset+201], dtype=float)
+
+    for neuron in range(num_neurons):
+        spike_vector = spike_matrix[reach_onset:reach_onset+201, neuron]
+        cumsum = np.cumsum(np.insert(spike_vector, 0, 0))
+        rolling_sum = cumsum[window_size:] - cumsum[:-window_size]
+        firing_rate = rolling_sum / window_size
+        firing_rate_matrix[:, neuron] = np.concatenate((np.zeros(window_size - 1), firing_rate))
+
+    return firing_rate_matrix
 
 def rolling_average_firing_rate_2d(spike_matrix, window_size):
   num_neurons = spike_matrix.shape[1]
@@ -239,26 +280,18 @@ def load_data(b):
     return neural_stim, continuous_stim
 
 def ising_model_multipliers(spikes: np.ndarray,
+                            N: int,
                             save_dir: str):
-    BIN_SIZE = 1
     SAMPLE_SIZE = 100000
     N_CPUS = os.cpu_count()
     MAX_ITER = 75
     ETA = 1e-3
 
-    stim_0 = spikes
-
-    # Concatenate all reaches together
-    bin_cat = np.vstack(stim_0)
-
-    bin_cat_p = preprocessingSpikes(bin_cat, BIN_SIZE)
-    bin_cat_p = 2 * bin_cat_p - 1
-
-    N = bin_cat_p.shape[1]
+    bin_cat_p = spikes
 
     solver = MCH(bin_cat_p,
                  sample_size=SAMPLE_SIZE,
-                 rng=np.random.RandomState(0),
+                 rng=np.random.RandomState(),
                  n_cpus=N_CPUS,
                  sampler_kw={'boost':True})
 
