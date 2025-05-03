@@ -1,0 +1,9 @@
+**/*.json
+**/*.jsonl
+**/*.jsonl.gz
+**/*.jsonl.gz.part
+**/*.jsonl.gz.part.1
+**/*.jsonl.gz.part.2
+**/*.jsonl.gz.part.3
+
+/data
