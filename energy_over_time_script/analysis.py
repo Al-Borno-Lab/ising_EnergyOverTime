@@ -307,3 +307,254 @@ def identify_transition_points(energy_data, kinematic_data, threshold=0.2, outpu
         transition_df.to_csv(os.path.join(output_dir, f"transition_analysis_stim_{stim_idx}.csv"), index=False)
     
     return transition_points
+
+def analyze_wells_data(neural_data, behavior_data, multipliers, critical_energy, energy_temp_spline=None, output_dir=None):
+    """
+    Analyze Wells lab data with respect to the Ising model.
+    This version handles stacked reaches instead of separate stimuli.
+    
+    Parameters:
+    -----------
+    neural_data : list of ndarrays
+        List of neural data arrays, one per reach
+    behavior_data : list of ndarrays
+        List of behavior data arrays, one per reach
+    multipliers : ndarray
+        Model parameters (h, J)
+    critical_energy : float
+        Critical energy from phase transition analysis
+    energy_temp_spline : CubicSpline, optional
+        Spline function mapping temperature to energy
+    output_dir : str, optional
+        Directory to save analysis results
+        
+    Returns:
+    --------
+    dict
+        Dictionary of analysis results
+    """
+    from model import calc_e
+    
+    # Convert behavior data to numpy arrays
+    x_positions = []
+    y_positions = []
+    for reach in behavior_data:
+        x_positions.append(reach[:, 0])  # Assuming first column is x position
+        y_positions.append(reach[:, 1])  # Assuming second column is y position
+    
+    # Convert neural data to binary format and stack all reaches
+    stacked_neural = []
+    for reach in neural_data:
+        # Convert to binary if needed
+        binary_reach = (np.asarray(reach) > 0) * 1
+        stacked_neural.append(binary_reach)
+    
+    # Calculate energy for each reach
+    reach_energies = []
+    for reach in stacked_neural:
+        reach_energy = np.asarray([calc_e(i, multipliers) for i in reach])
+        reach_energies.append(reach_energy)
+    
+    # Return comprehensive analysis data
+    results = {
+        'x_positions': x_positions,
+        'y_positions': y_positions,
+        'neural_binary': stacked_neural,
+        'energy_values': reach_energies,
+        'critical_energy': critical_energy
+    }
+    
+    # If output directory is provided, save additional analysis data
+    if output_dir:
+        # Save reach data summary
+        reach_summary = {
+            'Reach_Index': range(len(neural_data)),
+            'Num_Timepoints': [reach.shape[0] for reach in stacked_neural],
+            'Num_Neurons': [reach.shape[1] for reach in stacked_neural],
+            'Mean_Energy': [np.mean(e) for e in reach_energies],
+            'Min_Energy': [np.min(e) for e in reach_energies],
+            'Max_Energy': [np.max(e) for e in reach_energies]
+        }
+        pd.DataFrame(reach_summary).to_csv(os.path.join(output_dir, "reach_summary.csv"), index=False)
+    
+    # If spline function is provided, calculate effective temperatures
+    if energy_temp_spline is not None and output_dir:
+        try:
+            # Get the valid range for the spline
+            spline_x_min = energy_temp_spline.x[0]
+            spline_x_max = energy_temp_spline.x[-1]
+            
+            # Function to map energy to temperature within valid range
+            def energy_to_temp(energy):
+                # Clip energy values to the valid range for the spline
+                clipped_energy = np.clip(energy, spline_x_min, spline_x_max)
+                # Find temperature values through inverse lookup
+                temps = np.linspace(0.1, 2.0, 100)  # Temperature range
+                spline_energies = energy_temp_spline(temps)
+                # Find closest temperature for each energy
+                return [temps[np.abs(spline_energies - e).argmin()] for e in clipped_energy]
+            
+            # Calculate effective temperature for mean energy of each reach
+            mean_energies = [np.mean(e) for e in reach_energies]
+            effective_temps = energy_to_temp(mean_energies)
+            
+            # Save to CSV
+            temp_mapping = {
+                'Reach_Index': range(len(neural_data)),
+                'Mean_Energy': mean_energies,
+                'Effective_Temperature': effective_temps
+            }
+            pd.DataFrame(temp_mapping).to_csv(os.path.join(output_dir, "energy_temperature_mapping.csv"), index=False)
+        except Exception as e:
+            print(f"Warning: Could not map energy to temperature: {e}")
+    
+    return results
+
+def calculate_statistics_across_reaches(analysis_results, confidence=0.8, output_dir=None):
+    """
+    Calculate statistics across reaches for both kinematic and neural data.
+    
+    Parameters:
+    -----------
+    analysis_results : dict
+        Results from the analyze_wells_data function
+    confidence : float, optional
+        Confidence level for intervals (default=0.8)
+    output_dir : str, optional
+        Directory to save statistics results
+        
+    Returns:
+    --------
+    dict
+        Dictionary containing mean and confidence intervals for each measure
+    """
+    from utils import mean_confidence_interval
+    
+    x_positions = analysis_results['x_positions']
+    y_positions = analysis_results['y_positions']
+    energy_values = analysis_results['energy_values']
+    
+    # Initialize containers for results
+    kinematics_stats = []
+    energy_stats = []
+    
+    # Calculate statistics for each reach
+    for i, (x_pos, y_pos, e_vals) in enumerate(zip(x_positions, y_positions, energy_values)):
+        # Kinematics statistics
+        kin_mean, kin_lower, kin_upper = [], [], []
+        for j in range(len(x_pos)):
+            # Calculate for x position
+            m_x, ml_x, mu_x = mean_confidence_interval(x_pos[j], confidence)
+            # Calculate for y position
+            m_y, ml_y, mu_y = mean_confidence_interval(y_pos[j], confidence)
+            
+            kin_mean.append((m_x, m_y))
+            kin_lower.append((ml_x, ml_y))
+            kin_upper.append((mu_x, mu_y))
+        
+        # Energy statistics
+        energy_mean, energy_lower, energy_upper = [], [], []
+        for j in range(len(e_vals)):
+            m, ml, mu = mean_confidence_interval(e_vals[j], confidence)
+            energy_mean.append(m)
+            energy_lower.append(ml)
+            energy_upper.append(mu)
+        
+        kinematics_stats.append({
+            'mean': kin_mean,
+            'lower': kin_lower,
+            'upper': kin_upper
+        })
+        
+        energy_stats.append({
+            'mean': energy_mean,
+            'lower': energy_lower,
+            'upper': energy_upper
+        })
+        
+        # Save statistics to CSV if output directory is provided
+        if output_dir:
+            # Kinematics statistics
+            time_points = list(range(len(kin_mean)))
+            kin_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'X_Mean': [m[0] for m in kin_mean],
+                'Y_Mean': [m[1] for m in kin_mean],
+                'X_Lower_CI': [l[0] for l in kin_lower],
+                'X_Upper_CI': [u[0] for u in kin_upper],
+                'Y_Lower_CI': [l[1] for l in kin_lower],
+                'Y_Upper_CI': [u[1] for u in kin_upper]
+            })
+            kin_stats_df.to_csv(os.path.join(output_dir, f"kinematics_stats_reach_{i}.csv"), index=False)
+            
+            # Energy statistics
+            energy_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': energy_mean,
+                'Lower_CI': energy_lower,
+                'Upper_CI': energy_upper
+            })
+            energy_stats_df.to_csv(os.path.join(output_dir, f"energy_stats_reach_{i}.csv"), index=False)
+    
+    return {
+        'kinematics': kinematics_stats,
+        'energy': energy_stats
+    }
+
+def identify_reach_transition_points(energy_data, x_positions, y_positions, threshold=0.2, output_dir=None, reach_idx=0):
+    """
+    Identify potential transition points in neural activity based on energy changes for Wells data.
+    
+    Parameters:
+    -----------
+    energy_data : ndarray
+        Energy values over time
+    x_positions : ndarray
+        X position values over time
+    y_positions : ndarray
+        Y position values over time
+    threshold : float, optional
+        Threshold for identifying significant changes (default=0.2)
+    output_dir : str, optional
+        Directory to save transition points data
+    reach_idx : int, optional
+        Reach index for file naming
+        
+    Returns:
+    --------
+    list
+        Indices of potential transition points
+    """
+    # Calculate derivatives
+    energy_deriv = np.gradient(energy_data)
+    x_deriv = np.gradient(x_positions)
+    y_deriv = np.gradient(y_positions)
+    
+    # Find points where energy derivative exceeds threshold
+    significant_points = np.where(np.abs(energy_deriv) > threshold * np.std(energy_deriv))[0]
+    
+    # Filter points to find those with corresponding kinematic changes
+    transition_points = []
+    for point in significant_points:
+        if point > 0 and point < len(x_deriv) - 1:
+            # Check if there's a significant change in either x or y position
+            if (np.abs(x_deriv[point]) > np.std(x_deriv) or 
+                np.abs(y_deriv[point]) > np.std(y_deriv)):
+                transition_points.append(point)
+    
+    # Save transition points data to CSV if output directory is provided
+    if output_dir:
+        # Create a dataframe with all analysis data
+        transition_df = pd.DataFrame({
+            'Time_Index': range(len(energy_data)),
+            'Energy': energy_data,
+            'Energy_Derivative': energy_deriv,
+            'X_Position': x_positions,
+            'Y_Position': y_positions,
+            'X_Derivative': x_deriv,
+            'Y_Derivative': y_deriv,
+            'Is_Transition_Point': [1 if i in transition_points else 0 for i in range(len(energy_data))]
+        })
+        transition_df.to_csv(os.path.join(output_dir, f"transition_analysis_reach_{reach_idx}.csv"), index=False)
+    
+    return transition_points

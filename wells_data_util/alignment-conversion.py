@@ -14,8 +14,8 @@ def load_data():
     return reach_data, neural_data
 
 def process_behavior_data(reach_data):
-    behavior = []
-    behavior_time = []
+    behavior = {}
+    behavior_time = {}
     
     # Get unique mouse IDs from reach data
     mouse_ids = set(reach_data['mouse'].values())
@@ -41,20 +41,20 @@ def process_behavior_data(reach_data):
             # Assuming 150Hz sampling rate for behavior data
             time_points = np.arange(-reach_max_idx/150.0, (len(x_pos)-reach_max_idx)/150.0, 1/150.0)
             
-            # Combine x and y positions into a single array
-            positions = list(zip(x_pos, y_pos))
+            # Combine x, y positions and time into a single array
+            positions = list(zip(x_pos, y_pos, time_points))
             mouse_behavior.append(positions)
             mouse_behavior_time.append(time_points.tolist())
         
-        behavior.append(mouse_behavior)
-        behavior_time.append(mouse_behavior_time)
+        behavior[str(mouse_id)] = mouse_behavior
+        behavior_time[str(mouse_id)] = mouse_behavior_time
     
     return behavior, behavior_time
 
 def process_neural_data(neural_data, reach_data):
-    neural = []
-    neural_time = []
-    neural_metadata = []  # New list to store metadata
+    neural = {}
+    neural_time = {}
+    neural_metadata = {}
     
     # Get unique mouse IDs from neural data
     mouse_ids = set(neural_data['mouse'].values())
@@ -66,7 +66,7 @@ def process_neural_data(neural_data, reach_data):
         # Initialize mouse neural arrays
         mouse_neural = []
         mouse_neural_time = []
-        mouse_metadata = []  # New list to store metadata for this mouse
+        mouse_metadata = []
         
         # Get all reaches for this mouse
         mouse_reaches = [k for k, v in reach_data['mouse'].items() if v == mouse_id]
@@ -107,13 +107,17 @@ def process_neural_data(neural_data, reach_data):
         for neuron_id in mouse_neurons:
             neuron_metadata = {
                 'depth': neural_data['depth'][neuron_id],
-                'layer': neural_data['layer'][neuron_id]
+                'layer': neural_data['layer'][neuron_id],
+                'waveform_duration': neural_data['waveform_duration'][neuron_id],
+                'waveform_PTratio': neural_data['waveform_PTratio'][neuron_id],
+                'waveform_repolarizationslope': neural_data['waveform_repolarizationslope'][neuron_id],
+                'waveform_class': neural_data['waveform_class'][neuron_id]
             }
             mouse_metadata.append(neuron_metadata)
         
-        neural.append(mouse_neural)
-        neural_time.append(mouse_neural_time)
-        neural_metadata.append(mouse_metadata)
+        neural[str(mouse_id)] = mouse_neural
+        neural_time[str(mouse_id)] = mouse_neural_time
+        neural_metadata[str(mouse_id)] = mouse_metadata
     
     return neural, neural_time, neural_metadata
 
@@ -136,7 +140,7 @@ def main():
         "neural": {
             "data": neural,
             "time": neural_time,
-            "metadata": neural_metadata  # Add metadata to output
+            "metadata": neural_metadata
         }
     }
     
