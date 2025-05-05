@@ -1,6 +1,40 @@
 import os
 import pandas as pd
 from pathlib import Path
+import json
+
+def get_unique_layers_and_mice(aligned_data_path):
+    """
+    Extract unique layers and mouse IDs from aligned_data.json.
+    
+    Parameters:
+    -----------
+    aligned_data_path : str
+        Path to aligned_data.json file
+        
+    Returns:
+    --------
+    tuple
+        (unique_layers, unique_mice)
+    """
+    try:
+        with open(aligned_data_path, 'r') as f:
+            data = json.load(f)
+        
+        # Extract unique layers from neural metadata
+        unique_layers = set()
+        for mouse_data in list(data['neural']['metadata'].items()):
+            for neuron in mouse_data[1]:
+                if 'layer' in neuron:
+                    unique_layers.add(neuron['layer'])
+        
+        # Extract unique mouse IDs from behavior data
+        unique_mice = set(data['behavior']['data'].keys())
+        
+        return sorted(list(unique_layers)), sorted(list(unique_mice))
+    except Exception as e:
+        print(f"Error reading aligned_data.json: {str(e)}")
+        return [], []
 
 def combine_csv_files(root_dir, output_dir):
     # Create output directory if it doesn't exist
@@ -71,8 +105,19 @@ def combine_csv_files(root_dir, output_dir):
 
 if __name__ == "__main__":
     # Get the current directory
-    current_dir = "/Volumes/GunnarTB/mazen_lab/allMice"
-    output_dir = os.path.join("./", "combined_results")
-    print(f"Processing CSV files in: {current_dir}")
-    print(f"Saving results to: {output_dir}")
-    combine_csv_files(current_dir, output_dir)
+    
+    # Get unique layers and mouse IDs
+    aligned_data_path = "aligned_data.json"
+    unique_layers, unique_mice = get_unique_layers_and_mice(aligned_data_path)
+    
+    print("\nUnique Layers:")
+    for layer in unique_layers:
+        print(f"- {layer}")
+    
+    print("\nUnique Mouse IDs:")
+    for mouse_id in unique_mice:
+        print(f"- {mouse_id}")
+    
+    # print(f"\nProcessing CSV files in: {current_dir}")
+    # print(f"Saving results to: {output_dir}")
+    # combine_csv_files(current_dir, output_dir)

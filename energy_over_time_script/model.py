@@ -228,9 +228,9 @@ def phase_transition_analysis(multipliers, N, temp_range=None, samples=1000000):
         neg_avg_energy_c += [net_energy_neg]
     
     # Calculate derived quantities
-    pos_avg_pos = [np.mean(r)/N**2 for r in pos_avg_spin]
+    pos_avg_pos = [np.mean(r)/N for r in pos_avg_spin]
     pos_avg_energy = [np.mean(r) for r in pos_avg_energy_c]
-    neg_avg_pos = [np.mean(r)/N**2 for r in neg_avg_spin]
+    neg_avg_pos = [np.mean(r)/N for r in neg_avg_spin]
     neg_avg_energy = [np.mean(r) for r in neg_avg_energy_c]
 
     avg_heat_capacity_pos = [heat_capacity(r) for r in pos_avg_energy_c]

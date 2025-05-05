@@ -60,8 +60,8 @@ def process_neural_data(neural_data, reach_data):
     mouse_ids = set(neural_data['mouse'].values())
     
     for mouse_id in tqdm(mouse_ids, desc="Processing neural data"):
-        # Get all neurons for this mouse
-        mouse_neurons = [k for k, v in neural_data['mouse'].items() if v == mouse_id]
+        # Get all neurons for this mouse using the mouse mapping
+        mouse_neurons = [neuron_id for neuron_id, m_id in neural_data['mouse'].items() if m_id == mouse_id]
         
         # Initialize mouse neural arrays
         mouse_neural = []
@@ -72,6 +72,7 @@ def process_neural_data(neural_data, reach_data):
         mouse_reaches = [k for k, v in reach_data['mouse'].items() if v == mouse_id]
         
         for reach_id in mouse_reaches:
+            print(f"Completeing raech: {reach_id}")
             # Get the reach maximum time from ephys data
             reach_max_ephys = reach_data['reachMax_ephys'][reach_id]
             
@@ -86,6 +87,8 @@ def process_neural_data(neural_data, reach_data):
             # Process each neuron for this reach
             reach_neural = []
             for neuron_id in mouse_neurons:
+                print(f"processing neuron: {neuron_id}")
+                # Get spike times for this neuron
                 spike_times = neural_data['times'][neuron_id]
                 
                 # Create sparse array for this time window
@@ -106,12 +109,9 @@ def process_neural_data(neural_data, reach_data):
         # Store metadata for each neuron in this mouse
         for neuron_id in mouse_neurons:
             neuron_metadata = {
-                'depth': neural_data['depth'][neuron_id],
+                'neuron_id': neuron_id,
                 'layer': neural_data['layer'][neuron_id],
-                'waveform_duration': neural_data['waveform_duration'][neuron_id],
-                'waveform_PTratio': neural_data['waveform_PTratio'][neuron_id],
-                'waveform_repolarizationslope': neural_data['waveform_repolarizationslope'][neuron_id],
-                'waveform_class': neural_data['waveform_class'][neuron_id]
+                'spike_times': neural_data['times'][neuron_id]
             }
             mouse_metadata.append(neuron_metadata)
         
