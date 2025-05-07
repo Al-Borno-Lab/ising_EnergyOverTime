@@ -47,8 +47,8 @@ def parse_arguments():
     
     parser.add_argument('--mouse_id', type=str, required=True, 
                         help='Mouse ID to analyze')
-    parser.add_argument('--layers', type=str, nargs='+', required=True,
-                        help='List of layers to analyze (e.g., "L2/3" "L4" "L5")')
+    parser.add_argument('--layers', type=str, nargs='+', default=None,
+                        help='List of layers to analyze (e.g., "L2/3" "L4" "L5"). If not specified, all layers will be used.')
     parser.add_argument('--output_dir', type=str, default=None,
                         help='Directory to save output files (default: derived from mouse ID and layers)')
     parser.add_argument('--bin_size', type=int, default=1,
@@ -107,6 +107,10 @@ def load_wells_data(mouse_id, layers):
     
     if mouse_idx is None:
         raise ValueError(f"Mouse ID {mouse_id} not found in data")
+    
+    # If layers is None, use all unique layers for this mouse
+    if layers is None:
+        layers = list(set(neuron['layer'] for neuron in data['neural']['metadata'][mouse_idx]))
     
     # Filter neurons by layers
     layer_neurons = []
