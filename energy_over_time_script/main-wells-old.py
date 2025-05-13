@@ -2,33 +2,37 @@
 # coding: utf-8
 
 """
-Main script for analyzing Purkinje neuron spike configurations using the Ising model.
+Main script for analyzing neural data from Wells lab experiments using the Ising model.
 
-This script ties together the functionality from the other modules to:
-1. Load and preprocess neural data from MATLAB files
-2. Fit an Ising model to the spike data
-3. Analyze phase transitions in the model
-4. Calculate energy for neural states
-5. Generate visualizations of the results
-6. Output data to CSV files for further analysis
+This script processes neural and behavioral data from Wells lab experiments to:
+1. Load and preprocess neural data from aligned_data.json
+2. Filter neurons by specified layers
+3. Fit an Ising model to the spike data
+4. Analyze phase transitions in the model
+5. Calculate energy for neural states
+6. Generate visualizations of the results
+7. Output data to CSV files for further analysis
 
 Usage:
-    python main.py --matlab_file path/to/file.mat [--options]
+    python main-wells.py --mouse_id MOUSE_ID --layers LAYER1 LAYER2 [--options]
 """
 
 import os
 import argparse
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 import pandas as pd
+import json
 from os.path import basename, splitext
 
 # Import custom modules
-from utils import preprocessingSpikes
-from model import fit_ising_model, phase_transition_analysis
-from analysis import analyze_neural_stimuli, calculate_statistics_across_trials, identify_transition_points
-from visualization import create_output_directory, plot_phase_transition, plot_energy_across_time, plot_transition_points, plot_energy_histogram, plot_model_quality
+from utils import preprocessingSpikes, calculate_statistics_with_ci
+from model import fit_ising_model, phase_transition_analysis, calculate_energy_for_spike_data
+from analysis import (analyze_wells_data, calculate_statistics_across_reaches, 
+                     identify_reach_transition_points, create_energy_spline)
+from visualization import (create_output_directory, plot_phase_transition, 
+                         plot_energy_across_time, plot_transition_points, 
+                         plot_energy_histogram, plot_model_quality)
 
 def parse_arguments():
     """
@@ -39,14 +43,14 @@ def parse_arguments():
     argparse.Namespace
         Parsed command-line arguments
     """
-    parser = argparse.ArgumentParser(description='Analysis of neocortex spike configurations using the Ising model.')
+    parser = argparse.ArgumentParser(description='Analysis of neural data from Wells lab experiments using the Ising model.')
     
-    parser.add_argument('--wells_file', type=str, required=True, 
-                        help='Path to the wells file containing the experiment data')
     parser.add_argument('--mouse_id', type=str, required=True, 
-                        help='mouse_id to parse in wells data')
+                        help='Mouse ID to analyze')
+    parser.add_argument('--layers', type=str, nargs='+', default=None,
+                        help='List of layers to analyze (e.g., "L2/3" "L4" "L5"). If not specified, all layers will be used.')
     parser.add_argument('--output_dir', type=str, default=None,
-                        help='Directory to save output files (default: derived from MATLAB filename)')
+                        help='Directory to save output files (default: derived from mouse ID and layers)')
     parser.add_argument('--bin_size', type=int, default=1,
                         help='Bin size for preprocessing spike data (default: 1)')
     parser.add_argument('--sample_size', type=int, default=10000,
@@ -65,10 +69,6 @@ def parse_arguments():
                         help='Temperature step for phase transition analysis (default: 0.05)')
     parser.add_argument('--metropolis_samples', type=int, default=1000000,
                         help='Number of samples for Metropolis sampling (default: 1000000)')
-    parser.add_argument('--truncate_idx_l', type=int, default=100,
-                        help='Lower truncation index for data preprocessing (default: 100)')
-    parser.add_argument('--truncate_idx', type=int, default=800,
-                        help='Upper truncation index for data preprocessing (default: 800)')
     parser.add_argument('--confidence', type=float, default=0.8,
                         help='Confidence level for statistical intervals (default: 0.8)')
     parser.add_argument('--skip_phase_analysis', action='store_true',
@@ -78,8 +78,7 @@ def parse_arguments():
     
     return parser.parse_args()
 
-def load_wells_data(wells_file, mouse_id, layers):
-    import json
+def load_wells_data(mouse_id, layers):
     """
     Load and preprocess Wells lab data for a specific mouse and layers.
     
@@ -96,20 +95,26 @@ def load_wells_data(wells_file, mouse_id, layers):
         (neural_data, behavior_data, neural_time, behavior_time)
     """
     # Load aligned data
-    with open(wells_file, 'r') as f:
+    with open('aligned_data.json', 'r') as f:
         data = json.load(f)
     
-
-    if mouse_id not in list(data['neural']['metadata'].keys()):
+    # Find mouse index
+    mouse_idx = None
+    for i, mouse_data in enumerate(data['neural']['metadata']):
+        if mouse_data[0]['mouse'] == mouse_id:
+            mouse_idx = i
+            break
+    
+    if mouse_idx is None:
         raise ValueError(f"Mouse ID {mouse_id} not found in data")
     
     # If layers is None, use all unique layers for this mouse
     if layers is None:
-        layers = list(set(neuron['layer'] for neuron in data['neural']['metadata'][mouse_id]))
+        layers = list(set(neuron['layer'] for neuron in data['neural']['metadata'][mouse_idx]))
     
     # Filter neurons by layers
     layer_neurons = []
-    for i, neuron in enumerate(data['neural']['metadata'][mouse_id]):
+    for i, neuron in enumerate(data['neural']['metadata'][mouse_idx]):
         if neuron['layer'] in layers:
             layer_neurons.append(i)
     
@@ -118,7 +123,7 @@ def load_wells_data(wells_file, mouse_id, layers):
     
     # Extract neural data for selected neurons
     neural_data = []
-    for reach in data['neural']['data'][mouse_id]:
+    for reach in data['neural']['data'][mouse_idx]:
         reach_data = []
         for timepoint in reach:
             reach_data.append([timepoint[i] for i in layer_neurons])
@@ -127,8 +132,12 @@ def load_wells_data(wells_file, mouse_id, layers):
     # Extract behavior data
     behavior_data = data['behavior']['data'][mouse_id]
     
+    # Extract time vectors
+    neural_time = data['neural']['time'][mouse_idx]
+    behavior_time = data['behavior']['time'][mouse_id]
+    
     # Return as lists to avoid ValueError with inhomogeneous shapes
-    return neural_data, behavior_data
+    return neural_data, behavior_data, neural_time, behavior_time
 
 def run_analysis(args):
     """
@@ -145,41 +154,44 @@ def run_analysis(args):
     """
     # Set output directory
     if args.output_dir is None:
-        # Create output directory based on MATLAB filename
-        matlab_basename = args.mouse_id
-        args.output_dir = matlab_basename
+        layer_str = "_".join(args.layers)
+        args.output_dir = f"mouse_{args.mouse_id}_{layer_str}_results"
     
     output_dir = create_output_directory(args.output_dir)
     
     # Load and preprocess data
-    print(f"Loading data from {args.wells_file}...")
-    neural_stim, continous_stim = load_wells_data(args.wells_file, args.mouse_id)
+    print(f"Loading data for mouse {args.mouse_id}, layers {args.layers}...")
+    neural_data, behavior_data, neural_time, behavior_time = load_wells_data(args.mouse_id, args.layers)
     
-    # Extract and preprocess first stimulus for model fitting
+    # Preprocess spike data for each reach
     print("Preprocessing spike data for model fitting...")
-    stim_0 = neural_stim[0]
-    bin_cat = np.vstack(stim_0)
+    all_reaches_data = []
+    for reach in neural_data:
+        bin_cat = np.vstack(reach)
+        bin_cat_p = preprocessingSpikes(bin_cat, args.bin_size)
+        bin_cat_p = 2 * bin_cat_p - 1  # Convert to {-1, 1} representation
+        all_reaches_data.append(bin_cat_p)
     
-    bin_cat_p = preprocessingSpikes(bin_cat, args.bin_size)
-    bin_cat_p = 2 * bin_cat_p - 1  # Convert to {-1, 1} representation
-    
-    N = bin_cat_p.shape[1]
+    # Combine all reaches for model fitting
+    combined_data = np.vstack(all_reaches_data)
+    N = combined_data.shape[1]
     print(f"Number of neurons: {N}")
+    print(f"Number of reaches: {len(neural_data)}")
     
     # Save preprocessing info to CSV
     preprocessing_info = {
+        'Mouse_ID': args.mouse_id,
+        'Layers': ", ".join(args.layers) if args.layers is not None else "all",
         'Number_of_Neurons': N,
-        'Bin_Size': args.bin_size,
-        'Truncate_Index_Lower': args.truncate_idx_l,
-        'Truncate_Index_Upper': args.truncate_idx,
-        'Reach_Phase': os.path.basename(output_dir)
+        'Number_of_Reaches': len(neural_data),
+        'Bin_Size': args.bin_size
     }
     pd.DataFrame([preprocessing_info]).to_csv(os.path.join(output_dir, "preprocessing_info.csv"), index=False)
     
     # Fit Ising model
     print("Fitting Ising model...")
     multipliers, solver = fit_ising_model(
-        bin_cat_p,
+        combined_data,
         sample_size=args.sample_size,
         n_cpus=args.n_cpus,
         max_iter=args.max_iter,
@@ -208,7 +220,7 @@ def run_analysis(args):
     
     # Evaluate model quality
     print("Evaluating model quality...")
-    plot_model_quality(bin_cat_p, solver.model.sample, output_dir)
+    plot_model_quality(combined_data, solver.model.sample, output_dir)
     
     # Phase transition analysis
     if not args.skip_phase_analysis:
@@ -229,80 +241,84 @@ def run_analysis(args):
         
         # Save critical values to file
         with open(os.path.join(output_dir, "critical_values.txt"), "w") as f:
+            f.write(f"Mouse ID: {args.mouse_id}\n")
+            f.write(f"Layers: {', '.join(args.layers)}\n")
             f.write(f"Number of Neurons: {N}\n")
+            f.write(f"Number of Reaches: {len(neural_data)}\n")
             f.write(f"Critical Temperature: {critical_temp}\n")
             f.write(f"Critical Energy: {critical_energy}\n")
     else:
         print("Skipping phase transition analysis...")
-        # Use default critical energy if skipping analysis
-        critical_energy = -5.0  # This is a placeholder value
+        critical_energy = -5.0  # Placeholder value
         energy_spline = None
     
-    # Analyze neural stimuli
-    print("Analyzing neural stimuli...")
-    analysis_results = analyze_neural_stimuli(
-        neural_stim, 
-        continous_stim, 
-        multipliers, 
+    # Analyze all reaches using Wells-specific analysis
+    print("Analyzing all reaches...")
+    analysis_results = analyze_wells_data(
+        neural_data,
+        behavior_data,
+        multipliers,
         critical_energy,
-        energy_temp_spline=energy_spline
+        energy_temp_spline=energy_spline,
+        output_dir=output_dir
     )
     
-    # Calculate statistics across trials
-    print("Calculating statistics across trials...")
-    trial_statistics = calculate_statistics_across_trials(
+    # Calculate statistics across reaches
+    print("Calculating statistics across reaches...")
+    reach_statistics = calculate_statistics_across_reaches(
         analysis_results,
-        confidence=args.confidence
+        confidence=args.confidence,
+        output_dir=output_dir
     )
     
-    # Plot energy across time
-    print("Generating energy vs time plots...")
-    plot_energy_across_time(
-        trial_statistics, 
-        critical_energy, 
-        output_dir,
-        title_prefix="Full Reach",
-        neural_data=neural_stim,
-        window_size=args.firing_rate_window
-    )
-    
-    # Look for transition points in the first stimulus
-    print("Identifying transition points...")
-    for i, energy_data in enumerate(analysis_results['energy_values']):
-        if i < len(analysis_results['x_stim_data']):
-            # Get mean energy and kinematics
-            mean_energy = np.mean(energy_data, axis=0)
-            mean_kinematics = np.mean(analysis_results['x_stim_data'][i], axis=0)
-            
-            # Save raw data
-            raw_energy_df = pd.DataFrame(energy_data)
-            raw_energy_df.to_csv(os.path.join(output_dir, f"raw_energy_stim_{i}.csv"), index=False)
-            
-            raw_kinematics_df = pd.DataFrame(analysis_results['x_stim_data'][i])
-            raw_kinematics_df.to_csv(os.path.join(output_dir, f"raw_kinematics_stim_{i}.csv"), index=False)
-            
-            # Identify transition points
-            transition_points = identify_transition_points(mean_energy, mean_kinematics)
-            
-            # Plot transition points
-            if len(transition_points) > 0:
-                plot_transition_points(
-                    mean_energy, 
-                    mean_kinematics,
-                    transition_points,
-                    output_dir,
-                    stim_idx=i
-                )
-                
-                print(f"Identified {len(transition_points)} transition points in stim_{i}")
-            
-            # Plot energy histogram
-            plot_energy_histogram(
-                mean_energy, 
-                critical_energy, 
-                output_dir, 
-                stim_idx=i
+    # Analyze each reach individually
+    print("Analyzing individual reaches...")
+    for reach_idx, (reach_data, reach_behavior) in enumerate(zip(neural_data, behavior_data)):
+        reach_dir = os.path.join(output_dir, f"reach_{reach_idx}")
+        os.makedirs(reach_dir, exist_ok=True)
+        
+        # Get this reach's data from analysis results
+        energy_data = analysis_results['energy_values'][reach_idx]
+        x_positions = analysis_results['x_positions'][reach_idx]
+        y_positions = analysis_results['y_positions'][reach_idx]
+        
+        # Plot energy across time for this reach
+        plot_energy_across_time(
+            reach_statistics, 
+            critical_energy, 
+            reach_dir,
+            title_prefix=f"Mouse {args.mouse_id} Reach {reach_idx}",
+            neural_data=[reach_data],
+            window_size=args.firing_rate_window
+        )
+        
+        # Identify transition points
+        transition_points = identify_reach_transition_points(
+            energy_data,
+            x_positions,
+            y_positions,
+            threshold=0.2,
+            output_dir=reach_dir,
+            reach_idx=reach_idx
+        )
+        
+        # Plot transition points
+        if len(transition_points) > 0:
+            plot_transition_points(
+                energy_data,
+                np.column_stack((x_positions, y_positions)),
+                transition_points,
+                reach_dir
             )
+            
+            print(f"Identified {len(transition_points)} transition points in reach {reach_idx}")
+        
+        # Plot energy histogram
+        plot_energy_histogram(
+            energy_data,
+            critical_energy,
+            reach_dir
+        )
     
     print(f"Analysis complete. Results saved to {output_dir}")
 
