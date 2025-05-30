@@ -54,7 +54,12 @@ df_full_reach = df_merged[df_merged['folder_level_3'] == 'full_reach']
 #
 # 2. df_full_reach: Subset of df_merged filtered for 'full_reach' trials only
 #
+#   folder_level_1 - Mouse
+#   folder_level_2 - iteration of experiment per mouse
+#   folder_level_3 - Reach component inside iteration of experiment per mouse
+#
 # COLUMN DESCRIPTIONS:
+# 
 # - folder_level_1, folder_level_2, folder_level_3: Hierarchical trial identifiers
 # - Time: Time points for each measurement
 # - Mean_Firing_Rate: Original firing rate data
@@ -83,3 +88,25 @@ df_full_reach = df_merged[df_merged['folder_level_3'] == 'full_reach']
 # # Save processed data:
 # df_full_reach.to_csv('processed_full_reach_data.csv', index=False)
 # df_merged.to_csv('processed_all_data.csv', index=False)
+
+
+# TODO
+# Find the min point index and max point index in energy low pass
+# Run a z-score to see if there are any outlier, if there is outliers report which ones are (Might need some good and chatgpt searchin...)
+# Find velocity and acceleration of "Mean_Position" using scipy librarys for drivatives over time-series
+# find max index and min index of velocity and acceleration for mean_position
+# Find max index and min index of Mean_Firing_Rate_LP
+#
+# output: csv where is row has these columns:
+#   min_index_energy_LP
+#   max_index_energy_LP
+#   min_index_velocity
+#   max_index_velocity
+#   min_index_acceleration
+#   max_index_acceleration
+#   min_index_firing_rate_LP
+#   max_index_firing_rate_LP
+#   Folder_1
+#   Folder_2
+#
+# NOTE - should only use df_full_reach since we are looking at the full reach
