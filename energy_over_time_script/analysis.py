@@ -101,6 +101,15 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     x_stim_1 = np.array([continous_stim[1][i][:, 0] for i in range(0, len(continous_stim[1]))])
     x_stim_2 = np.array([continous_stim[2][i][:, 0] for i in range(0, len(continous_stim[2]))])
 
+    # Extract y and z coordinates as well
+    y_stim_0 = np.array([continous_stim[0][i][:, 1] for i in range(0, len(continous_stim[0]))])
+    y_stim_1 = np.array([continous_stim[1][i][:, 1] for i in range(0, len(continous_stim[1]))])
+    y_stim_2 = np.array([continous_stim[2][i][:, 1] for i in range(0, len(continous_stim[2]))])
+
+    z_stim_0 = np.array([continous_stim[0][i][:, 2] for i in range(0, len(continous_stim[0]))])
+    z_stim_1 = np.array([continous_stim[1][i][:, 2] for i in range(0, len(continous_stim[1]))])
+    z_stim_2 = np.array([continous_stim[2][i][:, 2] for i in range(0, len(continous_stim[2]))])
+
     # Convert neural data to binary format
     neural_0 = (np.asarray([neural_stim[0][i][:, :] for i in range(0, len(neural_stim[0]))]) > 0) * 1
     neural_1 = (np.asarray([neural_stim[1][i][:, :] for i in range(0, len(neural_stim[1]))]) > 0) * 1
@@ -114,6 +123,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     # Return comprehensive analysis data
     results = {
         'x_stim_data': [x_stim_0, x_stim_1, x_stim_2],
+        'y_stim_data': [y_stim_0, y_stim_1, y_stim_2],
+        'z_stim_data': [z_stim_0, z_stim_1, z_stim_2],
         'neural_binary': [neural_0, neural_1, neural_2],
         'energy_values': [e_0, e_1, e_2],
         'critical_energy': critical_energy
@@ -267,7 +278,7 @@ def analyze_neural_stimuli_wells(neural_stim, continous_stim, multipliers, criti
 
 def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_dir=None):
     """
-    Calculate statistics across trials for both kinematic and neural data.
+    Calculate statistics across trials for kinematic (x, y, z) and neural data.
     
     Parameters:
     -----------
@@ -286,21 +297,41 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
     from utils import mean_confidence_interval
     
     x_stim_data = analysis_results['x_stim_data']
+    y_stim_data = analysis_results['y_stim_data']
+    z_stim_data = analysis_results['z_stim_data']
     energy_values = analysis_results['energy_values']
     
     # Initialize containers for results
-    kinematics_stats = []
+    x_kinematics_stats = []
+    y_kinematics_stats = []
+    z_kinematics_stats = []
     energy_stats = []
     
     # Calculate statistics for each stimulation condition
-    for i, (x_stim, e_vals) in enumerate(zip(x_stim_data, energy_values)):
-        # Kinematics statistics
-        kin_mean, kin_lower, kin_upper = [], [], []
+    for i, (x_stim, y_stim, z_stim, e_vals) in enumerate(zip(x_stim_data, y_stim_data, z_stim_data, energy_values)):
+        # X-coordinate statistics
+        x_mean, x_lower, x_upper = [], [], []
         for j in range(x_stim.shape[1]):
             m, ml, mu = mean_confidence_interval(x_stim[:, j], confidence)
-            kin_mean.append(m)
-            kin_lower.append(ml)
-            kin_upper.append(mu)
+            x_mean.append(m)
+            x_lower.append(ml)
+            x_upper.append(mu)
+        
+        # Y-coordinate statistics
+        y_mean, y_lower, y_upper = [], [], []
+        for j in range(y_stim.shape[1]):
+            m, ml, mu = mean_confidence_interval(y_stim[:, j], confidence)
+            y_mean.append(m)
+            y_lower.append(ml)
+            y_upper.append(mu)
+        
+        # Z-coordinate statistics
+        z_mean, z_lower, z_upper = [], [], []
+        for j in range(z_stim.shape[1]):
+            m, ml, mu = mean_confidence_interval(z_stim[:, j], confidence)
+            z_mean.append(m)
+            z_lower.append(ml)
+            z_upper.append(mu)
         
         # Energy statistics
         energy_mean, energy_lower, energy_upper = [], [], []
@@ -310,10 +341,22 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
             energy_lower.append(ml)
             energy_upper.append(mu)
         
-        kinematics_stats.append({
-            'mean': kin_mean,
-            'lower': kin_lower,
-            'upper': kin_upper
+        x_kinematics_stats.append({
+            'mean': x_mean,
+            'lower': x_lower,
+            'upper': x_upper
+        })
+        
+        y_kinematics_stats.append({
+            'mean': y_mean,
+            'lower': y_lower,
+            'upper': y_upper
+        })
+        
+        z_kinematics_stats.append({
+            'mean': z_mean,
+            'lower': z_lower,
+            'upper': z_upper
         })
         
         energy_stats.append({
@@ -322,19 +365,38 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
             'upper': energy_upper
         })
         
-        # Save statistics to CSV if output directory is provided
+        # Save statistics to CSV and create plots if output directory is provided
         if output_dir:
-            # Kinematics statistics
-            time_points = list(range(len(kin_mean)))
-            kin_stats_df = pd.DataFrame({
-                'Time': time_points,
-                'Mean': kin_mean,
-                'Lower_CI': kin_lower,
-                'Upper_CI': kin_upper
-            })
-            kin_stats_df.to_csv(os.path.join(output_dir, f"kinematics_stats_stim_{i}.csv"), index=False)
+            time_points = list(range(len(x_mean)))
             
-            # Energy statistics
+            # Save X-coordinate statistics
+            x_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': x_mean,
+                'Lower_CI': x_lower,
+                'Upper_CI': x_upper
+            })
+            x_stats_df.to_csv(os.path.join(output_dir, f"x_kinematics_stats_stim_{i}.csv"), index=False)
+            
+            # Save Y-coordinate statistics
+            y_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': y_mean,
+                'Lower_CI': y_lower,
+                'Upper_CI': y_upper
+            })
+            y_stats_df.to_csv(os.path.join(output_dir, f"y_kinematics_stats_stim_{i}.csv"), index=False)
+            
+            # Save Z-coordinate statistics
+            z_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': z_mean,
+                'Lower_CI': z_lower,
+                'Upper_CI': z_upper
+            })
+            z_stats_df.to_csv(os.path.join(output_dir, f"z_kinematics_stats_stim_{i}.csv"), index=False)
+            
+            # Save Energy statistics
             energy_stats_df = pd.DataFrame({
                 'Time': time_points,
                 'Mean': energy_mean,
@@ -342,9 +404,51 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
                 'Upper_CI': energy_upper
             })
             energy_stats_df.to_csv(os.path.join(output_dir, f"energy_stats_stim_{i}.csv"), index=False)
+            
+            # Create stacked plots for X, Y, Z coordinates
+            fig, axs = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+            
+            # X-coordinate plot
+            axs[0].plot(time_points, x_mean, 'b-', linewidth=2, label='Mean X')
+            axs[0].fill_between(time_points, x_lower, x_upper, alpha=0.3, color='blue', label=f'{int(confidence*100)}% CI')
+            axs[0].set_ylabel('X Coordinate')
+            axs[0].set_title(f'X-Coordinate Statistics - Stimulus {i}')
+            axs[0].legend()
+            axs[0].grid(True, alpha=0.3)
+            
+            # Y-coordinate plot
+            axs[1].plot(time_points, y_mean, 'g-', linewidth=2, label='Mean Y')
+            axs[1].fill_between(time_points, y_lower, y_upper, alpha=0.3, color='green', label=f'{int(confidence*100)}% CI')
+            axs[1].set_ylabel('Y Coordinate')
+            axs[1].set_title(f'Y-Coordinate Statistics - Stimulus {i}')
+            axs[1].legend()
+            axs[1].grid(True, alpha=0.3)
+            
+            # Z-coordinate plot
+            axs[2].plot(time_points, z_mean, 'r-', linewidth=2, label='Mean Z')
+            axs[2].fill_between(time_points, z_lower, z_upper, alpha=0.3, color='red', label=f'{int(confidence*100)}% CI')
+            axs[2].set_ylabel('Z Coordinate')
+            axs[2].set_title(f'Z-Coordinate Statistics - Stimulus {i}')
+            axs[2].legend()
+            axs[2].grid(True, alpha=0.3)
+            
+            # Energy plot
+            axs[3].plot(time_points, energy_mean, 'purple', linewidth=2, label='Mean Energy')
+            axs[3].fill_between(time_points, energy_lower, energy_upper, alpha=0.3, color='purple', label=f'{int(confidence*100)}% CI')
+            axs[3].set_ylabel('Energy')
+            axs[3].set_xlabel('Time Points')
+            axs[3].set_title(f'Energy Statistics - Stimulus {i}')
+            axs[3].legend()
+            axs[3].grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(output_dir, f"stacked_statistics_stim_{i}.png"), dpi=300, bbox_inches='tight')
+            plt.close()
     
     return {
-        'kinematics': kinematics_stats,
+        'x_kinematics': x_kinematics_stats,
+        'y_kinematics': y_kinematics_stats,
+        'z_kinematics': z_kinematics_stats,
         'energy': energy_stats
     }
 

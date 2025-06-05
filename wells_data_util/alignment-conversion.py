@@ -5,6 +5,9 @@ import concurrent.futures
 import os
 import sys
 
+
+import matplotlib.pyplot as plt
+
 def load_data():
     # Load reach data
     with open('data/wells_data/df_reaches.json', 'r') as f:
@@ -24,6 +27,8 @@ def process_single_reach_behavior(args):
     reach_max_idx = reach_data['reachMax_ind'][reach_id]
     time_points = np.arange(-reach_max_idx/150.0, (len(x_pos)-reach_max_idx)/150.0, 1/150.0)
     positions = list(zip(x_pos, y_pos, time_points))
+    plt.plot(x_pos, y_pos)
+    plt.show()
     return positions, time_points.tolist()
 
 def process_behavior_data(reach_data):
