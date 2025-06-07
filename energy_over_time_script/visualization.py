@@ -168,12 +168,12 @@ def plot_phase_transition(results, output_dir):
 
 def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True, neural_data=None, window_size=10):
     """
-    Plot energy and kinematic data across time.
+    Plot energy and kinematic data (x, y, z coordinates) across time.
     
     Parameters:
     -----------
     stats : dict
-        Statistics calculated across trials
+        Statistics calculated across trials containing x_kinematics, y_kinematics, z_kinematics, energy
     critical_energy : float
         Critical energy from phase transition analysis
     output_dir : str
@@ -191,54 +191,111 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     --------
     None
     """
-    kinematics = stats['kinematics']
+    x_kinematics = stats['x_kinematics']
+    y_kinematics = stats['y_kinematics']
+    z_kinematics = stats['z_kinematics']
     energy = stats['energy']
     
-    for i, (kin, eng) in enumerate(zip(kinematics, energy)):
-        # Create figure with three subplots if neural data is provided
-        n_subplots = 3 if neural_data is not None else 2
-        plt.figure(figsize=(12, 4*n_subplots))
+    for i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
+        # Create figure with stacked subplots: X, Y, Z, Energy, and optionally Firing Rate
+        n_subplots = 5 if neural_data is not None else 4
+        plt.figure(figsize=(12, 3*n_subplots))
         
-        # Top subplot for kinematics
+        # X-coordinate subplot
         plt.subplot(n_subplots, 1, 1)
-        plt.title(f"{title_prefix} Kinematic Component Over Time, Stim_{i}")
+        plt.title(f"{title_prefix} X-Coordinate Over Time, Stim_{i}")
         
-        plt.plot(kin['mean'], '-r', label='mean')
-        plt.plot(kin['upper'], '-b', label='upper', alpha=0.15)
-        plt.plot(kin['lower'], '-b', label='lower', alpha=0.15)
+        plt.plot(x_kin['mean'], '-r', linewidth=2, label='mean X')
+        plt.plot(x_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(x_kin['lower'], '-b', label='lower CI', alpha=0.5)
         
         # Plot other stimulus means for comparison if available
-        for j, other_kin in enumerate(kinematics):
+        for j, other_x_kin in enumerate(x_kinematics):
             if j != i:
-                plt.plot(other_kin['mean'], '-', label=f"mean_stim_{j}", alpha=0.7)
+                plt.plot(other_x_kin['mean'], '-', label=f"mean X stim_{j}", alpha=0.7)
         
         # Fill between confidence intervals
-        plt.fill_between(list(range(len(kin['mean']))), kin['upper'], kin['lower'], 
-                         color="k", alpha=0.15)
+        plt.fill_between(list(range(len(x_kin['mean']))), x_kin['upper'], x_kin['lower'], 
+                         color="blue", alpha=0.15)
         
         # Mark midpoint if requested
-        if show_mid_point and len(kin['mean']) > 100:
-            mid_point = len(kin['mean']) // 2
-            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7)
+        if show_mid_point and len(x_kin['mean']) > 100:
+            mid_point = len(x_kin['mean']) // 2
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
-        plt.xlabel("Time")
-        plt.ylabel("Position")
+        plt.ylabel("X Position")
         plt.legend()
         plt.grid(alpha=0.3)
         
-        # Middle subplot for energy
+        # Y-coordinate subplot
         plt.subplot(n_subplots, 1, 2)
+        plt.title(f"{title_prefix} Y-Coordinate Over Time, Stim_{i}")
+        
+        plt.plot(y_kin['mean'], '-g', linewidth=2, label='mean Y')
+        plt.plot(y_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(y_kin['lower'], '-b', label='lower CI', alpha=0.5)
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_y_kin in enumerate(y_kinematics):
+            if j != i:
+                plt.plot(other_y_kin['mean'], '-', label=f"mean Y stim_{j}", alpha=0.7)
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(y_kin['mean']))), y_kin['upper'], y_kin['lower'], 
+                         color="green", alpha=0.15)
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(y_kin['mean']) > 100:
+            mid_point = len(y_kin['mean']) // 2
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("Y Position")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        
+        # Z-coordinate subplot
+        plt.subplot(n_subplots, 1, 3)
+        plt.title(f"{title_prefix} Z-Coordinate Over Time, Stim_{i}")
+        
+        plt.plot(z_kin['mean'], '-r', linewidth=2, label='mean Z', color='red')
+        plt.plot(z_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(z_kin['lower'], '-b', label='lower CI', alpha=0.5)
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_z_kin in enumerate(z_kinematics):
+            if j != i:
+                plt.plot(other_z_kin['mean'], '-', label=f"mean Z stim_{j}", alpha=0.7)
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(z_kin['mean']))), z_kin['upper'], z_kin['lower'], 
+                         color="red", alpha=0.15)
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(z_kin['mean']) > 100:
+            mid_point = len(z_kin['mean']) // 2
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("Z Position")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        
+        # Energy subplot
+        plt.subplot(n_subplots, 1, 4)
         plt.title(f"{title_prefix} Energy of Neural Activity Over Time, Stim_{i}")
         
         # Fill between confidence intervals
         plt.fill_between(list(range(len(eng['mean']))), eng['upper'], eng['lower'], 
-                         color="k", alpha=0.15)
+                         color="purple", alpha=0.15)
+        
+        plt.plot(eng['mean'], '-', linewidth=2, label='mean Energy', color='purple')
         
         # Plot other stimulus means for comparison if available
         for j, other_eng in enumerate(energy):
             if j != i:
-                plt.plot(other_eng['mean'], '-', label=f"mean_stim_{j}", alpha=0.7)
+                plt.plot(other_eng['mean'], '-', label=f"mean Energy stim_{j}", alpha=0.7)
         
         # Mark critical energy and mean energy
         plt.axhline(y=critical_energy, color='r', linestyle='--',
@@ -249,17 +306,16 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         # Mark midpoint if requested
         if show_mid_point and len(eng['mean']) > 100:
             mid_point = len(eng['mean']) // 2
-            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7)
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
-        plt.xlabel("Time")
         plt.ylabel("Energy")
         plt.legend()
         plt.grid(alpha=0.3)
         
-        # Bottom subplot for firing rates if neural data is provided
+        # Firing rate subplot if neural data is provided
         if neural_data is not None:
-            plt.subplot(n_subplots, 1, 3)
+            plt.subplot(n_subplots, 1, 5)
             plt.title(f"{title_prefix} Time-Dependent Firing Rate (window={window_size}), Stim_{i}")
             
             # Calculate firing rates for each trial in the current stimulus
@@ -286,16 +342,16 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             ci_firing = np.squeeze(ci_firing)
             
             # Plot mean firing rate and confidence intervals
-            plt.plot(mean_firing, '-r', label='mean')
+            plt.plot(mean_firing, '-', linewidth=2, label='mean Firing Rate', color='orange')
             plt.fill_between(range(len(mean_firing)), 
                            mean_firing - ci_firing,
                            mean_firing + ci_firing,
-                           color='k', alpha=0.15)
+                           color='orange', alpha=0.15)
             
             # Mark midpoint if requested
             if show_mid_point and len(mean_firing) > 100:
                 mid_point = len(mean_firing) // 2
-                plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7)
+                plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
                 plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
             
             plt.xlabel("Time")
@@ -312,28 +368,61 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
                 'Window_Size': [window_size] * len(mean_firing)
             })
             firing_df.to_csv(os.path.join(output_dir, f"firing_rates_stim_{i}.csv"), index=False)
+        else:
+            # Add x-label to the last subplot if no firing rate subplot
+            plt.xlabel("Time")
         
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"))
+        plt.savefig(os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"), dpi=300, bbox_inches='tight')
         plt.close()
         
-        # Save data to CSV
-        time_points = list(range(len(kin['mean'])))
+        # Save data to CSV files
+        time_points = list(range(len(x_kin['mean'])))
         
-        # Kinematics CSV
-        kin_df = pd.DataFrame({
+        # X-coordinate CSV
+        x_df = pd.DataFrame({
             'Time': time_points,
-            'Mean_Position': kin['mean'],
-            'Upper_CI': kin['upper'],
-            'Lower_CI': kin['lower']
+            'Mean_X_Position': x_kin['mean'],
+            'Upper_CI': x_kin['upper'],
+            'Lower_CI': x_kin['lower']
         })
         
         # Add other stim means for comparison
-        for j, other_kin in enumerate(kinematics):
-            if j != i and len(other_kin['mean']) == len(kin['mean']):
-                kin_df[f'Mean_Position_Stim_{j}'] = other_kin['mean']
+        for j, other_x_kin in enumerate(x_kinematics):
+            if j != i and len(other_x_kin['mean']) == len(x_kin['mean']):
+                x_df[f'Mean_X_Position_Stim_{j}'] = other_x_kin['mean']
         
-        kin_df.to_csv(os.path.join(output_dir, f"kinematics_stim_{i}.csv"), index=False)
+        x_df.to_csv(os.path.join(output_dir, f"x_kinematics_stim_{i}.csv"), index=False)
+        
+        # Y-coordinate CSV
+        y_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Y_Position': y_kin['mean'],
+            'Upper_CI': y_kin['upper'],
+            'Lower_CI': y_kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_y_kin in enumerate(y_kinematics):
+            if j != i and len(other_y_kin['mean']) == len(y_kin['mean']):
+                y_df[f'Mean_Y_Position_Stim_{j}'] = other_y_kin['mean']
+        
+        y_df.to_csv(os.path.join(output_dir, f"y_kinematics_stim_{i}.csv"), index=False)
+        
+        # Z-coordinate CSV
+        z_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Z_Position': z_kin['mean'],
+            'Upper_CI': z_kin['upper'],
+            'Lower_CI': z_kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_z_kin in enumerate(z_kinematics):
+            if j != i and len(other_z_kin['mean']) == len(z_kin['mean']):
+                z_df[f'Mean_Z_Position_Stim_{j}'] = other_z_kin['mean']
+        
+        z_df.to_csv(os.path.join(output_dir, f"z_kinematics_stim_{i}.csv"), index=False)
         
         # Energy CSV
         eng_df = pd.DataFrame({
@@ -352,7 +441,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         eng_df.to_csv(os.path.join(output_dir, f"energy_stim_{i}.csv"), index=False)
     
-    print(f"Energy and kinematic plots and CSVs saved to {output_dir}")
+    print(f"Energy and kinematic (X, Y, Z) plots and CSVs saved to {output_dir}")
 
 def plot_transition_points(energy_data, kinematic_data, transition_points, output_dir, stim_idx=0):
     """
