@@ -195,10 +195,13 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     y_kinematics = stats['y_kinematics']
     z_kinematics = stats['z_kinematics']
     energy = stats['energy']
+    j_values = stats.get('j_values', None)
+    h_values = stats.get('h_values', None)
+
     
     for i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
         # Create figure with stacked subplots: X, Y, Z, Energy, and optionally Firing Rate
-        n_subplots = 5 if neural_data is not None else 4
+        n_subplots = 6 if neural_data is not None else 4
         plt.figure(figsize=(12, 3*n_subplots))
         
         # X-coordinate subplot
@@ -220,7 +223,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         # Mark midpoint if requested
         if show_mid_point and len(x_kin['mean']) > 100:
-            mid_point = len(x_kin['mean']) // 2
+            mid_point = 400
             plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
@@ -247,7 +250,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         # Mark midpoint if requested
         if show_mid_point and len(y_kin['mean']) > 100:
-            mid_point = len(y_kin['mean']) // 2
+            mid_point = 400
             plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
@@ -274,7 +277,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         # Mark midpoint if requested
         if show_mid_point and len(z_kin['mean']) > 100:
-            mid_point = len(z_kin['mean']) // 2
+            mid_point = 400
             plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
@@ -282,7 +285,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.legend()
         plt.grid(alpha=0.3)
         
-        # Energy subplot
+        # Energy subplot --
         plt.subplot(n_subplots, 1, 4)
         plt.title(f"{title_prefix} Energy of Neural Activity Over Time, Stim_{i}")
         
@@ -305,7 +308,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         # Mark midpoint if requested
         if show_mid_point and len(eng['mean']) > 100:
-            mid_point = len(eng['mean']) // 2
+            mid_point = 400
             plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
         
@@ -313,9 +316,28 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.legend()
         plt.grid(alpha=0.3)
         
+        # h & j plots subplot
+        plt.subplot(n_subplots, 1, 5)
+
+        # plot 
+        plt.title(f"{title_prefix} Local Fields and Interactions, Stim_{i}")
+        
+        if show_mid_point and len(j_values[i]['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+
+        
+        plt.plot(j_values[i]['mean'], '-', label=f"[j] - mean Energy stim_{i}")
+        plt.plot(h_values[i]['mean'], '-', label=f"[h] - mean Energy stim_{i}")
+
+        plt.ylabel("Energy")
+        plt.legend()
+        plt.grid(alpha=0.3)
+
         # Firing rate subplot if neural data is provided
         if neural_data is not None:
-            plt.subplot(n_subplots, 1, 5)
+            plt.subplot(n_subplots, 1, 6)
             plt.title(f"{title_prefix} Time-Dependent Firing Rate (window={window_size}), Stim_{i}")
             
             # Calculate firing rates for each trial in the current stimulus
@@ -350,7 +372,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             
             # Mark midpoint if requested
             if show_mid_point and len(mean_firing) > 100:
-                mid_point = len(mean_firing) // 2
+                mid_point = 400
                 plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
                 plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
             

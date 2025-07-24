@@ -195,7 +195,8 @@ def run_analysis(args):
         continous_stim, 
         multipliers, 
         critical_energy,
-        energy_temp_spline=energy_spline
+        energy_temp_spline=energy_spline,
+        output_dir=output_dir,
     )
     
     # Calculate statistics across trials

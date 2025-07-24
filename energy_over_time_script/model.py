@@ -39,6 +39,7 @@ def fast_sum(J, s):
                 k += 1
     return e
 
+
 @njit("float64[:](int64[:,:],float64[:])")
 def calc_e(s, params):
     """
@@ -59,6 +60,30 @@ def calc_e(s, params):
     e = -fast_sum(params[s.shape[1]:], s)
     e -= np.sum(s * params[:s.shape[1]], 1)
     return e
+
+
+@njit("Tuple((float64[:], float64[:], float64[:]))(int64[:,:],float64[:])")
+def calc_e_with_terms(s, params):
+    """
+    Calculate energy for given states with individual term contributions.
+    
+    Parameters:
+    -----------
+    s : 2D ndarray of ints
+        State vectors, either {0,1} or {+/-1}
+    params : ndarray
+        (h, J) parameter vector containing local fields and couplings
+        
+    Returns:
+    --------
+    tuple
+        (energies, J_contributions, h_contributions)
+    """
+    j = fast_sum(params[s.shape[1]:], s) # Pairwise interaction contributions
+    h = np.sum(s * params[:s.shape[1]], 1) # Local field contributions
+    e = -j - h
+    return (e, j, h)
+
 
 def metropolis(initial_v, multiplier, temp, bootStrap=100000, samples=100000):
     """

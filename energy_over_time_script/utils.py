@@ -10,11 +10,12 @@ import numpy as np
 import scipy
 import scipy.io as spio
 from scipy.interpolate import InterpolatedUnivariateSpline
+import h5py
 
 def loadmat(filename):
     """
     Load MATLAB .mat files properly into Python dictionaries.
-    This function handles the conversion of MATLAB structs to nested dictionaries.
+    This function handles both older .mat files and newer v7.3 files (HDF5 format).
     
     Parameters:
     -----------
@@ -67,8 +68,72 @@ def loadmat(filename):
                 elem_list.append(sub_elem)
         return elem_list
     
-    data = spio.loadmat(filename, struct_as_record=False, squeeze_me=True)
-    return _check_keys(data)
+    def _load_hdf5_mat(filename):
+        """
+        Load MATLAB v7.3 files using HDF5 format.
+        """
+        def _read_hdf5_group(group, result_dict):
+            """
+            Recursively read HDF5 groups and convert to nested dictionaries.
+            """
+            for key in group.keys():
+                if isinstance(group[key], h5py.Group):
+                    result_dict[key] = {}
+                    _read_hdf5_group(group[key], result_dict[key])
+                elif isinstance(group[key], h5py.Dataset):
+                    data = group[key][()]
+                    
+                    # Handle different data types
+                    if isinstance(data, np.ndarray):
+                        if data.dtype.kind == 'U' or data.dtype.kind == 'S':
+                            # String data
+                            if data.size == 1:
+                                result_dict[key] = str(data.item())
+                            else:
+                                result_dict[key] = [str(item) for item in data.flat]
+                        elif data.dtype == np.dtype('O'):
+                            # Object array - often contains references
+                            try:
+                                if data.size == 1:
+                                    ref = data.item()
+                                    if isinstance(ref, h5py.Reference):
+                                        result_dict[key] = group.file[ref][()]
+                                    else:
+                                        result_dict[key] = ref
+                                else:
+                                    result_dict[key] = data
+                            except:
+                                result_dict[key] = data
+                        else:
+                            # Numeric data
+                            if data.size == 1:
+                                result_dict[key] = data.item()
+                            else:
+                                result_dict[key] = data
+                    else:
+                        result_dict[key] = data
+        
+        with h5py.File(filename, 'r') as f:
+            result = {}
+            _read_hdf5_group(f, result)
+            return result
+    
+    # Try to determine file format and load accordingly
+    try:
+        # First try with scipy.io (for older .mat files)
+        data = spio.loadmat(filename, struct_as_record=False, squeeze_me=True)
+        return _check_keys(data)
+    except NotImplementedError:
+        # If it's a v7.3 file, use HDF5 loader
+        print(f"Loading {filename} as HDF5 (MATLAB v7.3) file...")
+        return _load_hdf5_mat(filename)
+    except Exception as e:
+        # If scipy.io fails for other reasons, try HDF5
+        try:
+            print(f"scipy.io failed, trying HDF5 loader for {filename}...")
+            return _load_hdf5_mat(filename)
+        except Exception as e2:
+            raise Exception(f"Failed to load {filename} with both scipy.io and HDF5: {e}, {e2}")
 
 def preprocessingSpikes(spikes, binSize):
     """
@@ -201,7 +266,7 @@ def velocity_to_acceleration(timesteps, velocity):
     sp = InterpolatedUnivariateSpline(timesteps, velocity)
     return sp.derivative()(timesteps)
 
-def load_and_preprocess_data(matlab_file, truncate_idx_l=100, truncate_idx=800):
+def load_and_preprocess_data(matlab_file, truncate_idx_l=100, truncate_idx=800, include_excluded=False):
     """
     Load and preprocess data from a MATLAB file.
     
@@ -223,6 +288,7 @@ def load_and_preprocess_data(matlab_file, truncate_idx_l=100, truncate_idx=800):
     
     neural_stim = []
     continous_stim = []
+    excluded_reach_stim =[]
 
     for i in b['kinAggrogate'].keys():
         print(f"Processing {i}")
@@ -230,6 +296,7 @@ def load_and_preprocess_data(matlab_file, truncate_idx_l=100, truncate_idx=800):
 
         neural_session = []
         continous_sessions = []
+        exclude_reach_session = []
 
         for k in stim.keys():
             print(f"\t Organizing {k}")
@@ -249,10 +316,18 @@ def load_and_preprocess_data(matlab_file, truncate_idx_l=100, truncate_idx=800):
                 dataMatrix = np.hstack([dataMatrix[truncate_idx_l:truncate_idx], x, y, z])
                 continous_sessions += [dataMatrix[:, 1:]]
 
+            if include_excluded and k.startswith("exclude_"):
+                # Handle excluded sessions
+                exclude_reach_session += [dataMatrix]
+
         neural_stim += [neural_session]
         continous_stim += [continous_sessions]
-        
-    return neural_stim, continous_stim
+        excluded_reach_stim += [exclude_reach_session]
+
+    if not include_excluded:
+        return neural_stim, continous_stim
+    else:
+        return neural_stim, continous_stim, excluded_reach_stim
 
 def mean_confidence_interval(data, confidence=0.95):
     """

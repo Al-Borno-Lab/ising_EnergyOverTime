@@ -12,6 +12,7 @@ import os
 from scipy.interpolate import CubicSpline
 from coniii.utils import k_corr
 import matplotlib.pyplot as plt
+from utils import calculate_time_dependent_firing_rate
 
 def create_energy_spline(temp_range, energy_values):
     """
@@ -94,7 +95,7 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     dict
         Dictionary of analysis results
     """
-    from model import calc_e
+    from model import calc_e_with_terms
     
     # Convert stimuli to numpy arrays if needed
     x_stim_0 = np.array([continous_stim[0][i][:, 0] for i in range(0, len(continous_stim[0]))])
@@ -116,10 +117,31 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     neural_2 = (np.asarray([neural_stim[2][i][:, :] for i in range(0, len(neural_stim[2]))]) > 0) * 1
 
     # Calculate energy for each neural state
-    e_0 = np.asarray([calc_e(i, multipliers) for i in neural_0])
-    e_1 = np.asarray([calc_e(i, multipliers) for i in neural_1])
-    e_2 = np.asarray([calc_e(i, multipliers) for i in neural_2])
+    # returns both terms e, j, h
+    e_0 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_0])
+    e_1 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_1])
+    e_2 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_2])
+
+    # pull out hamiltonian terms  
+    j_0 = e_0[:, 1]
+    h_0 = e_0[:, 2]
+    j_1 = e_1[:, 1]
+    h_1 = e_1[:, 2]
+    j_2 = e_2[:, 1]
+    h_2 = e_2[:, 2] 
+
+    # pull out energy terms
+    e_0 = e_0[:, 0]
+    e_1 = e_1[:, 0]
+    e_2 = e_2[:, 0]
+
+    # firing rate
+    f_0 = [np.asarray(calculate_time_dependent_firing_rate(n_0)) for  n_0 in neural_0]
+    f_1 = [np.asarray(calculate_time_dependent_firing_rate(n_1)) for n_1 in neural_1] 
+    f_2 = [np.asarray(calculate_time_dependent_firing_rate(n_2)) for n_2 in neural_2]
     
+    reach_idx = [[i]*len(v) for i, v in enumerate(continous_stim[0])]
+
     # Return comprehensive analysis data
     results = {
         'x_stim_data': [x_stim_0, x_stim_1, x_stim_2],
@@ -127,6 +149,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
         'z_stim_data': [z_stim_0, z_stim_1, z_stim_2],
         'neural_binary': [neural_0, neural_1, neural_2],
         'energy_values': [e_0, e_1, e_2],
+        'j_values': [j_0, j_1, j_2],
+        'h_values': [h_0, h_1, h_2],
         'critical_energy': critical_energy
     }
     
@@ -141,10 +165,65 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
             'Num_Neurons': [neural_0.shape[2], neural_1.shape[2], neural_2.shape[2]],
             'Mean_Energy': [np.mean(e_0), np.mean(e_1), np.mean(e_2)],
             'Min_Energy': [np.min(e_0), np.min(e_1), np.min(e_2)],
-            'Max_Energy': [np.max(e_0), np.max(e_1), np.max(e_2)]
+            'Max_Energy': [np.max(e_0), np.max(e_1), np.max(e_2)],
+            'Mean_J': [np.mean(j_0), np.mean(j_1), np.mean(j_2)],
+            'Min_J': [np.min(j_0), np.min(j_1), np.min(j_2)],
+            'Max_J': [np.max(j_0), np.max(j_1), np.max(j_2)],
+            'Mean_H': [np.mean(h_0), np.mean(h_1), np.mean(h_2)],
+            'Min_H': [np.min(h_0), np.min(h_1), np.min(h_2)],
+            'Max_H': [np.max(h_0), np.max(h_1), np.max(h_2)]
         }
         pd.DataFrame(stim_summary).to_csv(os.path.join(output_dir, "neural_stimuli_summary.csv"), index=False)
     
+        # output all reaches
+        all_reaches = {
+            "reach_idx": [],
+            "stim":[],
+            "x":[],
+            "y":[],
+            "z":[],
+            "firing_rate": [],
+            "energy": [],
+            "j": [],
+            "h": []
+        }
+        
+        for i in range(len(continous_stim[0])):
+            all_reaches["reach_idx"] += reach_idx[i]
+            all_reaches["stim"] += [0] * len(reach_idx[i])
+            all_reaches["x"] += x_stim_0[i].tolist()
+            all_reaches["y"] += y_stim_0[i].tolist()
+            all_reaches["z"] += z_stim_0[i].tolist()
+            all_reaches["firing_rate"] += f_0[i].tolist()
+            all_reaches["energy"]+= e_0[i].tolist()
+            all_reaches["j"] += j_0[i].tolist()
+            all_reaches["h"] += h_0[i].tolist()
+        
+        for i in range(len(continous_stim[1])):
+            all_reaches["reach_idx"]+= reach_idx[i]
+            all_reaches["stim"] += [1] * len(reach_idx[i])
+            all_reaches["x"] += x_stim_1[i].tolist()
+            all_reaches["y"] += y_stim_1[i].tolist()
+            all_reaches["z"] += z_stim_1[i].tolist()
+            all_reaches["firing_rate"] += f_1[i].tolist()
+            all_reaches["energy"] += e_1[i].tolist()
+            all_reaches["j"] += j_1[i].tolist()
+            all_reaches["h"] += h_1[i].tolist()
+
+        for i in range(len(continous_stim[2])):
+            all_reaches["reach_idx"] += reach_idx[i]
+            all_reaches["stim"] += [2] * len(reach_idx[i])
+            all_reaches["x"] += x_stim_2[i].tolist()
+            all_reaches["y"] += y_stim_2[i].tolist()
+            all_reaches["z"] += z_stim_2[i].tolist()
+            all_reaches["firing_rate"] += f_2[i].tolist()
+            all_reaches["energy"] += e_2[i].tolist()
+            all_reaches["j"] += j_2[i].tolist()
+            all_reaches["h"] += h_2[i].tolist()
+
+        pd.DataFrame(all_reaches).to_csv(os.path.join(output_dir, "per_reach_state.csv"), index=False)
+
+
     # If spline function is provided, calculate effective temperatures
     if energy_temp_spline is not None and output_dir:
         # Try to map energy back to temperature for interpretation
@@ -300,12 +379,16 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
     y_stim_data = analysis_results['y_stim_data']
     z_stim_data = analysis_results['z_stim_data']
     energy_values = analysis_results['energy_values']
+    j_values = analysis_results['j_values']
+    h_values = analysis_results['h_values']
     
     # Initialize containers for results
     x_kinematics_stats = []
     y_kinematics_stats = []
     z_kinematics_stats = []
     energy_stats = []
+    j_values_stats = []
+    h_values_stats = []
     
     # Calculate statistics for each stimulation condition
     for i, (x_stim, y_stim, z_stim, e_vals) in enumerate(zip(x_stim_data, y_stim_data, z_stim_data, energy_values)):
@@ -341,6 +424,20 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
             energy_lower.append(ml)
             energy_upper.append(mu)
         
+        # J and H statistics
+        j_mean, j_lower, j_upper = [], [], []
+        h_mean, h_lower, h_upper = [], [], []
+        for j in range(j_values[i].shape[1]):
+            j_m, j_ml, j_mu = mean_confidence_interval(j_values[i][:, j], confidence)
+            h_m, h_ml, h_mu = mean_confidence_interval(h_values[i][:, j], confidence)
+            j_mean.append(j_m)
+            j_lower.append(j_ml)
+            j_upper.append(j_mu)
+            h_mean.append(h_m)
+            h_lower.append(h_ml)
+            h_upper.append(h_mu)
+
+
         x_kinematics_stats.append({
             'mean': x_mean,
             'lower': x_lower,
@@ -365,6 +462,17 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
             'upper': energy_upper
         })
         
+        j_values_stats.append({
+            'mean': j_mean,
+            'lower': j_lower,
+            'upper': j_upper
+        })
+        h_values_stats.append({
+            'mean': h_mean,
+            'lower': h_lower,
+            'upper': h_upper
+        })
+
         # Save statistics to CSV and create plots if output directory is provided
         if output_dir:
             time_points = list(range(len(x_mean)))
@@ -405,6 +513,25 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
             })
             energy_stats_df.to_csv(os.path.join(output_dir, f"energy_stats_stim_{i}.csv"), index=False)
             
+            # Save J statistics
+            j_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': j_mean,
+                'Lower_CI': j_lower,
+                'Upper_CI': j_upper
+            })
+            j_stats_df.to_csv(os.path.join(output_dir, f"j_stats_stim_{i}.csv"), index=False)
+            
+            # Save H statistics
+            h_stats_df = pd.DataFrame({
+                'Time': time_points,
+                'Mean': h_mean,
+                'Lower_CI': h_lower,
+                'Upper_CI': h_upper
+            })
+            h_stats_df.to_csv(os.path.join(output_dir, f"h_stats_stim_{i}.csv"), index=False)
+
+
             # Create stacked plots for X, Y, Z coordinates
             fig, axs = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
             
@@ -449,7 +576,9 @@ def calculate_statistics_across_trials(analysis_results, confidence=0.8, output_
         'x_kinematics': x_kinematics_stats,
         'y_kinematics': y_kinematics_stats,
         'z_kinematics': z_kinematics_stats,
-        'energy': energy_stats
+        'energy': energy_stats,
+        'j_values': j_values_stats,
+        'h_values': h_values_stats
     }
 
 def identify_transition_points(energy_data, kinematic_data, threshold=0.2, output_dir=None, stim_idx=0):
