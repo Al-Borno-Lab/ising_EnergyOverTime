@@ -7,20 +7,21 @@
 #SBATCH --output=ising_master_%j.log
 
 # Path to your singularity container
-CONTAINER="~/projectDir/singularity-env/inverse-ising-arm.sif"
+CONTAINER="~/projectDir/singularity-env/inverse-ising-arm-2.sif"
 
 # Check if directory and number of repetitions are provided
-if [ $# -lt 2 ]; then
-    echo "Usage: sbatch run_ising_master.slurm <directory> <number_of_repetitions>"
+if [ $# -lt 3 ]; then
+    echo "Usage: sbatch process_matlab_file_manyTimes_sbatch.sh <directory> <number_of_repetitions> <output_dir>"
     exit 1
 fi
 
 # Directory to process and number of repetitions
 DIR=$1
 NUM_REPETITIONS=$2
+OUTPUT_DIR=$3
 
 # Define window size for firing rate calculation
-WINDOW_SIZE=10
+WINDOW_SIZE=1
 
 # Check if directory exists
 if [ ! -d "$DIR" ]; then
@@ -37,8 +38,8 @@ fi
 # Define the reach phases with their truncation indexes and directory suffixes
 # Format: "low_idx high_idx suffix description"
 REACH_PHASES=(
-    "100 300 begin_reach 'Beginning of reach'"
-    "300 500 mid_reach 'Middle of reach'"
+    "100 350 begin_reach 'Beginning of reach'"
+    "350 500 mid_reach 'Middle of reach'"
     "500 800 post_reach 'Post reach'"
     "100 800 full_reach 'Full reach'"
 )
@@ -53,7 +54,7 @@ cat > job_template.sh << 'EOF'
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=256G
-#SBATCH --output=ising_task_%j.log
+#SBATCH --output=./logs_window_4/ising_task_%j.log
 
 # Arguments passed to this script
 MATLAB_FILE=$1
@@ -69,10 +70,10 @@ mkdir -p "$OUTPUT_DIR"
 singularity exec CONTAINER_PATH /entrypoint.sh python main.py \
     --matlab_file "$MATLAB_FILE" \
     --output_dir "$OUTPUT_DIR" \
-    --bin_size 1 \
+    --bin_size 10 \
     --sample_size 10000 \
     --n_cpus 64 \
-    --max_iter 75 \
+    --max_iter 200 \
     --eta 1e-3 \
     --temp_min 0.1 \
     --temp_max 2.0 \
@@ -101,7 +102,7 @@ for file in "$DIR"/*.mat; do
         experiment_name=$(echo "$filename" | cut -d'_' -f1)
         
         # Create a main folder for this experiment's outputs
-        base_output_folder="${DIR}/${experiment_name}_results"
+        base_output_folder="${OUTPUT_DIR}/${experiment_name}_results"
         mkdir -p "$base_output_folder"
         
         echo "Processing file: $file"

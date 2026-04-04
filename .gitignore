@@ -1,4 +1,7 @@
+
+
 # Data files
+*.zip
 *.csv
 *.xlsx
 *.xls

@@ -23,12 +23,13 @@ import time
 import matplotlib.pyplot as plt
 import pandas as pd
 from os.path import basename, splitext
+from coniii import *
 
 # Import custom modules
 from utils import load_and_preprocess_data, preprocessingSpikes, calculate_statistics_with_ci
-from model import fit_ising_model, phase_transition_analysis, calculate_energy_for_spike_data
-from analysis import create_energy_spline, analyze_neural_stimuli, calculate_statistics_across_trials, identify_transition_points
-from visualization import create_output_directory, plot_phase_transition, plot_energy_across_time, plot_transition_points, plot_energy_histogram, plot_model_quality
+from model import fit_ising_model, phase_transition_analysis, calculate_energy_for_spike_data, calculate_energy_by_neuron_count, calc_e
+from analysis import create_energy_spline, analyze_neural_stimuli, calculate_statistics_across_trials, identify_transition_points, identify_firing_rate_transition_points
+from visualization import create_output_directory, plot_phase_transition, plot_energy_across_time, plot_transition_points, plot_energy_histogram, plot_model_quality, plot_model_quality_summary, plot_energy_distribution_by_k
 
 def parse_arguments():
     """
@@ -73,6 +74,10 @@ def parse_arguments():
                         help='Skip phase transition analysis (useful for quick testing)')
     parser.add_argument('--firing_rate_window', type=int, default=10,
                         help='Window size for time-dependent firing rate calculation (default: 10)')
+    parser.add_argument('--energy_by_k_samples', type=int, default=10000,
+                        help='Number of random samples per k value for energy distribution analysis (default: 1000)')
+    parser.add_argument('--skip_energy_by_k', action='store_true',
+                        help='Skip energy distribution by k analysis')
     
     return parser.parse_args()
 
@@ -156,9 +161,35 @@ def run_analysis(args):
     J_params_df = pd.DataFrame([J_dict])
     J_params_df.to_csv(os.path.join(output_dir, "J_parameters.csv"), index=False)
     
+    # generate samples from multiplers
+    print("sampling...")
+    from coniii.samplers import Metropolis
+    m = Metropolis(N, solver.multipliers, calc_e)
+    m.generate_sample_parallel_py(args.sample_size)
+
+
+
     # Evaluate model quality
     print("Evaluating model quality...")
-    plot_model_quality(bin_cat_p, solver.model.sample, output_dir)
+    plot_model_quality(bin_cat_p, m.sample, output_dir)
+    plot_model_quality_summary(bin_cat_p, m.sample, multipliers, N, output_dir)
+    
+    # Energy distribution by number of neurons on
+    if not args.skip_energy_by_k:
+        print("Calculating energy distribution by number of neurons on...")
+        energy_by_k_results = calculate_energy_by_neuron_count(
+            multipliers,
+            N,
+            num_samples_per_count=args.energy_by_k_samples,
+            rng_seed=42,
+            num_cores=args.n_cpus
+        )
+        
+        # Plot energy distribution heatmap
+        print("Plotting energy distribution heatmap...")
+        plot_energy_distribution_by_k(energy_by_k_results, output_dir)
+    else:
+        print("Skipping energy distribution by k analysis...")
     
     # Phase transition analysis
     if not args.skip_phase_analysis:
@@ -168,7 +199,8 @@ def run_analysis(args):
             multipliers, 
             N, 
             temp_range=temp_range,
-            samples=args.metropolis_samples
+            samples=args.metropolis_samples,
+            num_cores=args.n_cpus
         )
         
         # Plot phase transition results
@@ -195,6 +227,7 @@ def run_analysis(args):
         continous_stim, 
         multipliers, 
         critical_energy,
+        fr_window=args.firing_rate_window,
         energy_temp_spline=energy_spline,
         output_dir=output_dir,
     )
@@ -232,20 +265,36 @@ def run_analysis(args):
             raw_kinematics_df = pd.DataFrame(analysis_results['x_stim_data'][i])
             raw_kinematics_df.to_csv(os.path.join(output_dir, f"raw_kinematics_stim_{i}.csv"), index=False)
             
-            # Identify transition points
-            transition_points = identify_transition_points(mean_energy, mean_kinematics)
+            # Identify transition points from energy
+            energy_transition_points = identify_transition_points(
+                mean_energy, mean_kinematics, output_dir=output_dir, stim_idx=i
+            )
             
-            # Plot transition points
-            if len(transition_points) > 0:
-                plot_transition_points(
-                    mean_energy, 
-                    mean_kinematics,
-                    transition_points,
-                    output_dir,
-                    stim_idx=i
-                )
-                
-                print(f"Identified {len(transition_points)} transition points in stim_{i}")
+            # Identify transition points from firing rate (if available)
+            firing_rate_transition_points = []
+            mean_firing_rate = None
+            if 'firing_rate_values' in analysis_results:
+                fr_list = analysis_results['firing_rate_values'][i]
+                if fr_list:
+                    mean_firing_rate = np.mean(np.array(fr_list), axis=0)
+                    firing_rate_transition_points = identify_firing_rate_transition_points(
+                        mean_firing_rate, mean_kinematics, output_dir=output_dir, stim_idx=i
+                    )
+                    print(f"Identified {len(firing_rate_transition_points)} firing-rate transition points in stim_{i}")
+            
+            # Plot transition points (always plot if we have any, or for comparison)
+            plot_transition_points(
+                mean_energy,
+                mean_kinematics,
+                energy_transition_points,
+                output_dir,
+                stim_idx=i,
+                firing_rate_transition_points=firing_rate_transition_points if firing_rate_transition_points else None,
+                firing_rate_data=mean_firing_rate
+            )
+            
+            if len(energy_transition_points) > 0:
+                print(f"Identified {len(energy_transition_points)} energy transition points in stim_{i}")
             
             # Plot energy histogram
             plot_energy_histogram(

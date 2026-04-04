@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import os
 from scipy.interpolate import CubicSpline
-from coniii.utils import k_corr
+#from coniii.utils import k_corr
 import matplotlib.pyplot as plt
 from utils import calculate_time_dependent_firing_rate
 
@@ -71,7 +71,7 @@ def evaluate_model_quality(original_data, model_samples, max_corr_order=6):
     
     return correlation_results
 
-def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_energy, energy_temp_spline=None, output_dir=None):
+def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_energy, fr_window=10, energy_temp_spline=None, output_dir=None):
     """
     Analyze neural stimuli data with respect to the Ising model.
     
@@ -136,11 +136,14 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     e_2 = e_2[:, 0]
 
     # firing rate
-    f_0 = [np.asarray(calculate_time_dependent_firing_rate(n_0)) for  n_0 in neural_0]
-    f_1 = [np.asarray(calculate_time_dependent_firing_rate(n_1)) for n_1 in neural_1] 
-    f_2 = [np.asarray(calculate_time_dependent_firing_rate(n_2)) for n_2 in neural_2]
+    f_0 = [np.asarray(calculate_time_dependent_firing_rate(n_0, window_size=fr_window)) for  n_0 in neural_0]
+    f_1 = [np.asarray(calculate_time_dependent_firing_rate(n_1, window_size=fr_window)) for n_1 in neural_1] 
+    f_2 = [np.asarray(calculate_time_dependent_firing_rate(n_2, window_size=fr_window)) for n_2 in neural_2]
     
-    reach_idx = [[i]*len(v) for i, v in enumerate(continous_stim[0])]
+    # Create reach_idx arrays for each stimulus (each may have different number of trials)
+    reach_idx_0 = [[i]*len(v) for i, v in enumerate(continous_stim[0])]
+    reach_idx_1 = [[i]*len(v) for i, v in enumerate(continous_stim[1])]
+    reach_idx_2 = [[i]*len(v) for i, v in enumerate(continous_stim[2])]
 
     # Return comprehensive analysis data
     results = {
@@ -149,6 +152,7 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
         'z_stim_data': [z_stim_0, z_stim_1, z_stim_2],
         'neural_binary': [neural_0, neural_1, neural_2],
         'energy_values': [e_0, e_1, e_2],
+        'firing_rate_values': [f_0, f_1, f_2],
         'j_values': [j_0, j_1, j_2],
         'h_values': [h_0, h_1, h_2],
         'critical_energy': critical_energy
@@ -189,8 +193,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
         }
         
         for i in range(len(continous_stim[0])):
-            all_reaches["reach_idx"] += reach_idx[i]
-            all_reaches["stim"] += [0] * len(reach_idx[i])
+            all_reaches["reach_idx"] += reach_idx_0[i]
+            all_reaches["stim"] += [0] * len(reach_idx_0[i])
             all_reaches["x"] += x_stim_0[i].tolist()
             all_reaches["y"] += y_stim_0[i].tolist()
             all_reaches["z"] += z_stim_0[i].tolist()
@@ -200,8 +204,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
             all_reaches["h"] += h_0[i].tolist()
         
         for i in range(len(continous_stim[1])):
-            all_reaches["reach_idx"]+= reach_idx[i]
-            all_reaches["stim"] += [1] * len(reach_idx[i])
+            all_reaches["reach_idx"]+= reach_idx_1[i]
+            all_reaches["stim"] += [1] * len(reach_idx_1[i])
             all_reaches["x"] += x_stim_1[i].tolist()
             all_reaches["y"] += y_stim_1[i].tolist()
             all_reaches["z"] += z_stim_1[i].tolist()
@@ -211,8 +215,8 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
             all_reaches["h"] += h_1[i].tolist()
 
         for i in range(len(continous_stim[2])):
-            all_reaches["reach_idx"] += reach_idx[i]
-            all_reaches["stim"] += [2] * len(reach_idx[i])
+            all_reaches["reach_idx"] += reach_idx_2[i]
+            all_reaches["stim"] += [2] * len(reach_idx_2[i])
             all_reaches["x"] += x_stim_2[i].tolist()
             all_reaches["y"] += y_stim_2[i].tolist()
             all_reaches["z"] += z_stim_2[i].tolist()
@@ -633,5 +637,73 @@ def identify_transition_points(energy_data, kinematic_data, threshold=0.2, outpu
             'Is_Transition_Point': [1 if i in transition_points else 0 for i in range(len(energy_data))]
         })
         transition_df.to_csv(os.path.join(output_dir, f"transition_analysis_stim_{stim_idx}.csv"), index=False)
+    
+    return transition_points
+
+
+def identify_firing_rate_transition_points(firing_rate_data, kinematic_data, threshold=0.2, output_dir=None, stim_idx=0):
+    """
+    Identify potential transition points in neural activity based on firing rate changes.
+    
+    Uses the same derivative-based logic as identify_transition_points but applied to
+    firing rate instead of energy. This allows comparison of which kinematic transitions
+    are detected by firing rate vs energy.
+    
+    Parameters:
+    -----------
+    firing_rate_data : list or ndarray
+        Firing rate values over time (mean across trials or single trial)
+    kinematic_data : list or ndarray
+        Kinematic values over time (position)
+    threshold : float, optional
+        Threshold for identifying significant changes (default=0.2)
+    output_dir : str, optional
+        Directory to save transition points data
+    stim_idx : int, optional
+        Stimulus index for file naming
+        
+    Returns:
+    --------
+    list
+        Indices of potential transition points based on firing rate
+    """
+    firing_rate_data = np.array(firing_rate_data)
+    kinematic_data = np.array(kinematic_data)
+    
+    # Ensure same length (firing rate may be shorter due to window)
+    min_len = min(len(firing_rate_data), len(kinematic_data))
+    firing_rate_data = firing_rate_data[:min_len]
+    kinematic_data = kinematic_data[:min_len]
+    
+    # Calculate derivatives
+    fr_deriv = np.gradient(firing_rate_data)
+    kinematic_deriv = np.gradient(kinematic_data)
+    
+    # Find points where firing rate derivative exceeds threshold
+    fr_std = np.std(fr_deriv)
+    if fr_std > 0:
+        significant_points = np.where(np.abs(fr_deriv) > threshold * fr_std)[0]
+    else:
+        significant_points = np.array([])
+    
+    # Filter points to find those with corresponding kinematic changes
+    transition_points = []
+    kin_std = np.std(kinematic_deriv)
+    for point in significant_points:
+        if point > 0 and point < len(kinematic_deriv) - 1 and kin_std > 0:
+            if np.abs(kinematic_deriv[point]) > kin_std:
+                transition_points.append(point)
+    
+    # Save transition points data to CSV if output directory is provided
+    if output_dir:
+        transition_df = pd.DataFrame({
+            'Time_Index': range(len(firing_rate_data)),
+            'Firing_Rate': firing_rate_data,
+            'Firing_Rate_Derivative': fr_deriv,
+            'Kinematics': kinematic_data,
+            'Kinematics_Derivative': kinematic_deriv,
+            'Is_Transition_Point': [1 if i in transition_points else 0 for i in range(len(firing_rate_data))]
+        })
+        transition_df.to_csv(os.path.join(output_dir, f"transition_analysis_firing_rate_stim_{stim_idx}.csv"), index=False)
     
     return transition_points
