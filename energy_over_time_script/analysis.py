@@ -111,16 +111,21 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     z_stim_1 = np.array([continous_stim[1][i][:, 2] for i in range(0, len(continous_stim[1]))])
     z_stim_2 = np.array([continous_stim[2][i][:, 2] for i in range(0, len(continous_stim[2]))])
 
-    # Convert neural data to binary format
+    # Convert neural data to binary format {0, 1}
     neural_0 = (np.asarray([neural_stim[0][i][:, :] for i in range(0, len(neural_stim[0]))]) > 0) * 1
     neural_1 = (np.asarray([neural_stim[1][i][:, :] for i in range(0, len(neural_stim[1]))]) > 0) * 1
     neural_2 = (np.asarray([neural_stim[2][i][:, :] for i in range(0, len(neural_stim[2]))]) > 0) * 1
 
+    # Ising spins {-1, +1} for energy (matches model fitting / calc_e convention)
+    neural_0_ising = 2 * neural_0 - 1
+    neural_1_ising = 2 * neural_1 - 1
+    neural_2_ising = 2 * neural_2 - 1
+
     # Calculate energy for each neural state
     # returns both terms e, j, h
-    e_0 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_0])
-    e_1 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_1])
-    e_2 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_2])
+    e_0 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_0_ising])
+    e_1 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_1_ising])
+    e_2 = np.asarray([calc_e_with_terms(i, multipliers) for i in neural_2_ising])
 
     # pull out hamiltonian terms  
     j_0 = e_0[:, 1]

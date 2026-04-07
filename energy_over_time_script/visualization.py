@@ -792,10 +792,10 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     ax_pk = fig.add_subplot(gs[2, 1])
 
     def _binary_spike_matrix(X):
-    X = np.asarray(X, dtype=float)
-    if X.min() < 0:  # {-1, +1}
-        return (X + 1.0) / 2.0
-    return (X > 0).astype(float)  # hard binarize
+        X = np.asarray(X, dtype=float)
+        if X.min() < 0:  # {-1, +1}
+            return (X + 1.0) / 2.0
+        return (X > 0).astype(float)  # hard binarize
 
     def _spike_counts_per_bin(X):
         sigma = _binary_spike_matrix(X)
@@ -814,6 +814,12 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     k_axis = np.arange(N + 1)
     P_data = np.bincount(K_data, minlength=N + 1).astype(float) / max(len(K_data), 1)
     P_ising = np.bincount(K_model, minlength=N + 1).astype(float) / max(len(K_model), 1)
+
+    sigma = (original_data + 1) / 2  # should be {0,1}
+    print("Unique values after conversion:", np.unique(sigma))
+    print("K=0 count:", np.sum(sigma.sum(axis=1) == 0))
+    print("K=1 count:", np.sum(sigma.sum(axis=1) == 1))
+    print("Mean K:", sigma.sum(axis=1).mean())
 
     eps = 1e-12
     ax_pk.semilogy(k_axis, np.maximum(P_data, eps), "o-", color="blue", ms=4, lw=1.2, label="data")

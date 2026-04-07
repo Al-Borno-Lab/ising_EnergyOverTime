@@ -38,9 +38,9 @@ fi
 # Define the reach phases with their truncation indexes and directory suffixes
 # Format: "low_idx high_idx suffix description"
 REACH_PHASES=(
-    "100 350 begin_reach 'Beginning of reach'"
-    "350 500 mid_reach 'Middle of reach'"
-    "500 800 post_reach 'Post reach'"
+    # "100 350 begin_reach 'Beginning of reach'"
+    # "350 500 mid_reach 'Middle of reach'"
+    # "500 800 post_reach 'Post reach'"
     "100 800 full_reach 'Full reach'"
 )
 
@@ -70,15 +70,15 @@ mkdir -p "$OUTPUT_DIR"
 singularity exec CONTAINER_PATH /entrypoint.sh python main.py \
     --matlab_file "$MATLAB_FILE" \
     --output_dir "$OUTPUT_DIR" \
-    --bin_size 10 \
-    --sample_size 10000 \
+    --bin_size 1 \
+    --sample_size 100000 \
     --n_cpus 64 \
     --max_iter 200 \
-    --eta 1e-3 \
+    --eta 0.05 \
     --temp_min 0.1 \
     --temp_max 2.0 \
     --temp_step 0.05 \
-    --metropolis_samples 1000000 \
+    --metropolis_samples 100000 \
     --truncate_idx_l "$LOW_IDX" \
     --truncate_idx "$HIGH_IDX" \
     --confidence 0.8 \

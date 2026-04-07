@@ -125,9 +125,14 @@ def metropolis(initial_v, multiplier, temp, bootStrap=100000, samples=100000):
 
         # Accept or reject altered vector
         dE = E_u - E_i
-        if (dE > 0) * (np.random.random() < np.exp(-temp * dE)):
+        # if (dE > 0) * (np.random.random() < np.exp(-temp * dE)):
+        #     current_vec = mu_vector
+        # elif dE <= 0:
+        #     current_vec = mu_vector
+
+        if dE <= 0:
             current_vec = mu_vector
-        elif dE <= 0:
+        elif np.random.random() < np.exp(-dE / temp):
             current_vec = mu_vector
 
         # Store data after burn-in period
@@ -250,11 +255,11 @@ def fit_ising_model(spike_data, sample_size=10000, n_cpus=8, max_iter=75, eta=1e
     
     # Solve for model parameters
     start_time = time.time()
-    multipliers = solver.solve(maxiter=max_iter,
-                              n_iters=N*10,
-                              burn_in=N*10,
-                              iprint="detailed",
-                              custom_convergence_f=learn_settings)
+    multipliers = solver.solve( maxiter=max_iter,
+                                n_iters=max(N*100, 2000),
+                                burn_in=max(N*50, 1000),
+                                iprint="detailed",
+                                custom_convergence_f=learn_settings)
     
     print(f"Model fitting completed in {time.time() - start_time:.2f} seconds")
     
@@ -278,8 +283,8 @@ def _process_single_temperature(args):
     print(f"Temperature: {temp}")
     
     # Run Metropolis sampling with both initializations
-    _, net_spin_neg, net_energy_neg = metropolis(vec_neg.copy(), multipliers, 1/temp, samples=samples)
-    _, net_spin_pos, net_energy_pos = metropolis(vec_pos.copy(), multipliers, 1/temp, samples=samples)
+    _, net_spin_neg, net_energy_neg = metropolis(vec_neg.copy(), multipliers, temp, samples=samples)
+    _, net_spin_pos, net_energy_pos = metropolis(vec_pos.copy(), multipliers, temp, samples=samples)
     
     return (temp, net_spin_pos, net_spin_neg, net_energy_pos, net_energy_neg)
 
