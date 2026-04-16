@@ -6,12 +6,34 @@
 #SBATCH --ntasks=1
 #SBATCH --output=ising_master_%j.log
 
+set -euo pipefail
+
 # Path to your singularity container
 CONTAINER="~/projectDir/singularity-env/inverse-ising-arm-2.sif"
+
+# Directory containing main.py / arbitration_many.py (for follow-up job).
+# When you run sbatch from the energy_over_time_script folder, SLURM_SUBMIT_DIR is set correctly.
+_resolve_energy_script_dir() {
+    if [[ -n "${SLURM_SUBMIT_DIR:-}" ]] && [[ -f "${SLURM_SUBMIT_DIR}/arbitration_many.py" ]]; then
+        (cd "${SLURM_SUBMIT_DIR}" && pwd)
+        return
+    fi
+    local _script="${BASH_SOURCE[0]}"
+    if [[ "${_script}" != /* ]]; then
+        _script="${PWD}/${_script}"
+    fi
+    if command -v readlink >/dev/null 2>&1 && readlink -f / >/dev/null 2>&1; then
+        _script="$(readlink -f "${_script}")"
+    fi
+    (cd "$(dirname "${_script}")" && pwd)
+}
+
+ENERGY_SCRIPT_DIR="$(_resolve_energy_script_dir)"
 
 # Check if directory and number of repetitions are provided
 if [ $# -lt 3 ]; then
     echo "Usage: sbatch process_matlab_file_manyTimes_sbatch.sh <directory> <number_of_repetitions> <output_dir>"
+    echo "  Submit from energy_over_time_script (or a directory that contains arbitration_many.py) so the arbitration step can find the Python tree."
     exit 1
 fi
 
@@ -20,8 +42,17 @@ DIR=$1
 NUM_REPETITIONS=$2
 OUTPUT_DIR=$3
 
+mkdir -p "$OUTPUT_DIR"
+OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
+
+# Expand ~ in container path for generated job scripts
+CONTAINER_EXPANDED="${CONTAINER/#\~/${HOME}}"
+
 # Define window size for firing rate calculation
 WINDOW_SIZE=1
+
+# Collect ising_task job IDs for Slurm afterok dependency
+JOB_IDS=()
 
 # Check if directory exists
 if [ ! -d "$DIR" ]; then
@@ -35,12 +66,15 @@ if ! [[ "$NUM_REPETITIONS" =~ ^[0-9]+$ ]] || [ "$NUM_REPETITIONS" -lt 1 ]; then
     exit 1
 fi
 
+# Arbitration rep range must include all repetition folders (rep 1 .. NUM_REPETITIONS)
+REP_END_EXCLUSIVE=$((NUM_REPETITIONS + 1))
+
 # Define the reach phases with their truncation indexes and directory suffixes
 # Format: "low_idx high_idx suffix description"
 REACH_PHASES=(
-    # "100 350 begin_reach 'Beginning of reach'"
-    # "350 500 mid_reach 'Middle of reach'"
-    # "500 800 post_reach 'Post reach'"
+    "100 350 begin_reach 'Beginning of reach'"
+    "350 500 mid_reach 'Middle of reach'"
+    "500 800 post_reach 'Post reach'"
     "100 800 full_reach 'Full reach'"
 )
 
@@ -88,7 +122,7 @@ echo "Task completed for $OUTPUT_DIR"
 EOF
 
 # Replace the container path in the template
-sed -i "s|CONTAINER_PATH|$CONTAINER|g" job_template.sh
+sed -i "s|CONTAINER_PATH|${CONTAINER_EXPANDED}|g" job_template.sh
 chmod +x job_template.sh
 
 # Loop over all .mat files in the directory
@@ -122,8 +156,13 @@ for file in "$DIR"/*.mat; do
                 
                 echo "    Submitting job for repetition $rep of $NUM_REPETITIONS"
                 
-                # Submit the job
-                sbatch job_template.sh "$file" "$rep_output_dir" "$low_idx" "$high_idx" "$WINDOW_SIZE"
+                jid=$(sbatch --parsable job_template.sh "$file" "$rep_output_dir" "$low_idx" "$high_idx" "$WINDOW_SIZE")
+                jid="${jid%%;*}"
+                if [[ -z "${jid}" ]] || ! [[ "${jid}" =~ ^[0-9]+$ ]]; then
+                    echo "Error: sbatch failed or returned unexpected id: ${jid}" >&2
+                    exit 1
+                fi
+                JOB_IDS+=("${jid}")
                 
                 # Add a small delay to avoid overwhelming the scheduler
                 sleep 0.5
@@ -139,4 +178,54 @@ done
 # Clean up the template
 rm job_template.sh
 
+if [[ ${#JOB_IDS[@]} -eq 0 ]]; then
+    echo "No .mat jobs were submitted; skipping arbitration follow-up."
+    echo "All jobs have been submitted (none)."
+    exit 0
+fi
+
+# Build afterok dependency: jobid1:jobid2:...
+DEP_STRING=$(IFS=:; echo "${JOB_IDS[*]}")
+MASTER_TAG="${SLURM_JOB_ID:-$$}"
+
+FOLLOWUP_SH="${OUTPUT_DIR}/slurm_arbitration_followup_${MASTER_TAG}.sh"
+
+cat > "${FOLLOWUP_SH}" << FOLLOWUP_EOF
+#!/bin/bash
+#SBATCH --job-name=ising_arbitration
+#SBATCH --partition=math-alderaan
+#SBATCH --nodes=1
+#SBATCH --time=4:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=64G
+#SBATCH --output=${OUTPUT_DIR}/ising_arbitration_%j.log
+
+set -euo pipefail
+cd "${ENERGY_SCRIPT_DIR}"
+
+echo "Running arbitration_many.py on ${OUTPUT_DIR}"
+echo "Plots and CSVs -> ${OUTPUT_DIR}/arbitration/"
+
+singularity exec "${CONTAINER_EXPANDED}" /entrypoint.sh python arbitration_many.py \\
+    --data_folder "${OUTPUT_DIR}" \\
+    --output_base "${OUTPUT_DIR}/arbitration" \\
+    --rep_start 1 \\
+    --rep_end_exclusive ${REP_END_EXCLUSIVE} \\
+    --window 390 410 \\
+    --quiet_find
+
+echo "Arbitration job finished."
+FOLLOWUP_EOF
+
+chmod +x "${FOLLOWUP_SH}"
+
+ARBIT_JID=$(sbatch --parsable --dependency=afterok:"${DEP_STRING}" "${FOLLOWUP_SH}")
+ARBIT_JID="${ARBIT_JID%%;*}"
+
+echo "Submitted ${#JOB_IDS[@]} ising_task job(s)."
+echo "Dependency chain: afterok:${DEP_STRING}"
+echo "Arbitration follow-up job ID: ${ARBIT_JID}"
+echo "Follow-up script (for reference): ${FOLLOWUP_SH}"
+echo "Arbitration Slurm log: ${OUTPUT_DIR}/ising_arbitration_<jobid>.log"
 echo "All jobs have been submitted"

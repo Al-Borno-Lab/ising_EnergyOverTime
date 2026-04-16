@@ -10,7 +10,7 @@
 
 singularity exec ~/projectDir/singularity-env/inverse-ising-arm-2.sif /entrypoint.sh python main.py \
     --matlab_file  /data001/projects/enserrog/AbigailData/energy_over_time/210421_fChR2_bin10_spike.mat \
-    --output_dir /home/enserrog/ising_EnergyOverTime/energy_over_time_script/test_output_4_updated_code_smaller \
+    --output_dir /home/enserrog/ising_EnergyOverTime/energy_over_time_script/test_output_6 \
     --bin_size 1 \
     --sample_size 100000 \
     --n_cpus 64 \

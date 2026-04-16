@@ -471,7 +471,8 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
 def plot_transition_points(energy_data, kinematic_data, energy_transition_points, output_dir, stim_idx=0,
                           firing_rate_transition_points=None, firing_rate_data=None):
     """
-    Plot transition points on position, velocity, acceleration, energy, and firing rate.
+    Plot transition points on position, velocity, acceleration, energy, firing rate, and
+    firing-rate change (time derivative, same as in identify_firing_rate_transition_points).
     
     Compares energy-based and firing-rate-based transition points with different colors
     to visualize which kinematic transitions are detected by each signal.
@@ -493,7 +494,8 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
         When provided, both types are plotted with different colors for comparison.
     firing_rate_data : ndarray, optional
         Firing rate values over time for plotting (default=None).
-        When provided, firing rate is plotted below the kinematic graphs.
+        When provided, firing rate and its discrete derivative (``np.gradient``) are plotted
+        below energy; firing-rate transitions are detected from large |d(FR)/dt| vs std.
         
     Returns:
     --------
@@ -517,18 +519,20 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
     
     # Align firing rate data if provided
     firing_rate_data = np.array(firing_rate_data) if firing_rate_data is not None else None
+    firing_rate_deriv = None
     if firing_rate_data is not None:
         firing_rate_data = firing_rate_data[:n_points] if len(firing_rate_data) > n_points else np.pad(
             firing_rate_data, (0, max(0, n_points - len(firing_rate_data))), mode='edge'
         )[:n_points]
+        firing_rate_deriv = np.gradient(firing_rate_data)
     
     # Find overlap: points detected by both energy and firing rate
     energy_set = set(energy_transition_points)
     fr_set = set(firing_rate_transition_points)
     both_set = energy_set & fr_set
     
-    # 5 subplots: position, velocity, acceleration, energy, firing rate (if available)
-    n_subplots = 5 if firing_rate_data is not None else 4
+    # 6 subplots when firing rate present: + panel for d(FR)/dt (matches transition detection)
+    n_subplots = 6 if firing_rate_data is not None else 4
     plt.figure(figsize=(14, 2.5 * n_subplots))
     
     time_axis = np.arange(n_points)
@@ -546,7 +550,9 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
     
     # Subplot 1: Position
     plt.subplot(n_subplots, 1, 1)
-    plt.title(f"Position, Velocity, Acceleration, Energy, and Firing Rate with Transition Points, Stim_{stim_idx}")
+    plt.title(
+        f"Position, Velocity, Acceleration, Energy, Firing Rate & d(FR)/dt with Transition Points, Stim_{stim_idx}"
+    )
     plt.plot(time_axis, kinematic_data, '-b', linewidth=1.5, label='Position')
     _add_transition_lines()
     plt.ylabel("Position")
@@ -585,8 +591,22 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
         plt.subplot(n_subplots, 1, 5)
         plt.plot(time_axis, firing_rate_data, '-', color='orange', linewidth=1.5, label='Firing Rate')
         _add_transition_lines()
-        plt.xlabel("Time")
         plt.ylabel("Firing Rate")
+        plt.grid(alpha=0.3)
+        
+        # Subplot 6: change in firing rate (same derivative used for firing-rate transitions)
+        plt.subplot(n_subplots, 1, 6)
+        plt.plot(
+            time_axis,
+            firing_rate_deriv,
+            '-',
+            color='darkorange',
+            linewidth=1.5,
+            label='d(FR)/dt',
+        )
+        _add_transition_lines()
+        plt.xlabel("Time")
+        plt.ylabel("Firing rate change")
         plt.grid(alpha=0.3)
     
     plt.tight_layout()
@@ -607,6 +627,7 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
     }
     if firing_rate_data is not None:
         csv_data['Firing_Rate_Data'] = firing_rate_data[:n_points]
+        csv_data['Firing_Rate_Derivative'] = firing_rate_deriv
     transitions_df = pd.DataFrame(csv_data)
     
     transitions_df.to_csv(os.path.join(output_dir, f"transition_points_stim_{stim_idx}.csv"), index=False)
@@ -733,6 +754,11 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     corr3_orig = k_corr(original_data, 3)
     corr3_model = k_corr(model_samples, 3)
 
+    # Independent model triplet prediction: ⟨σᵢ σⱼ σₖ⟩_ind = ⟨σᵢ⟩⟨σⱼ⟩⟨σₖ⟩
+    si = k_corr(original_data, 1)   # shape (N,) — mean spin per neuron
+    corr3_indep = np.array([si[i] * si[j] * si[k]
+                             for i, j, k in combinations(range(N), 3)])
+
     fig = plt.figure(figsize=(12, 14))
     gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.15, 1.0, 1.15],
                            width_ratios=[1, 1], hspace=0.35, wspace=0.28)
@@ -775,15 +801,24 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     ax_j.text(0.02, 0.98, "(b)", transform=ax_j.transAxes, fontsize=12, fontweight="bold",
               va="top", ha="left")
 
-    # --- (c) Triplet correlations ---
+    # --- (c) Triplet correlations: Ising vs data, and independent vs data ---
     ax_trip = fig.add_subplot(gs[2, 0])
-    ax_trip.scatter(corr3_orig, corr3_model, s=10, alpha=0.45, c="darkred", edgecolors="none")
-    lo3 = float(min(corr3_orig.min(), corr3_model.min()))
-    hi3 = float(max(corr3_orig.max(), corr3_model.max()))
-    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1)
+
+    # Ising model (red)
+    ax_trip.scatter(corr3_orig, corr3_model, s=10, alpha=0.5, c="red",
+                    edgecolors="none", label="Ising", zorder=3)
+    # Independent model ⟨σᵢ⟩⟨σⱼ⟩⟨σₖ⟩ (black circles)
+    ax_trip.scatter(corr3_orig, corr3_indep, s=10, alpha=0.4, c="black",
+                    edgecolors="none", label="independent", zorder=2)
+
+    lo3 = float(min(corr3_orig.min(), corr3_model.min(), corr3_indep.min()))
+    hi3 = float(max(corr3_orig.max(), corr3_model.max(), corr3_indep.max()))
+    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1, label="identity")
+
     ax_trip.set_xlabel(r"measured $\langle \sigma_i \sigma_j \sigma_k \rangle$")
     ax_trip.set_ylabel(r"predicted $\langle \sigma_i \sigma_j \sigma_k \rangle$")
-    ax_trip.set_title("Triplet correlation ($k=3$)")
+    ax_trip.set_title("Triplet correlation ($k=3$): Ising vs independent")
+    ax_trip.legend(loc="upper left", fontsize=8)
     ax_trip.grid(alpha=0.3)
     ax_trip.text(0.02, 0.98, "(c)", transform=ax_trip.transAxes, fontsize=12, fontweight="bold",
                  va="top", ha="left")
@@ -859,6 +894,7 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     trip_df = pd.DataFrame({
         "triplet_corr_orig": corr3_orig,
         "triplet_corr_model": corr3_model,
+        "triplet_corr_independent": corr3_indep,
     })
     trip_df.to_csv(os.path.join(output_dir, "model_quality_summary_triplet.csv"), index=False)
 

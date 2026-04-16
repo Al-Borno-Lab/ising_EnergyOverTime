@@ -624,11 +624,11 @@ def identify_transition_points(energy_data, kinematic_data, threshold=0.2, outpu
     significant_points = np.where(np.abs(energy_deriv) > threshold * np.std(energy_deriv))[0]
     
     # Filter points to find those with corresponding kinematic changes
-    transition_points = []
-    for point in significant_points:
-        if point > 0 and point < len(kinematic_deriv) - 1:
-            if np.abs(kinematic_deriv[point]) > np.std(kinematic_deriv):
-                transition_points.append(point)
+    transition_points = significant_points
+    # for point in significant_points:
+    #     if point > 0 and point < len(kinematic_deriv) - 1:
+    #         if np.abs(kinematic_deriv[point]) > np.std(kinematic_deriv):
+    #             transition_points.append(point)
     
     # Save transition points data to CSV if output directory is provided
     if output_dir:
