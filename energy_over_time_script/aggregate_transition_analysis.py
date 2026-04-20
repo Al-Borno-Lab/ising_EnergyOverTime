@@ -357,6 +357,18 @@ def default_session_hook(
     plt.close()
     print(f"    Saved figure : {out_png}")
 
+    # ---- event alignment figure (independent kinematic lines + spike marks) ----
+    _plot_spike_event_alignment(
+        t=t,
+        energy_deriv=energy_deriv,
+        spike_mask=spike_mask,
+        kin_vars=kin_vars,
+        threshold=threshold,
+        label=label,
+        stim=stim,
+        output_dir=output_dir,
+    )
+
     # ---- save regression CSV ----
     results_df.insert(0, "session", label)
     results_df.insert(1, "stim",    stim)
@@ -364,6 +376,135 @@ def default_session_hook(
     out_csv = output_dir / f"energy_spike_regression_{label}_stim_{stim}.csv"
     results_df.to_csv(out_csv, index=False)
     print(f"    Saved results: {out_csv}")
+
+
+# ---------------------------------------------------------------------------
+# Spike-event alignment plot (independent kinematic lines + event markers)
+# ---------------------------------------------------------------------------
+
+def _plot_spike_event_alignment(
+    t: np.ndarray,
+    energy_deriv: np.ndarray,
+    spike_mask: np.ndarray,
+    kin_vars: dict,
+    threshold: float,
+    label: str,
+    stim: int,
+    output_dir: Path,
+) -> None:
+    """
+    'Event alignment' figure: shows WHERE energy-derivative spike events fall
+    on each kinematic signal, with no colour-coding of non-spike points.
+
+    Layout (all panels share the x-axis):
+      Panel 0 : Energy derivative + threshold bands (same as regression figure)
+      Panel 1 : Spike event raster  — one tick per spike time, no kinematic info
+      Panel 2+ : One panel per kinematic variable, plotted as a clean continuous
+                 line.  Vertical semi-transparent lines at spike times let you
+                 see the temporal alignment directly.
+
+    This separates the 'where are the spikes?' question from the 'do values
+    differ?' question — you see the signal shape first, then where events land.
+    """
+    spike_times = t[spike_mask]
+    thresh_val  = threshold * np.std(energy_deriv)
+    n_spikes    = int(spike_mask.sum())
+    n_total     = len(t)
+
+    kin_names  = list(kin_vars.keys())
+    n_kin      = len(kin_names)
+    n_panels   = 2 + n_kin      # energy + raster + one per kin var
+
+    spike_color = "#d62728"     # red for events
+    kin_colors  = {
+        "position":     "#1f77b4",   # blue
+        "velocity":     "#ff7f0e",   # orange
+        "acceleration": "#2ca02c",   # green
+    }
+
+    fig, axes = plt.subplots(
+        n_panels, 1,
+        figsize=(16, 3.0 * n_panels),
+        sharex=True,
+    )
+
+    # ── Panel 0: Energy derivative ────────────────────────────────────────
+    ax0 = axes[0]
+    ax0.plot(t, energy_deriv, lw=0.8, color="dimgray", label="Energy deriv.")
+    ax0.axhline( thresh_val, color=spike_color, lw=1.3, ls="--",
+                 label=f"+{threshold}σ")
+    ax0.axhline(-thresh_val, color=spike_color, lw=1.3, ls="--",
+                 label=f"−{threshold}σ")
+    ax0.fill_between(t, energy_deriv, where=spike_mask,
+                     color=spike_color, alpha=0.28, label="spike region")
+    ax0.set_ylabel("Energy deriv.", fontsize=9)
+    ax0.legend(fontsize=7, ncol=4, loc="upper right")
+    ax0.grid(alpha=0.2)
+    ax0.set_title(
+        f"{label}  |  stim {stim}  |  threshold = {threshold}σ  "
+        f"|  {n_spikes} spikes ({100 * n_spikes / n_total:.1f}% of {n_total} bins)",
+        fontsize=9,
+    )
+
+    # ── Panel 1: Spike event raster ───────────────────────────────────────
+    ax1 = axes[1]
+    if len(spike_times) > 0:
+        ax1.eventplot(
+            spike_times, lineoffsets=0.5, linelengths=0.85,
+            colors=spike_color, linewidths=0.9,
+        )
+    ax1.set_ylim(0.0, 1.0)
+    ax1.set_yticks([0.5])
+    ax1.set_yticklabels(["spikes"], fontsize=8)
+    ax1.set_ylabel("Events", fontsize=9)
+    ax1.grid(axis="x", alpha=0.2)
+    ax1.set_facecolor("#fff8f8")
+
+    # ── Panels 2+: clean kinematic lines with event marks ────────────────
+    for panel_i, (name, kvar) in enumerate(kin_vars.items(), start=2):
+        ax = axes[panel_i]
+        col = kin_colors.get(name, "steelblue")
+
+        # Spike event vertical lines drawn FIRST (behind the signal)
+        if len(spike_times) > 0:
+            ax.vlines(
+                spike_times,
+                ymin=kvar.min(), ymax=kvar.max(),
+                color=spike_color, alpha=0.18, lw=0.9,
+            )
+            # Small tick marks along the top edge using axes-coordinate y
+            # blended transform: x in data coords, y in axes [0,1] fraction
+            trans = ax.get_xaxis_transform()
+            ax.vlines(
+                spike_times,
+                ymin=0.95, ymax=1.0,
+                color=spike_color, alpha=0.6, lw=0.9,
+                transform=trans, clip_on=False,
+            )
+
+        # Kinematic signal as a clean continuous line
+        ax.plot(t, kvar, lw=1.6, color=col, label=name.capitalize(), zorder=3)
+        ax.set_ylabel(name.capitalize(), fontsize=9, color=col)
+        ax.tick_params(axis="y", labelcolor=col)
+        ax.grid(alpha=0.2)
+        ax.legend(fontsize=7, loc="upper left")
+
+        if panel_i == n_panels - 1:
+            ax.set_xlabel("Time index", fontsize=9)
+
+    fig.suptitle(
+        f"Energy-derivative spike event alignment — {label}  |  stim {stim}\n"
+        f"Threshold = {threshold}σ  |  {n_spikes} events  "
+        f"({100 * n_spikes / n_total:.1f}% of time)  |  "
+        f"Red lines = spike times (independent of kinematic amplitude)",
+        fontsize=10, fontweight="bold",
+    )
+    plt.tight_layout()
+
+    out_png = output_dir / f"spike_event_alignment_{label}_stim_{stim}.png"
+    plt.savefig(out_png, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"    Saved event alignment: {out_png}")
 
 
 # ---------------------------------------------------------------------------
@@ -712,6 +853,194 @@ def _pool_session_results(session_results: list) -> dict:
     return out
 
 
+def _plot_aggregate_event_alignment(
+    session_dfs: dict,
+    threshold: float,
+    stim: int,
+    output_dir: Path,
+) -> None:
+    """
+    One aggregate event-alignment figure for a given threshold, pooling all
+    sessions.
+
+    Layout (sharex):
+      Panel 0 : Energy derivative — per-session light traces + bold mean +
+                ±threshold bands.
+      Panel 1 : Multi-session spike raster — one row per session, sorted
+                alphabetically.  Lets you see at a glance whether events
+                cluster at the same time-bins across sessions.
+      Panel 2 : Spike density — fraction of sessions that have a spike at
+                each time bin.  This is the aggregate 'event rate' curve.
+      Panel 3+ : One panel per kinematic variable (acceleration, velocity,
+                 position).  Per-session light traces + bold mean line.
+                 Spike density filled in the background so you see the
+                 aggregate event timing against the mean kinematic shape,
+                 independently of any single session.
+
+    Saved as:
+        aggregate_event_alignment_thr<threshold>_stim_<N>.png
+    """
+    kin_colors = {
+        "position":     "#1f77b4",
+        "velocity":     "#ff7f0e",
+        "acceleration": "#2ca02c",
+    }
+    spike_color  = "#d62728"
+    trace_alpha  = 0.18
+    density_alpha = 0.30
+
+    # ── Build aligned arrays ──────────────────────────────────────────────
+    # Each session may have a different length; align to the shortest.
+    session_labels = sorted(session_dfs.keys())
+    n_sess = len(session_labels)
+
+    arrays_by_sess = {}
+    for lab in session_labels:
+        df = session_dfs[lab]
+        t_s = df["Time_Index"].values if "Time_Index" in df.columns else np.arange(len(df))
+        ed  = df["Energy_Derivative"].values
+        pos = df["Kinematics"].values
+        vel = df["Kinematics_Derivative"].values
+        acc = np.gradient(vel)
+        arrays_by_sess[lab] = dict(t=t_s, energy=ed, pos=pos, vel=vel, acc=acc)
+
+    min_len = min(len(v["t"]) for v in arrays_by_sess.values())
+    t_common = arrays_by_sess[session_labels[0]]["t"][:min_len]
+
+    # Stack into (n_sess × min_len) matrices
+    E_mat   = np.vstack([arrays_by_sess[l]["energy"][:min_len] for l in session_labels])
+    pos_mat = np.vstack([arrays_by_sess[l]["pos"][:min_len]    for l in session_labels])
+    vel_mat = np.vstack([arrays_by_sess[l]["vel"][:min_len]    for l in session_labels])
+    acc_mat = np.vstack([arrays_by_sess[l]["acc"][:min_len]    for l in session_labels])
+
+    # Per-session spike masks aligned to common length
+    spike_mat = np.zeros((n_sess, min_len), dtype=bool)
+    for i, lab in enumerate(session_labels):
+        ed_full = arrays_by_sess[lab]["energy"]
+        sess_std = np.std(ed_full)
+        spike_mat[i] = np.abs(ed_full[:min_len]) > threshold * sess_std
+
+    # Aggregate spike density: fraction of sessions with spike at each bin
+    spike_density = spike_mat.mean(axis=0)
+
+    # Mean signals
+    E_mean   = E_mat.mean(axis=0)
+    pos_mean = pos_mat.mean(axis=0)
+    vel_mean = vel_mat.mean(axis=0)
+    acc_mean = acc_mat.mean(axis=0)
+
+    total_n_spikes = spike_mat.sum()
+    mean_spike_pct = 100 * spike_mat.mean()
+
+    # ── Figure layout ─────────────────────────────────────────────────────
+    kin_order  = ["acceleration", "velocity", "position"]
+    kin_mats   = {"acceleration": acc_mat, "velocity": vel_mat, "position": pos_mat}
+    kin_means  = {"acceleration": acc_mean, "velocity": vel_mean, "position": pos_mean}
+
+    n_panels = 3 + len(kin_order)   # energy + raster + density + 3 kin
+    fig, axes = plt.subplots(
+        n_panels, 1,
+        figsize=(16, 3.2 * n_panels),
+        sharex=True,
+    )
+
+    # ── Panel 0: Energy derivative ─────────────────────────────────────────
+    ax = axes[0]
+    grand_std = E_mat.std()          # pooled std for reference band
+    thresh_val = threshold * grand_std
+    for row in E_mat:
+        ax.plot(t_common, row, lw=0.4, color="dimgray", alpha=trace_alpha)
+    ax.plot(t_common, E_mean, lw=1.8, color="black", label="Mean energy deriv.")
+    ax.axhline( thresh_val, color=spike_color, lw=1.3, ls="--",
+                label=f"+{threshold}σ (pooled)")
+    ax.axhline(-thresh_val, color=spike_color, lw=1.3, ls="--",
+                label=f"−{threshold}σ (pooled)")
+    ax.set_ylabel("Energy deriv.", fontsize=9)
+    ax.legend(fontsize=7, ncol=3, loc="upper right")
+    ax.grid(alpha=0.2)
+    ax.set_title(
+        f"Aggregate — stim {stim}  |  threshold = {threshold}σ  |  "
+        f"{n_sess} sessions  |  {total_n_spikes} total spikes "
+        f"({mean_spike_pct:.1f}% mean rate)",
+        fontsize=9,
+    )
+
+    # ── Panel 1: Multi-session spike raster ────────────────────────────────
+    ax = axes[1]
+    spike_times_per_sess = [t_common[spike_mat[i]] for i in range(n_sess)]
+    if any(len(s) > 0 for s in spike_times_per_sess):
+        ax.eventplot(
+            spike_times_per_sess,
+            lineoffsets=np.arange(n_sess),
+            linelengths=0.8,
+            colors=spike_color,
+            linewidths=0.7,
+        )
+    ax.set_yticks(np.arange(n_sess))
+    ax.set_yticklabels(session_labels, fontsize=6)
+    ax.set_ylabel("Session", fontsize=9)
+    ax.set_ylim(-0.5, n_sess - 0.5)
+    ax.grid(axis="x", alpha=0.2)
+    ax.set_facecolor("#fff8f8")
+
+    # ── Panel 2: Spike density across sessions ──────────────────────────────
+    ax = axes[2]
+    ax.fill_between(t_common, spike_density, alpha=0.55,
+                    color=spike_color, label="Spike density")
+    ax.plot(t_common, spike_density, lw=1.0, color=spike_color)
+    ax.axhline(spike_density.mean(), color="black", lw=1.0, ls="--",
+               label=f"Mean density ({spike_density.mean():.3f})")
+    ax.set_ylabel("Fraction\nwith spike", fontsize=9)
+    ax.set_ylim(0, max(spike_density.max() * 1.15, 0.05))
+    ax.legend(fontsize=7, loc="upper right")
+    ax.grid(alpha=0.2)
+
+    # ── Panels 3+: kinematic signals ───────────────────────────────────────
+    for panel_i, name in enumerate(kin_order, start=3):
+        ax  = axes[panel_i]
+        mat = kin_mats[name]
+        mn  = kin_means[name]
+        col = kin_colors[name]
+
+        # Spike density as a background fill scaled to the data range
+        data_range = mat.max() - mat.min()
+        if data_range > 0:
+            density_scaled = mat.min() + spike_density * data_range
+            ax.fill_between(t_common, mat.min(), density_scaled,
+                            color=spike_color, alpha=density_alpha,
+                            label="Spike density (scaled)")
+
+        # Per-session light traces
+        for row in mat:
+            ax.plot(t_common, row, lw=0.4, color=col, alpha=trace_alpha)
+
+        # Bold mean line on top
+        ax.plot(t_common, mn, lw=2.0, color=col, label=f"Mean {name}", zorder=4)
+
+        ax.set_ylabel(name.capitalize(), fontsize=9, color=col)
+        ax.tick_params(axis="y", labelcolor=col)
+        ax.legend(fontsize=7, loc="upper left")
+        ax.grid(alpha=0.2)
+
+        if panel_i == n_panels - 1:
+            ax.set_xlabel("Time index", fontsize=9)
+
+    fig.suptitle(
+        f"Aggregate spike event alignment  |  stim {stim}  |  threshold = {threshold}σ\n"
+        f"{n_sess} sessions  |  Red background = spike density "
+        f"(fraction of sessions with event at that bin)  |  "
+        f"Bold line = cross-session mean signal",
+        fontsize=10, fontweight="bold",
+    )
+    plt.tight_layout()
+
+    thr_str = f"{threshold:.1f}".replace(".", "p")
+    out_png = output_dir / f"aggregate_event_alignment_thr{thr_str}_stim_{stim}.png"
+    plt.savefig(out_png, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"  Saved aggregate alignment: {out_png}")
+
+
 def threshold_sweep(
     root: Path,
     stim: int,
@@ -779,10 +1108,45 @@ def threshold_sweep(
             )
         print("    " + "  |".join(parts))
 
+        # aggregate event-alignment figure for this threshold
+        _plot_aggregate_event_alignment(session_dfs, thr, stim, output_dir)
+
     sweep_df = pd.DataFrame(sweep_rows)
     out_csv  = output_dir / f"threshold_sweep_stim_{stim}.csv"
     sweep_df.to_csv(out_csv, index=False)
     print(f"  Saved sweep CSV : {out_csv}")
+
+    # ── Identify the best threshold ───────────────────────────────────────
+    # Primary signal = acceleration (confirmed by notes).  Best threshold =
+    # lowest pooled p-value for acceleration across the sweep.
+    PRIMARY_KIN = "acceleration"
+    best_thr = thresholds[0]
+    best_p   = 1.0
+    for thr in thresholds:
+        p = pooled_by_thresh[thr].get(PRIMARY_KIN, {}).get("pooled_p", 1.0)
+        if np.isfinite(p) and p < best_p:
+            best_p   = p
+            best_thr = thr
+    print(f"\n  Best threshold ({PRIMARY_KIN}, lowest pooled p={best_p:.4f}): {best_thr}σ")
+
+    # ── Per-session alignment plots at the best threshold ─────────────────
+    best_dir = output_dir / f"best_threshold_thr{best_thr:.1f}".replace(".", "p")
+    best_dir.mkdir(parents=True, exist_ok=True)
+    print(f"  Generating per-session alignment plots at {best_thr}σ → {best_dir}")
+    for lab, df in session_dfs.items():
+        t_s  = df["Time_Index"].values if "Time_Index" in df.columns else np.arange(len(df))
+        ed   = df["Energy_Derivative"].values
+        pos  = df["Kinematics"].values
+        vel  = df["Kinematics_Derivative"].values
+        acc  = np.gradient(vel)
+        _, spike_mask, kin_vars = _energy_spike_regression(df, best_thr)
+        _plot_spike_event_alignment(
+            t=t_s, energy_deriv=ed,
+            spike_mask=spike_mask, kin_vars=kin_vars,
+            threshold=best_thr, label=lab, stim=stim,
+            output_dir=best_dir,
+        )
+    print(f"  Done — {len(session_dfs)} per-session plots saved to {best_dir}")
 
     # ---- figure ----
     kin_names = sweep_df["kinematic"].unique().tolist()
@@ -899,11 +1263,14 @@ def main():
         help="Where to save output files (default: <root_dir>/aggregate_transition)",
     )
     parser.add_argument(
-        "--threshold", type=float, default=1.0,
+        "--threshold", type=float, default=2.0,
         help=(
             "Std-multiplier for the energy-derivative spike threshold: "
-            "|Energy_Derivative| > threshold × σ  (default: 1.0).  "
-            "Only used by the built-in default hook."
+            "|Energy_Derivative| > threshold × σ  (default: 2.0, the empirically "
+            "best threshold for acceleration coupling).  "
+            "Only used by the built-in default hook.  "
+            "When --sweep is used, the sweep automatically identifies and re-generates "
+            "per-session alignment plots at the best threshold regardless of this value."
         ),
     )
     parser.add_argument(

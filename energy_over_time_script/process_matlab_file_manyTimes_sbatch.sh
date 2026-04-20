@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --time=1:00:00
 #SBATCH --ntasks=1
-#SBATCH --output=ising_master_%j.log
+#SBATCH --output=./logs/ising_master/ising_master_%j.log
 
 set -euo pipefail
 
@@ -45,6 +45,9 @@ OUTPUT_DIR=$3
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(cd "$OUTPUT_DIR" && pwd)"
 
+# Ensure log directories exist before jobs try to write to them
+mkdir -p ./logs/ising_master ./logs/ising_tasks
+
 # Expand ~ in container path for generated job scripts
 CONTAINER_EXPANDED="${CONTAINER/#\~/${HOME}}"
 
@@ -72,9 +75,9 @@ REP_END_EXCLUSIVE=$((NUM_REPETITIONS + 1))
 # Define the reach phases with their truncation indexes and directory suffixes
 # Format: "low_idx high_idx suffix description"
 REACH_PHASES=(
-    "100 350 begin_reach 'Beginning of reach'"
-    "350 500 mid_reach 'Middle of reach'"
-    "500 800 post_reach 'Post reach'"
+    # "100 350 begin_reach 'Beginning of reach'"
+    # "350 500 mid_reach 'Middle of reach'"
+    # "500 800 post_reach 'Post reach'"
     "100 800 full_reach 'Full reach'"
 )
 
@@ -88,7 +91,7 @@ cat > job_template.sh << 'EOF'
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=256G
-#SBATCH --output=./logs_window_4/ising_task_%j.log
+#SBATCH --output=./logs/ising_tasks/ising_task_%j.log
 
 # Arguments passed to this script
 MATLAB_FILE=$1
@@ -190,6 +193,9 @@ MASTER_TAG="${SLURM_JOB_ID:-$$}"
 
 FOLLOWUP_SH="${OUTPUT_DIR}/slurm_arbitration_followup_${MASTER_TAG}.sh"
 
+# Derive a report name from the output directory (used inside the heredoc below)
+REPORT_NAME="$(basename "${OUTPUT_DIR}")_report"
+
 cat > "${FOLLOWUP_SH}" << FOLLOWUP_EOF
 #!/bin/bash
 #SBATCH --job-name=ising_arbitration
@@ -204,6 +210,23 @@ cat > "${FOLLOWUP_SH}" << FOLLOWUP_EOF
 set -euo pipefail
 cd "${ENERGY_SCRIPT_DIR}"
 
+# ── Session report (from ising task PNGs) ────────────────────────────────────
+echo "Generating session report: ${REPORT_NAME}"
+echo "Scanning ${OUTPUT_DIR} for PNG outputs..."
+
+singularity exec "${CONTAINER_EXPANDED}" /entrypoint.sh python generate_session_report.py \\
+    "${OUTPUT_DIR}" \\
+    --name "${REPORT_NAME}" \\
+    --title "Session Report – ${REPORT_NAME}" \\
+    --output_dir "${OUTPUT_DIR}/reports" \\
+    --columns 2 \\
+    --pdf
+
+echo "Session report saved to ${OUTPUT_DIR}/reports/${REPORT_NAME}/"
+echo "  Markdown : ${OUTPUT_DIR}/reports/${REPORT_NAME}/${REPORT_NAME}.md"
+echo "  PDF      : ${OUTPUT_DIR}/reports/${REPORT_NAME}/${REPORT_NAME}.pdf"
+
+# ── Arbitration ───────────────────────────────────────────────────────────────
 echo "Running arbitration_many.py on ${OUTPUT_DIR}"
 echo "Plots and CSVs -> ${OUTPUT_DIR}/arbitration/"
 
@@ -213,8 +236,25 @@ singularity exec "${CONTAINER_EXPANDED}" /entrypoint.sh python arbitration_many.
     --rep_start 1 \\
     --rep_end_exclusive ${REP_END_EXCLUSIVE} \\
     --window 390 410 \\
-    --quiet_find
+    --quiet_find \\
+    --report_dir "${OUTPUT_DIR}/reports/${REPORT_NAME}"
 
+echo "Arbitration results written to ${OUTPUT_DIR}/reports/${REPORT_NAME}/arbitration_results.md"
+
+# ── J-value arbitration ───────────────────────────────────────────────────────
+echo "Running arbitration_j_many.py on ${OUTPUT_DIR}"
+echo "Plots and CSVs -> ${OUTPUT_DIR}/arbitration_j/"
+
+singularity exec "${CONTAINER_EXPANDED}" /entrypoint.sh python arbitration_j_many.py \\
+    --data_folder "${OUTPUT_DIR}" \\
+    --output_base "${OUTPUT_DIR}/arbitration_j" \\
+    --rep_start 1 \\
+    --rep_end_exclusive ${REP_END_EXCLUSIVE} \\
+    --window 390 410 \\
+    --quiet_find \\
+    --report_dir "${OUTPUT_DIR}/reports/${REPORT_NAME}"
+
+echo "J arbitration results written to ${OUTPUT_DIR}/reports/${REPORT_NAME}/arbitration_j_results.md"
 echo "Arbitration job finished."
 FOLLOWUP_EOF
 

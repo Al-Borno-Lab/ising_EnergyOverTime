@@ -54,7 +54,7 @@ def parse_arguments():
                         help='Number of CPUs to use for model fitting (default: 8)')
     parser.add_argument('--max_iter', type=int, default=75,
                         help='Maximum number of iterations for model fitting (default: 75)')
-    parser.add_argument('--eta', type=float, default=1e-3,
+    parser.add_argument('--eta', type=float, default=0.005,
                         help='Learning rate for model fitting (default: 1e-3)')
     parser.add_argument('--temp_min', type=float, default=0.1,
                         help='Minimum temperature for phase transition analysis (default: 0.1)')

@@ -175,9 +175,22 @@ logs/
 
 # Output directories
 output/
+outputs/
 results/
 figures/
 plots/
+
+# Local pip installs (pip install --target)
+.pip_packages/
+
+# Generated session reports (large assets + PDFs)
+notes/session_report/
+energy_over_time_script/notes/session_report/
+
+# Temporary scratch files
+temp/
+energy_over_time_script/temp/
+energy_over_time_script/report.md
 
 # Model files
 *.model

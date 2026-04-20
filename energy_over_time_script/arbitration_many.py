@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import date
 from multiprocessing import Pool
 
 import numpy as np
@@ -132,7 +133,143 @@ def parse_args():
         action="store_true",
         help="Less verbose output from within_session_test_with_plots",
     )
+    p.add_argument(
+        "--report_dir",
+        type=str,
+        default=None,
+        metavar="DIR",
+        help=(
+            "If set, write arbitration_results.md into this directory "
+            "(e.g. the session report folder produced by generate_session_report.py)."
+        ),
+    )
     return p.parse_args()
+
+
+# ---------------------------------------------------------------------------
+# Markdown report writer
+# ---------------------------------------------------------------------------
+
+_CLOSEST_LABELS = ["Energy Min", "Energy Max", "Firing Min", "Firing Max"]
+
+
+def write_arbitration_markdown(all_results, all_closest, out_base, report_dir, args):
+    """
+    Write a self-contained arbitration_results.md into *report_dir*.
+
+    Parameters
+    ----------
+    all_results  : {rep: results_dict}   from within_session_test_with_plots
+    all_closest  : {rep: {stim: [e_min_wins, e_max_wins, f_min_wins, f_max_wins]}}
+    out_base     : path where per-rep CSVs were saved
+    report_dir   : destination directory for the markdown file
+    args         : parsed CLI args (for metadata)
+    """
+    os.makedirs(report_dir, exist_ok=True)
+    md_path = os.path.join(report_dir, "arbitration_results.md")
+
+    lines = []
+    lines += [
+        "# Arbitration Results",
+        "",
+        f"*Generated: {date.today().isoformat()}*",
+        "",
+        f"**Data folder:** `{args.data_folder}`  ",
+        f"**Window:** [{args.window[0]}, {args.window[1]}]  ",
+        f"**Reference:** {args.reference}  ",
+        f"**Reps:** {args.rep_start} – {args.rep_end_exclusive - 1}  ",
+        f"**Stimuli:** {args.stim_min} – {args.stim_max_exclusive - 1}",
+        "",
+        "---",
+        "",
+    ]
+
+    stim_range = range(args.stim_min, args.stim_max_exclusive)
+
+    # ── Per-rep overall summary ───────────────────────────────────────────
+    lines += ["## Overall Results (per Rep)", ""]
+    lines += [
+        "| Rep | Energy Wins | Firing Wins | Ties | N Sessions | Energy Win % |",
+        "|:---:|:---:|:---:|:---:|:---:|:---:|",
+    ]
+    for rep, res in sorted(all_results.items()):
+        ov = res["overall"]
+        lines.append(
+            f"| {rep} | {ov['energy_wins']} | {ov['firing_wins']} | "
+            f"{ov['ties']} | {ov['n_sessions']} | {ov['energy_win_pct']:.1f}% |"
+        )
+    lines += [""]
+
+    # ── Per-stimulus breakdown ────────────────────────────────────────────
+    lines += ["## Per-Stimulus Breakdown", ""]
+    lines += [
+        "| Rep | Stim | Energy Wins | Firing Wins | Ties | N Sessions | "
+        "Energy Win % | Mean ΔEnergy | Mean ΔFiring |",
+        "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
+    ]
+    for rep, res in sorted(all_results.items()):
+        for stim in sorted(res["by_stimulus"].keys()):
+            s = res["by_stimulus"][stim]
+            lines.append(
+                f"| {rep} | {stim} | {s['energy_wins']} | {s['firing_wins']} | "
+                f"{s['ties']} | {s['n_sessions']} | {s['energy_win_pct']:.1f}% | "
+                f"{s['mean_energy_distance']:.3f} | {s['mean_firing_distance']:.3f} |"
+            )
+    lines += [""]
+
+    # ── Closest-extremum counts ───────────────────────────────────────────
+    lines += [
+        "## Closest Extremum to Kinematic Reference",
+        "",
+        f"Counts: how many sessions had each extremum closest to the "
+        f"{args.reference} peak.",
+        "",
+        "| Rep | Stim | Energy Min | Energy Max | Firing Min | Firing Max |",
+        "|:---:|:---:|:---:|:---:|:---:|:---:|",
+    ]
+    for rep, stim_map in sorted(all_closest.items()):
+        for stim, cp in sorted(stim_map.items()):
+            lines.append(
+                f"| {rep} | {stim} | {cp[0]} | {cp[1]} | {cp[2]} | {cp[3]} |"
+            )
+    lines += [""]
+
+    # ── Distance statistics ───────────────────────────────────────────────
+    lines += ["## Distance Statistics", ""]
+    lines += [
+        "| Rep | Stim | Mean ΔEnergy | Std ΔEnergy | Mean ΔFiring | Std ΔFiring | "
+        "Mean Covariance | Mean Correlation |",
+        "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
+    ]
+    for rep, res in sorted(all_results.items()):
+        for stim in sorted(res["by_stimulus"].keys()):
+            s = res["by_stimulus"][stim]
+            lines.append(
+                f"| {rep} | {stim} | {s['mean_energy_distance']:.3f} | "
+                f"{s['std_energy_distance']:.3f} | {s['mean_firing_distance']:.3f} | "
+                f"{s['std_firing_distance']:.3f} | {s['mean_covariance']:.4f} | "
+                f"{s['mean_correlation']:.4f} |"
+            )
+    lines += [""]
+
+    # ── CSV locations ─────────────────────────────────────────────────────
+    lines += ["## Output Files", ""]
+    for rep in sorted(all_results.keys()):
+        rep_out = os.path.join(out_base, str(rep))
+        lines += [
+            f"**Rep {rep}**  ",
+            f"- Results CSV: `{os.path.join(rep_out, 'results.csv')}`  ",
+            f"- Session summary: `{os.path.join(rep_out, 'session_summary.csv')}`  ",
+            f"- Energy-win plots: `{os.path.join(rep_out, 'energy_wins')}/`  ",
+            f"- Firing-win plots: `{os.path.join(rep_out, 'firing_wins')}/`  ",
+            f"- Tie plots: `{os.path.join(rep_out, 'ties')}/`  ",
+            "",
+        ]
+
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    print(f"Arbitration report written to: {md_path}")
 
 
 def main() -> int:
@@ -156,6 +293,10 @@ def main() -> int:
         return 1
 
     stim_range = range(args.stim_min, args.stim_max_exclusive)
+
+    # Collect results across all reps for the markdown report
+    all_results = {}
+    all_closest = {}
 
     for rep in range(args.rep_start, args.rep_end_exclusive):
         session_data = {}
@@ -201,6 +342,7 @@ def main() -> int:
         ref_key = "acceleration" if args.reference == "acceleration" else "velocity"
         ref_idx_attr = 1  # (value, index) tuple from find_extrema_in_range
 
+        rep_closest = {}
         for stim in stim_range:
             if stim not in stim_sessions_extrema:
                 print(f"(stim {stim}: no data)")
@@ -218,9 +360,12 @@ def main() -> int:
                 idx_closest = int(np.argmin(close_set))
                 closest_list.append(close_set)
                 closest_point[idx_closest] += 1
+            rep_closest[stim] = closest_point
             print(closest_point)
             if closest_list:
                 print(np.array(closest_list))
+
+        all_closest[rep] = rep_closest
 
         rep_out = os.path.join(out_base, str(rep))
         os.makedirs(rep_out, exist_ok=True)
@@ -230,6 +375,7 @@ def main() -> int:
             output_dir=rep_out,
             verbose=not args.quiet_arbitration,
         )
+        all_results[rep] = results
 
         df = pd.concat(
             [
@@ -240,6 +386,10 @@ def main() -> int:
         )
         df.to_csv(os.path.join(rep_out, "results.csv"), index=False)
         print(f"Wrote {os.path.join(rep_out, 'results.csv')}")
+
+    # Write markdown report if requested and we have results
+    if args.report_dir and all_results:
+        write_arbitration_markdown(all_results, all_closest, out_base, args.report_dir, args)
 
     return 0
 

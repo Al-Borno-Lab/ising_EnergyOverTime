@@ -204,7 +204,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     
     for i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
         # Create figure with stacked subplots: X, Y, Z, Energy, and optionally Firing Rate
-        n_subplots = 6 if neural_data is not None else 4
+        n_subplots = 6 if neural_data is not None else 5
         plt.figure(figsize=(12, 3*n_subplots))
         
         # X-coordinate subplot
@@ -287,7 +287,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.ylabel("Z Position")
         plt.legend()
         plt.grid(alpha=0.3)
-        
+
         # Energy subplot --
         plt.subplot(n_subplots, 1, 4)
         plt.title(f"{title_prefix} Energy of Neural Activity Over Time, Stim_{i}")
@@ -319,10 +319,8 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         plt.legend()
         plt.grid(alpha=0.3)
         
-        # h & j plots subplot
+        # ── Subplot 5: h & J values ──────────────────────────────────────
         plt.subplot(n_subplots, 1, 5)
-
-        # plot 
         plt.title(f"{title_prefix} Local Fields and Interactions, Stim_{i}")
         
         if show_mid_point and len(j_values[i]['mean']) > 100:
