@@ -138,45 +138,156 @@ def _j_jump_index(j_ts: np.ndarray, w_lo: int, w_hi: int):
     return w_lo + local_idx, float(dj[local_idx])
 
 
+def _gaussian_smooth(arr: np.ndarray, sigma: float) -> np.ndarray:
+    """Convolve arr with a Gaussian kernel of given sigma (in samples)."""
+    if sigma <= 0 or len(arr) < 3:
+        return arr.astype(float)
+    r      = int(np.ceil(3 * sigma))
+    x      = np.arange(-r, r + 1, dtype=float)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel /= kernel.sum()
+    return np.convolve(arr.astype(float), kernel, mode='same')
+
+
+def _local_prominence(j_smooth: np.ndarray, idx: int, half: int) -> float:
+    """
+    Prominence of a candidate peak at `idx` in the smoothed signal:
+        peak_value − max(left_valley_min, right_valley_min)
+    where the valleys are searched in ±half bins around the peak.
+    """
+    left_seg  = j_smooth[max(0, idx - half) : idx]
+    right_seg = j_smooth[idx + 1 : min(len(j_smooth), idx + half + 1)]
+    left_val  = float(left_seg.min())  if len(left_seg)  else float(j_smooth[idx])
+    right_val = float(right_seg.min()) if len(right_seg) else float(j_smooth[idx])
+    return float(j_smooth[idx]) - max(left_val, right_val)
+
+
+def _j_peak_detect(j_ts: np.ndarray, w_lo: int, w_hi: int,
+                   threshold_ratio: float = 2.0, smooth_sigma: float = 5.0):
+    """
+    Test whether J has an exceptional peak within the window [w_lo, w_hi].
+
+    Strategy
+    --------
+    1. Smooth J (Gaussian, sigma=smooth_sigma) to suppress noise.
+    2. Find the maximum of the smoothed signal inside the window.
+    3. Compute its local prominence (how far it rises above flanking valleys).
+    4. Collect the prominences of ALL local maxima in the smoothed signal
+       OUTSIDE the search window — these represent background undulations.
+    5. Compare window_prominence to the 90th percentile of background
+       prominences.  If window_prominence > threshold_ratio × bg_90th,
+       the peak is declared large.
+
+    Why background comparison?
+        A gently undulating J (like regular oscillations) produces background
+        peaks with similar prominences to whatever is in the search window, so
+        the ratio stays near 1 → not flagged.
+        A genuine J peak is distinctly taller than any background undulation,
+        so the ratio is well above threshold → flagged.
+        This works regardless of whether the raw signal is noisy or quiet.
+
+    Parameters
+    ----------
+    j_ts            : full J time series (numpy array)
+    w_lo, w_hi      : search window (indices into j_ts)
+    threshold_ratio : window prominence must be > this × bg_90th (default 2.0)
+    smooth_sigma    : Gaussian smoothing width in time-bins (default 5)
+
+    Returns
+    -------
+    has_peak      : bool  — True if window peak dominates background
+    peak_idx      : int   — index (in full ts) of the smoothed-signal maximum
+    peak_value    : float — raw J value at that index
+    prom_ratio    : float — window_prominence / bg_90th (the test statistic)
+    """
+    w_lo = max(0, int(w_lo))
+    w_hi = min(len(j_ts), int(w_hi))
+    if w_hi <= w_lo + 1 or len(j_ts) < 3:
+        return False, w_lo, np.nan, np.nan
+
+    j_smooth  = _gaussian_smooth(j_ts, smooth_sigma)
+    half      = max(10, (w_hi - w_lo) // 2)
+
+    # Candidate peak: smoothed maximum inside the window
+    segment   = j_smooth[w_lo:w_hi]
+    local_idx = int(np.argmax(segment))
+    peak_idx  = w_lo + local_idx
+    window_prom = _local_prominence(j_smooth, peak_idx, half)
+
+    # Background: prominences of all local maxima OUTSIDE the search window
+    # (simple definition: point greater than both immediate neighbors)
+    bg_proms = []
+    for i in range(1, len(j_smooth) - 1):
+        if w_lo <= i < w_hi:
+            continue
+        if j_smooth[i] > j_smooth[i - 1] and j_smooth[i] > j_smooth[i + 1]:
+            bg_proms.append(_local_prominence(j_smooth, i, half))
+
+    if not bg_proms:
+        # No background peaks: fall back to comparing against smooth std
+        smooth_std = float(j_smooth.std())
+        if smooth_std < 1e-10:
+            return False, peak_idx, float(j_ts[peak_idx]), 0.0
+        prom_ratio = window_prom / smooth_std
+        return bool(prom_ratio > threshold_ratio), peak_idx, float(j_ts[peak_idx]), prom_ratio
+
+    bg_90 = float(np.percentile(bg_proms, 90))
+    if bg_90 < 1e-10:
+        return False, peak_idx, float(j_ts[peak_idx]), 0.0
+
+    prom_ratio = window_prom / bg_90
+    has_peak   = bool(prom_ratio > threshold_ratio)
+    return has_peak, peak_idx, float(j_ts[peak_idx]), prom_ratio
+
+
 # ---------------------------------------------------------------------------
 # Core analysis: J jumps vs kinematic peaks
 # ---------------------------------------------------------------------------
 
 def within_session_j_kinematics(stim_sessions_extrema, window, reference="acceleration",
-                                 verbose=True):
+                                 peak_threshold=1.5, smooth_sigma=5.0, verbose=True):
     """
     For every session: find the largest J jump (max |dJ/dt| in window) and compare
     its timing to both the acceleration peak and the velocity peak.
+    Also tests whether J has a large peak in the window and, if so, reports
+    its lag relative to each kinematic signal.
 
     Metrics computed per session:
-      - j_jump_idx     : time-bin of largest |ΔJ| in window
-      - j_jump_mag     : magnitude of that change
-      - accel_peak_idx : time-bin of max acceleration in window
-      - vel_peak_idx   : time-bin of max velocity in window
-      - lag_to_accel   : j_jump_idx − accel_peak_idx  (neg = J leads accel)
-      - lag_to_vel     : j_jump_idx − vel_peak_idx    (neg = J leads vel)
-      - dist_to_accel  : |lag_to_accel|
-      - dist_to_vel    : |lag_to_vel|
-      - corr_j_accel   : Pearson r(J ts, accel ts)
-      - corr_j_vel     : Pearson r(J ts, vel ts)
-      - xcorr_lag_accel: cross-corr peak lag J vs accel (pos = J leads)
-      - xcorr_lag_vel  : cross-corr peak lag J vs vel   (pos = J leads)
-      - timing_accel   : 'leads' | 'lags' | 'simultaneous'
+      - j_jump_idx          : time-bin of largest |ΔJ| in window
+      - j_jump_mag          : magnitude of that change
+      - accel_peak_idx      : time-bin of max acceleration in window
+      - vel_peak_idx        : time-bin of max velocity in window
+      - lag_to_accel        : j_jump_idx − accel_peak_idx  (neg = J leads accel)
+      - lag_to_vel          : j_jump_idx − vel_peak_idx    (neg = J leads vel)
+      - dist_to_accel       : |lag_to_accel|
+      - dist_to_vel         : |lag_to_vel|
+      - corr_j_accel        : Pearson r(J ts, accel ts)
+      - corr_j_vel          : Pearson r(J ts, vel ts)
+      - xcorr_lag_accel     : cross-corr peak lag J vs accel (pos = J leads)
+      - xcorr_lag_vel       : cross-corr peak lag J vs vel   (pos = J leads)
+      - timing_accel        : 'leads' | 'lags' | 'simultaneous'
+      - has_j_peak          : bool — J has a large peak in the window
+      - j_peak_idx          : time-bin of the J peak (nan if no peak)
+      - j_peak_value        : J value at the peak (nan if no peak)
+      - j_peak_z            : prom/bg90 ratio (prominence vs background undulations)
+      - j_peak_lag_to_accel : j_peak_idx − accel_peak_idx (nan if no peak)
+      - j_peak_lag_to_vel   : j_peak_idx − vel_peak_idx   (nan if no peak)
 
     Prints a formatted session-by-session table per stimulus.
     """
     results = {'by_stimulus': {}, 'overall': {}, 'all_sessions': []}
     w_lo, w_hi = window
 
-    total_sessions = 0
-    all_lag_accel   = []
-    all_lag_vel     = []
-    all_dist_accel  = []
-    all_dist_vel    = []
-    all_corr_accel  = []
-    all_corr_vel    = []
-    all_xcorr_accel = []
-    all_xcorr_vel   = []
+    total_sessions   = 0
+    all_lag_accel    = []
+    all_lag_vel      = []
+    all_dist_accel   = []
+    all_dist_vel     = []
+    all_corr_accel   = []
+    all_corr_vel     = []
+    all_xcorr_accel  = []
+    all_xcorr_vel    = []
+    all_has_peak     = []
 
     for stim in sorted(stim_sessions_extrema):
         sessions = stim_sessions_extrema[stim]
@@ -191,10 +302,11 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
         stim_corr_vel    = []
         stim_xcorr_accel = []
         stim_xcorr_vel   = []
+        stim_has_peak    = []
         session_rows     = []
 
         if verbose:
-            sep = '═' * 78
+            sep = '═' * 90
             print(f"\n{sep}")
             print(f"  STIMULUS {stim}   ({n_sess} sessions)")
             print(sep)
@@ -202,7 +314,8 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
                    f"{'Accel_pk':>9} {'Vel_pk':>8} "
                    f"{'Lag→A':>7} {'Lag→V':>7} "
                    f"{'r(J,A)':>8} {'r(J,V)':>8} "
-                   f"{'XC_A':>6} {'XC_V':>6}  Timing")
+                   f"{'XC_A':>6} {'XC_V':>6}  "
+                   f"{'Peak?':>6} {'Ratio':>6} {'PkLag→A':>8} {'PkLag→V':>8}  Timing")
             print(hdr)
             print('  ' + '-' * (len(hdr) - 2))
 
@@ -218,6 +331,14 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             xcorr_a     = np.nan
             xcorr_v     = np.nan
 
+            # Peak-detection defaults
+            has_j_peak          = False
+            j_peak_idx          = np.nan
+            j_peak_value        = np.nan
+            j_peak_z            = np.nan
+            j_peak_lag_to_accel = np.nan
+            j_peak_lag_to_vel   = np.nan
+
             if 'original_data' in sdata:
                 od = sdata['original_data']
                 od_stim = od[od['stim'] == stim]
@@ -226,9 +347,21 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
                     accel_ts = _acceleration_timeseries(od_stim)
                     vel_ts   = _velocity_timeseries(od_stim)
 
-                    # J jump: index of largest |dJ/dt| in window
                     if len(j_ts) > 0:
+                        # J jump: index of largest |dJ/dt| in window
                         j_jump_idx, j_jump_mag = _j_jump_index(j_ts, w_lo, w_hi)
+
+                        # J peak: test for a large, prominent maximum in window
+                        has_j_peak, _pk_idx, j_peak_value, j_peak_z = \
+                            _j_peak_detect(j_ts, w_lo, w_hi,
+                                           threshold_ratio=peak_threshold,
+                                           smooth_sigma=smooth_sigma)
+                        if has_j_peak:
+                            j_peak_idx          = int(_pk_idx)
+                            j_peak_lag_to_accel = j_peak_idx - accel_peak_idx
+                            j_peak_lag_to_vel   = j_peak_idx - vel_peak_idx
+                        else:
+                            j_peak_idx = int(_pk_idx)   # store anyway for plotting
 
                     # Pearson correlations
                     n_ja = min(len(j_ts), len(accel_ts))
@@ -265,68 +398,92 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             stim_lag_vel.append(lag_to_vel)
             stim_dist_accel.append(dist_to_accel)
             stim_dist_vel.append(dist_to_vel)
+            stim_has_peak.append(has_j_peak)
             all_lag_accel.append(lag_to_accel)
             all_lag_vel.append(lag_to_vel)
             all_dist_accel.append(dist_to_accel)
             all_dist_vel.append(dist_to_vel)
+            all_has_peak.append(has_j_peak)
 
             # Timing relative to reference signal
             ref_lag = lag_to_accel if reference == 'acceleration' else lag_to_vel
             timing  = 'leads' if ref_lag < 0 else ('lags' if ref_lag > 0 else 'simultaneous')
 
             row = {
-                'stimulus':       stim,
-                'session':        session,
-                'j_jump_idx':     j_jump_idx,
-                'j_jump_mag':     j_jump_mag,
-                'accel_peak_idx': accel_peak_idx,
-                'vel_peak_idx':   vel_peak_idx,
-                'lag_to_accel':   lag_to_accel,
-                'lag_to_vel':     lag_to_vel,
-                'dist_to_accel':  dist_to_accel,
-                'dist_to_vel':    dist_to_vel,
-                'corr_j_accel':   corr_j_a,
-                'corr_j_vel':     corr_j_v,
-                'xcorr_lag_accel': xcorr_a,
-                'xcorr_lag_vel':   xcorr_v,
-                'timing':         timing,
+                'stimulus':             stim,
+                'session':              session,
+                'j_jump_idx':           j_jump_idx,
+                'j_jump_mag':           j_jump_mag,
+                'accel_peak_idx':       accel_peak_idx,
+                'vel_peak_idx':         vel_peak_idx,
+                'lag_to_accel':         lag_to_accel,
+                'lag_to_vel':           lag_to_vel,
+                'dist_to_accel':        dist_to_accel,
+                'dist_to_vel':          dist_to_vel,
+                'corr_j_accel':         corr_j_a,
+                'corr_j_vel':           corr_j_v,
+                'xcorr_lag_accel':      xcorr_a,
+                'xcorr_lag_vel':        xcorr_v,
+                'timing':               timing,
+                'has_j_peak':           has_j_peak,
+                'j_peak_idx':           j_peak_idx,
+                'j_peak_value':         j_peak_value,
+                'j_peak_z':             j_peak_z,
+                'j_peak_lag_to_accel':  j_peak_lag_to_accel,
+                'j_peak_lag_to_vel':    j_peak_lag_to_vel,
             }
             session_rows.append(row)
             results['all_sessions'].append(row)
 
             if verbose:
-                na  = lambda v: f"{v:+.3f}" if not np.isnan(v) else "   n/a"
-                nai = lambda v: f"{v:+.0f}"  if not np.isnan(v) else "  n/a"
-                mag_s = f"{j_jump_mag:.4f}" if not np.isnan(j_jump_mag) else "   n/a"
+                na   = lambda v: f"{v:+.3f}" if (isinstance(v, float) and not np.isnan(v)) else "   n/a"
+                nai  = lambda v: f"{v:+.0f}"  if (isinstance(v, float) and not np.isnan(v)) else "  n/a"
+                naf  = lambda v: f"{v:.2f}"   if (isinstance(v, float) and not np.isnan(v)) else "  n/a"
+                mag_s    = f"{j_jump_mag:.4f}" if not np.isnan(j_jump_mag) else "   n/a"
+                peak_sym = "YES" if has_j_peak else " no"
+                pk_z_s   = naf(j_peak_z)
+                pk_la_s  = nai(j_peak_lag_to_accel)
+                pk_lv_s  = nai(j_peak_lag_to_vel)
                 print(
                     f"  {session:<10} {j_jump_idx:>7d} {mag_s:>8} "
                     f"{accel_peak_idx:>9d} {vel_peak_idx:>8d} "
                     f"{lag_to_accel:>+7d} {lag_to_vel:>+7d} "
                     f"{na(corr_j_a):>8} {na(corr_j_v):>8} "
-                    f"{nai(xcorr_a):>6} {nai(xcorr_v):>6}  {timing}"
+                    f"{nai(xcorr_a):>6} {nai(xcorr_v):>6}  "
+                    f"{peak_sym:>6} {pk_z_s:>6} {pk_la_s:>8} {pk_lv_s:>8}  {timing}"
                 )
 
         # Stim-level summary
-        n_leads = sum(1 for r in session_rows if r['timing'] == 'leads')
-        n_lags  = sum(1 for r in session_rows if r['timing'] == 'lags')
-        n_simul = sum(1 for r in session_rows if r['timing'] == 'simultaneous')
+        n_leads     = sum(1 for r in session_rows if r['timing'] == 'leads')
+        n_lags      = sum(1 for r in session_rows if r['timing'] == 'lags')
+        n_simul     = sum(1 for r in session_rows if r['timing'] == 'simultaneous')
+        n_with_peak = sum(1 for r in session_rows if r['has_j_peak'])
+
+        # Mean lag of the J peak (only sessions that actually have one)
+        pk_lags_a = [r['j_peak_lag_to_accel'] for r in session_rows
+                     if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_accel'])]
+        pk_lags_v = [r['j_peak_lag_to_vel']   for r in session_rows
+                     if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_vel'])]
 
         results['by_stimulus'][stim] = {
-            'n_sessions':        n_sess,
-            'n_j_leads':         n_leads,
-            'n_j_lags':          n_lags,
-            'n_simultaneous':    n_simul,
-            'mean_lag_accel':    np.mean(stim_lag_accel)    if stim_lag_accel   else np.nan,
-            'std_lag_accel':     np.std(stim_lag_accel)     if stim_lag_accel   else np.nan,
-            'mean_lag_vel':      np.mean(stim_lag_vel)      if stim_lag_vel     else np.nan,
-            'std_lag_vel':       np.std(stim_lag_vel)       if stim_lag_vel     else np.nan,
-            'mean_dist_accel':   np.mean(stim_dist_accel)   if stim_dist_accel  else np.nan,
-            'mean_dist_vel':     np.mean(stim_dist_vel)     if stim_dist_vel    else np.nan,
-            'mean_corr_j_accel': np.nanmean(stim_corr_accel)  if stim_corr_accel  else np.nan,
-            'mean_corr_j_vel':   np.nanmean(stim_corr_vel)    if stim_corr_vel    else np.nan,
-            'mean_xcorr_accel':  np.nanmean(stim_xcorr_accel) if stim_xcorr_accel else np.nan,
-            'mean_xcorr_vel':    np.nanmean(stim_xcorr_vel)   if stim_xcorr_vel   else np.nan,
-            'sessions':          session_rows,
+            'n_sessions':              n_sess,
+            'n_j_leads':               n_leads,
+            'n_j_lags':                n_lags,
+            'n_simultaneous':          n_simul,
+            'n_with_j_peak':           n_with_peak,
+            'mean_lag_accel':          np.mean(stim_lag_accel)    if stim_lag_accel   else np.nan,
+            'std_lag_accel':           np.std(stim_lag_accel)     if stim_lag_accel   else np.nan,
+            'mean_lag_vel':            np.mean(stim_lag_vel)      if stim_lag_vel     else np.nan,
+            'std_lag_vel':             np.std(stim_lag_vel)       if stim_lag_vel     else np.nan,
+            'mean_dist_accel':         np.mean(stim_dist_accel)   if stim_dist_accel  else np.nan,
+            'mean_dist_vel':           np.mean(stim_dist_vel)     if stim_dist_vel    else np.nan,
+            'mean_corr_j_accel':       np.nanmean(stim_corr_accel)  if stim_corr_accel  else np.nan,
+            'mean_corr_j_vel':         np.nanmean(stim_corr_vel)    if stim_corr_vel    else np.nan,
+            'mean_xcorr_accel':        np.nanmean(stim_xcorr_accel) if stim_xcorr_accel else np.nan,
+            'mean_xcorr_vel':          np.nanmean(stim_xcorr_vel)   if stim_xcorr_vel   else np.nan,
+            'mean_j_peak_lag_accel':   np.mean(pk_lags_a) if pk_lags_a else np.nan,
+            'mean_j_peak_lag_vel':     np.mean(pk_lags_v) if pk_lags_v else np.nan,
+            'sessions':                session_rows,
         }
 
         if verbose:
@@ -342,19 +499,37 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
                   f"  |  XCorr lag: {s['mean_xcorr_accel']:+.1f} bins")
             print(f"  Mean Corr(J, vel):   {s['mean_corr_j_vel']:.3f}"
                   f"  |  XCorr lag: {s['mean_xcorr_vel']:+.1f} bins")
+            print(f"  J PEAK (prom/bg90>{peak_threshold}, smooth={smooth_sigma}): "
+                  f"{n_with_peak}/{n_sess} sessions have a large peak")
+            if pk_lags_a:
+                pk_a_dir = 'leads' if s['mean_j_peak_lag_accel'] < 0 else 'lags'
+                pk_v_dir = 'leads' if s['mean_j_peak_lag_vel']   < 0 else 'lags'
+                print(f"    Mean J-peak lag → accel: {s['mean_j_peak_lag_accel']:+.1f} bins  "
+                      f"(J-peak {pk_a_dir})")
+                print(f"    Mean J-peak lag → vel:   {s['mean_j_peak_lag_vel']:+.1f} bins  "
+                      f"(J-peak {pk_v_dir})")
+
+    n_with_peak_all = sum(all_has_peak)
+    all_pk_lags_a   = [r['j_peak_lag_to_accel'] for r in results['all_sessions']
+                       if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_accel'])]
+    all_pk_lags_v   = [r['j_peak_lag_to_vel']   for r in results['all_sessions']
+                       if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_vel'])]
 
     results['overall'] = {
-        'n_sessions':        total_sessions,
-        'mean_lag_accel':    np.mean(all_lag_accel)    if all_lag_accel   else np.nan,
-        'std_lag_accel':     np.std(all_lag_accel)     if all_lag_accel   else np.nan,
-        'mean_lag_vel':      np.mean(all_lag_vel)      if all_lag_vel     else np.nan,
-        'std_lag_vel':       np.std(all_lag_vel)       if all_lag_vel     else np.nan,
-        'mean_dist_accel':   np.mean(all_dist_accel)   if all_dist_accel  else np.nan,
-        'mean_dist_vel':     np.mean(all_dist_vel)     if all_dist_vel    else np.nan,
-        'mean_corr_j_accel': np.nanmean(all_corr_accel)  if all_corr_accel  else np.nan,
-        'mean_corr_j_vel':   np.nanmean(all_corr_vel)    if all_corr_vel    else np.nan,
-        'mean_xcorr_accel':  np.nanmean(all_xcorr_accel) if all_xcorr_accel else np.nan,
-        'mean_xcorr_vel':    np.nanmean(all_xcorr_vel)   if all_xcorr_vel   else np.nan,
+        'n_sessions':              total_sessions,
+        'n_with_j_peak':           n_with_peak_all,
+        'mean_lag_accel':          np.mean(all_lag_accel)    if all_lag_accel   else np.nan,
+        'std_lag_accel':           np.std(all_lag_accel)     if all_lag_accel   else np.nan,
+        'mean_lag_vel':            np.mean(all_lag_vel)      if all_lag_vel     else np.nan,
+        'std_lag_vel':             np.std(all_lag_vel)       if all_lag_vel     else np.nan,
+        'mean_dist_accel':         np.mean(all_dist_accel)   if all_dist_accel  else np.nan,
+        'mean_dist_vel':           np.mean(all_dist_vel)     if all_dist_vel    else np.nan,
+        'mean_corr_j_accel':       np.nanmean(all_corr_accel)  if all_corr_accel  else np.nan,
+        'mean_corr_j_vel':         np.nanmean(all_corr_vel)    if all_corr_vel    else np.nan,
+        'mean_xcorr_accel':        np.nanmean(all_xcorr_accel) if all_xcorr_accel else np.nan,
+        'mean_xcorr_vel':          np.nanmean(all_xcorr_vel)   if all_xcorr_vel   else np.nan,
+        'mean_j_peak_lag_accel':   np.mean(all_pk_lags_a) if all_pk_lags_a else np.nan,
+        'mean_j_peak_lag_vel':     np.mean(all_pk_lags_v) if all_pk_lags_v else np.nan,
     }
 
     if verbose:
@@ -364,9 +539,9 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
         n_simul_all = sum(1 for r in results['all_sessions'] if r['timing'] == 'simultaneous')
         lag_a_dir = 'leads' if ov['mean_lag_accel'] < 0 else 'lags'
         lag_v_dir = 'leads' if ov['mean_lag_vel']   < 0 else 'lags'
-        print(f"\n{'═'*78}")
+        print(f"\n{'═'*90}")
         print(f"  OVERALL  ({total_sessions} sessions)")
-        print(f"{'═'*78}")
+        print(f"{'═'*90}")
         print(f"  J leads: {n_leads_all}  |  J lags: {n_lags_all}  |  simultaneous: {n_simul_all}")
         print(f"  Mean lag → accel: {ov['mean_lag_accel']:+.1f} ± {ov['std_lag_accel']:.1f} bins  "
               f"(J {lag_a_dir})")
@@ -376,6 +551,15 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
               f"  |  XCorr lag: {ov['mean_xcorr_accel']:+.1f} bins")
         print(f"  Mean Corr(J, vel):   {ov['mean_corr_j_vel']:.3f}"
               f"  |  XCorr lag: {ov['mean_xcorr_vel']:+.1f} bins")
+        print(f"\n  J PEAK (prom/bg90>{peak_threshold}, smooth={smooth_sigma}): "
+              f"{n_with_peak_all}/{total_sessions} sessions have a large J peak in the window")
+        if all_pk_lags_a:
+            pk_a_dir = 'leads' if ov['mean_j_peak_lag_accel'] < 0 else 'lags'
+            pk_v_dir = 'leads' if ov['mean_j_peak_lag_vel']   < 0 else 'lags'
+            print(f"    Mean J-peak lag → accel: {ov['mean_j_peak_lag_accel']:+.1f} bins  "
+                  f"(J-peak {pk_a_dir})")
+            print(f"    Mean J-peak lag → vel:   {ov['mean_j_peak_lag_vel']:+.1f} bins  "
+                  f"(J-peak {pk_v_dir})")
 
     return results
 
@@ -391,24 +575,39 @@ def _plot_session_j_kinematics(session, stim, reference,
                                 lag_to_accel, lag_to_vel,
                                 corr_j_accel, corr_j_vel,
                                 xcorr_lag_accel, xcorr_lag_vel,
-                                timing, save_dir):
-    """3-panel figure: velocity | acceleration | J coupling with jump marked."""
+                                timing, save_dir,
+                                has_j_peak=False, j_peak_idx=None,
+                                j_peak_value=np.nan, j_peak_z=np.nan,
+                                j_peak_lag_to_accel=np.nan,
+                                j_peak_lag_to_vel=np.nan,
+                                smooth_sigma=5.0):
+    """3-panel figure: velocity | acceleration | J coupling with jump and peak marked."""
 
-    na_fmt  = lambda v: f"{v:.3f}" if not np.isnan(v) else "n/a"
+    na_fmt  = lambda v: f"{v:.3f}" if (isinstance(v, float) and not np.isnan(v)) else "n/a"
+    nai_fmt = lambda v: f"{v:+d}"  if (isinstance(v, (int, np.integer))) else "n/a"
     lag_dir = timing   # 'leads' | 'lags' | 'simultaneous'
 
     panel_color = {'leads': 'limegreen', 'lags': 'tomato',
                    'simultaneous': 'gold'}[timing]
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 11), sharex=True)
+    peak_line = ""
+    if has_j_peak and j_peak_idx is not None:
+        peak_line = (f"\nJ PEAK: idx={j_peak_idx}  prom/bg90={na_fmt(j_peak_z)}  "
+                     f"lag→accel={nai_fmt(j_peak_lag_to_accel)}  "
+                     f"lag→vel={nai_fmt(j_peak_lag_to_vel)}")
+    elif not has_j_peak:
+        peak_line = f"\nNo large J peak detected (prom/bg90={na_fmt(j_peak_z)})"
+
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
     fig.suptitle(
         f"Session {session}  |  Stim {stim}  |  J {lag_dir.upper()} kinematics\n"
         f"J jump idx={j_jump_idx}  |ΔJ|={na_fmt(j_jump_mag)}\n"
         f"Accel peak={accel_peak_idx} (lag {lag_to_accel:+d})  "
         f"Vel peak={vel_peak_idx} (lag {lag_to_vel:+d})\n"
         f"Corr(J,accel)={na_fmt(corr_j_accel)}  XClag={xcorr_lag_accel:+.0f}  |  "
-        f"Corr(J,vel)={na_fmt(corr_j_vel)}  XClag={xcorr_lag_vel:+.0f}",
-        fontsize=10, fontweight='bold'
+        f"Corr(J,vel)={na_fmt(corr_j_vel)}  XClag={xcorr_lag_vel:+.0f}"
+        f"{peak_line}",
+        fontsize=9, fontweight='bold'
     )
 
     # ── Panel 1: Velocity ──────────────────────────────────────────────────
@@ -435,13 +634,26 @@ def _plot_session_j_kinematics(session, stim, reference,
     ax3 = axes[2]
     ax3_twin = ax3.twinx()
 
-    ax3.plot(j_ts, color='darkorchid', linewidth=1.5, label='J (mean coupling)')
+    ax3.plot(j_ts, color='darkorchid', linewidth=1.0, alpha=0.5, label='J (raw)')
+    if len(j_ts) > 2:
+        j_smooth_plot = _gaussian_smooth(j_ts, smooth_sigma)
+        ax3.plot(j_smooth_plot, color='indigo', linewidth=2.0,
+                 label=f'J smoothed (σ={smooth_sigma:.0f})')
     ax3.axvline(j_jump_idx, color='crimson', linewidth=2.5,
                 label=f'J jump (|ΔJ|={na_fmt(j_jump_mag)})')
     ax3.axvline(accel_peak_idx, color='green',      linestyle='--', linewidth=1.5, alpha=0.6,
-                label=f'Accel peak')
+                label='Accel peak')
     ax3.axvline(vel_peak_idx,   color='deepskyblue', linestyle='--', linewidth=1.5, alpha=0.6,
-                label=f'Vel peak')
+                label='Vel peak')
+
+    # J peak marker (only when a significant peak was detected)
+    if has_j_peak and j_peak_idx is not None:
+        ax3.axvline(j_peak_idx, color='darkorange', linewidth=2.0, linestyle='-.',
+                    label=f'J PEAK (ratio={na_fmt(j_peak_z)}, lag→A={nai_fmt(j_peak_lag_to_accel)})')
+        if not np.isnan(j_peak_value):
+            ax3.scatter([j_peak_idx], [j_peak_value], color='darkorange',
+                        zorder=5, s=80, marker='*')
+
     ax3.set_facecolor((*mcolors.to_rgb(panel_color), 0.10))
     ax3.set_ylabel("J (coupling)", color='darkorchid')
     ax3.tick_params(axis='y', labelcolor='darkorchid')
@@ -471,7 +683,8 @@ def _plot_session_j_kinematics(session, stim, reference,
 # ---------------------------------------------------------------------------
 
 def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
-                             reference="acceleration", verbose=True):
+                             reference="acceleration", peak_threshold=1.5,
+                             smooth_sigma=5.0, verbose=True):
     """
     Run J-jump vs kinematic peak analysis; save per-session plots and CSVs.
 
@@ -487,7 +700,8 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
         os.makedirs(d, exist_ok=True)
 
     results = within_session_j_kinematics(
-        stim_sessions_extrema, window=window, reference=reference, verbose=verbose
+        stim_sessions_extrema, window=window, reference=reference,
+        peak_threshold=peak_threshold, smooth_sigma=smooth_sigma, verbose=verbose
     )
 
     for row in results['all_sessions']:
@@ -520,25 +734,38 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
             corr_j_accel=row['corr_j_accel'], corr_j_vel=row['corr_j_vel'],
             xcorr_lag_accel=xcorr_a, xcorr_lag_vel=xcorr_v,
             timing=timing, save_dir=save_dir,
+            has_j_peak=row['has_j_peak'],
+            j_peak_idx=row['j_peak_idx'],
+            j_peak_value=row['j_peak_value'],
+            j_peak_z=row['j_peak_z'],
+            j_peak_lag_to_accel=row['j_peak_lag_to_accel'],
+            j_peak_lag_to_vel=row['j_peak_lag_to_vel'],
+            smooth_sigma=smooth_sigma,
         )
 
     # Session-level CSV
     summary_df = pd.DataFrame([{
-        'stimulus':        r['stimulus'],
-        'session':         r['session'],
-        'j_jump_idx':      r['j_jump_idx'],
-        'j_jump_mag':      r['j_jump_mag'],
-        'accel_peak_idx':  r['accel_peak_idx'],
-        'vel_peak_idx':    r['vel_peak_idx'],
-        'lag_to_accel':    r['lag_to_accel'],
-        'lag_to_vel':      r['lag_to_vel'],
-        'dist_to_accel':   r['dist_to_accel'],
-        'dist_to_vel':     r['dist_to_vel'],
-        'corr_j_accel':    r['corr_j_accel'],
-        'corr_j_vel':      r['corr_j_vel'],
-        'xcorr_lag_accel': r['xcorr_lag_accel'],
-        'xcorr_lag_vel':   r['xcorr_lag_vel'],
-        'timing':          r['timing'],
+        'stimulus':             r['stimulus'],
+        'session':              r['session'],
+        'j_jump_idx':           r['j_jump_idx'],
+        'j_jump_mag':           r['j_jump_mag'],
+        'accel_peak_idx':       r['accel_peak_idx'],
+        'vel_peak_idx':         r['vel_peak_idx'],
+        'lag_to_accel':         r['lag_to_accel'],
+        'lag_to_vel':           r['lag_to_vel'],
+        'dist_to_accel':        r['dist_to_accel'],
+        'dist_to_vel':          r['dist_to_vel'],
+        'corr_j_accel':         r['corr_j_accel'],
+        'corr_j_vel':           r['corr_j_vel'],
+        'xcorr_lag_accel':      r['xcorr_lag_accel'],
+        'xcorr_lag_vel':        r['xcorr_lag_vel'],
+        'timing':               r['timing'],
+        'has_j_peak':           r['has_j_peak'],
+        'j_peak_idx':           r['j_peak_idx'],
+        'j_peak_value':         r['j_peak_value'],
+        'j_peak_z':             r['j_peak_z'],
+        'j_peak_lag_to_accel':  r['j_peak_lag_to_accel'],
+        'j_peak_lag_to_vel':    r['j_peak_lag_to_vel'],
     } for r in results['all_sessions']])
     summary_df.to_csv(os.path.join(output_dir, 'session_summary_j_kinematics.csv'), index=False)
 
@@ -665,20 +892,27 @@ def write_j_kinematics_markdown(all_results, out_base, report_dir, args):
         "## Session-by-Session Detail",
         "",
         "| Rep | Stim | Session | J jump | |ΔJ| | Accel pk | Vel pk | "
-        "Lag→A | Lag→V | r(J,A) | r(J,V) | Timing |",
-        "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
+        "Lag→A | Lag→V | r(J,A) | r(J,V) | Timing | J Peak? | Prom/bg90 | PkLag→A | PkLag→V |",
+        "|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
     ]
     for rep, res in sorted(all_results.items()):
         for row in res['all_sessions']:
-            mag = f"{row['j_jump_mag']:.4f}" if not np.isnan(row['j_jump_mag']) else "n/a"
-            rja = f"{row['corr_j_accel']:.3f}" if not np.isnan(row['corr_j_accel']) else "n/a"
-            rjv = f"{row['corr_j_vel']:.3f}"   if not np.isnan(row['corr_j_vel'])   else "n/a"
+            mag   = f"{row['j_jump_mag']:.4f}"        if not np.isnan(row['j_jump_mag'])        else "n/a"
+            rja   = f"{row['corr_j_accel']:.3f}"      if not np.isnan(row['corr_j_accel'])      else "n/a"
+            rjv   = f"{row['corr_j_vel']:.3f}"        if not np.isnan(row['corr_j_vel'])        else "n/a"
+            pk_z  = f"{row['j_peak_z']:.2f}"          if not np.isnan(row['j_peak_z'])          else "n/a"
+            pk_la = f"{row['j_peak_lag_to_accel']:+d}" if (row['has_j_peak'] and
+                        not np.isnan(row['j_peak_lag_to_accel'])) else "—"
+            pk_lv = f"{row['j_peak_lag_to_vel']:+d}"   if (row['has_j_peak'] and
+                        not np.isnan(row['j_peak_lag_to_vel']))   else "—"
+            peak_yn = "**YES**" if row['has_j_peak'] else "no"
             lines.append(
                 f"| {rep} | {row['stimulus']} | {row['session']} | "
                 f"{row['j_jump_idx']} | {mag} | "
                 f"{row['accel_peak_idx']} | {row['vel_peak_idx']} | "
                 f"{row['lag_to_accel']:+d} | {row['lag_to_vel']:+d} | "
-                f"{rja} | {rjv} | **{row['timing']}** |"
+                f"{rja} | {rjv} | **{row['timing']}** | "
+                f"{peak_yn} | {pk_z} | {pk_la} | {pk_lv} |"
             )
 
     lines += ["", "## Output Files", ""]
@@ -715,7 +949,7 @@ def parse_args():
     p.add_argument("--rep_end_exclusive", type=int, default=2,
                    help="One past last rep index (default 2)")
     p.add_argument("--window", type=int, nargs=2, metavar=("LO", "HI"),
-                   default=[390, 410],
+                   default=[375, 450],
                    help="Time-index window for jump/peak search (default: 390 410)")
     p.add_argument("--stim_min", type=int, default=0,
                    help="Inclusive minimum stimulus index (default 0)")
@@ -735,6 +969,15 @@ def parse_args():
                    help="Suppress per-session table output")
     p.add_argument("--report_dir", type=str, default=None, metavar="DIR",
                    help="If set, write j_kinematics_results.md into this directory")
+    p.add_argument("--peak_threshold", type=float, default=2.0,
+                   help="Ratio threshold for declaring a J peak 'large': "
+                        "window_prominence / bg_90th_percentile > threshold "
+                        "(default 2.0 — window peak must be 2x more prominent "
+                        "than typical background undulations)")
+    p.add_argument("--smooth_sigma", type=float, default=5.0,
+                   help="Gaussian smoothing width in time-bins applied to J "
+                        "before peak detection (default 5.0). Larger values "
+                        "require a broader, smoother bump to count as a peak.")
     return p.parse_args()
 
 
@@ -813,6 +1056,8 @@ def main() -> int:
             window=window,
             output_dir=rep_out,
             reference=args.reference,
+            peak_threshold=args.peak_threshold,
+            smooth_sigma=args.smooth_sigma,
             verbose=not args.quiet,
         )
         all_results[rep] = results

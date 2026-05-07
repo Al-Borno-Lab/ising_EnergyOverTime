@@ -81,12 +81,35 @@ def _group_for_stem(stem):
 # Session discovery
 # ---------------------------------------------------------------------------
 
+# Directory names that are never treated as real sessions (report artifacts,
+# asset dumps, etc.).
+_EXCLUDE_DIR_NAMES = {"assets", "figures", "plots", "output", "outputs", "temp"}
+
+
 def find_session_dirs(root):
-    """Return every directory (recursively) that contains at least one .png."""
+    """
+    Return every directory (recursively) that contains at least one .png,
+    skipping directories whose name is in _EXCLUDE_DIR_NAMES (and all their
+    descendants) so that previously-generated asset folders are never picked
+    up as sessions.
+    """
+    root = Path(root)
     found = []
-    for dirpath, _, files in os.walk(str(root)):
+    for dirpath, dirnames, files in os.walk(str(root)):
+        p = Path(dirpath)
+        # Skip this directory entirely if any component of its path relative
+        # to root is an excluded name.
+        try:
+            rel_parts = p.relative_to(root).parts
+        except ValueError:
+            rel_parts = p.parts
+        if any(part in _EXCLUDE_DIR_NAMES for part in rel_parts):
+            dirnames.clear()   # also prune os.walk from descending further
+            continue
+        # Prune excluded names from subdirectory traversal
+        dirnames[:] = [d for d in dirnames if d not in _EXCLUDE_DIR_NAMES]
         if any(f.lower().endswith(".png") for f in files):
-            found.append(Path(dirpath))
+            found.append(p)
     return sorted(found)
 
 

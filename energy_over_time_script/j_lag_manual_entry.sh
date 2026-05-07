@@ -1,0 +1,1 @@
+python peak_near_max_velocity.py --data_folder /data001/projects/enserrog/AbigailData/energy_over_time/energy_decomp_Apr_16/ --sessions 210425 210511 210515 220515 220516 220517 220518 220519 220520 --stim_min 0 --stim_max_exclusive 1 --half_window 60 --output_dir ./notes/J_analysis
