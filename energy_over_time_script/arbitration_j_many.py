@@ -31,6 +31,12 @@ import pandas as pd
 
 from src.processing import calculate_session_averages, find_extrema_in_range
 from src.util import find_file_recursive
+from src.peak_detection import (
+    gaussian_smooth   as _gaussian_smooth,
+    local_prominence  as _local_prominence,
+    detect_j_peak     as _j_peak_detect,
+    detect_signal_extremum as _signal_extremum_detect,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -138,107 +144,6 @@ def _j_jump_index(j_ts: np.ndarray, w_lo: int, w_hi: int):
     return w_lo + local_idx, float(dj[local_idx])
 
 
-def _gaussian_smooth(arr: np.ndarray, sigma: float) -> np.ndarray:
-    """Convolve arr with a Gaussian kernel of given sigma (in samples)."""
-    if sigma <= 0 or len(arr) < 3:
-        return arr.astype(float)
-    r      = int(np.ceil(3 * sigma))
-    x      = np.arange(-r, r + 1, dtype=float)
-    kernel = np.exp(-0.5 * (x / sigma) ** 2)
-    kernel /= kernel.sum()
-    return np.convolve(arr.astype(float), kernel, mode='same')
-
-
-def _local_prominence(j_smooth: np.ndarray, idx: int, half: int) -> float:
-    """
-    Prominence of a candidate peak at `idx` in the smoothed signal:
-        peak_value − max(left_valley_min, right_valley_min)
-    where the valleys are searched in ±half bins around the peak.
-    """
-    left_seg  = j_smooth[max(0, idx - half) : idx]
-    right_seg = j_smooth[idx + 1 : min(len(j_smooth), idx + half + 1)]
-    left_val  = float(left_seg.min())  if len(left_seg)  else float(j_smooth[idx])
-    right_val = float(right_seg.min()) if len(right_seg) else float(j_smooth[idx])
-    return float(j_smooth[idx]) - max(left_val, right_val)
-
-
-def _j_peak_detect(j_ts: np.ndarray, w_lo: int, w_hi: int,
-                   threshold_ratio: float = 2.0, smooth_sigma: float = 5.0):
-    """
-    Test whether J has an exceptional peak within the window [w_lo, w_hi].
-
-    Strategy
-    --------
-    1. Smooth J (Gaussian, sigma=smooth_sigma) to suppress noise.
-    2. Find the maximum of the smoothed signal inside the window.
-    3. Compute its local prominence (how far it rises above flanking valleys).
-    4. Collect the prominences of ALL local maxima in the smoothed signal
-       OUTSIDE the search window — these represent background undulations.
-    5. Compare window_prominence to the 90th percentile of background
-       prominences.  If window_prominence > threshold_ratio × bg_90th,
-       the peak is declared large.
-
-    Why background comparison?
-        A gently undulating J (like regular oscillations) produces background
-        peaks with similar prominences to whatever is in the search window, so
-        the ratio stays near 1 → not flagged.
-        A genuine J peak is distinctly taller than any background undulation,
-        so the ratio is well above threshold → flagged.
-        This works regardless of whether the raw signal is noisy or quiet.
-
-    Parameters
-    ----------
-    j_ts            : full J time series (numpy array)
-    w_lo, w_hi      : search window (indices into j_ts)
-    threshold_ratio : window prominence must be > this × bg_90th (default 2.0)
-    smooth_sigma    : Gaussian smoothing width in time-bins (default 5)
-
-    Returns
-    -------
-    has_peak      : bool  — True if window peak dominates background
-    peak_idx      : int   — index (in full ts) of the smoothed-signal maximum
-    peak_value    : float — raw J value at that index
-    prom_ratio    : float — window_prominence / bg_90th (the test statistic)
-    """
-    w_lo = max(0, int(w_lo))
-    w_hi = min(len(j_ts), int(w_hi))
-    if w_hi <= w_lo + 1 or len(j_ts) < 3:
-        return False, w_lo, np.nan, np.nan
-
-    j_smooth  = _gaussian_smooth(j_ts, smooth_sigma)
-    half      = max(10, (w_hi - w_lo) // 2)
-
-    # Candidate peak: smoothed maximum inside the window
-    segment   = j_smooth[w_lo:w_hi]
-    local_idx = int(np.argmax(segment))
-    peak_idx  = w_lo + local_idx
-    window_prom = _local_prominence(j_smooth, peak_idx, half)
-
-    # Background: prominences of all local maxima OUTSIDE the search window
-    # (simple definition: point greater than both immediate neighbors)
-    bg_proms = []
-    for i in range(1, len(j_smooth) - 1):
-        if w_lo <= i < w_hi:
-            continue
-        if j_smooth[i] > j_smooth[i - 1] and j_smooth[i] > j_smooth[i + 1]:
-            bg_proms.append(_local_prominence(j_smooth, i, half))
-
-    if not bg_proms:
-        # No background peaks: fall back to comparing against smooth std
-        smooth_std = float(j_smooth.std())
-        if smooth_std < 1e-10:
-            return False, peak_idx, float(j_ts[peak_idx]), 0.0
-        prom_ratio = window_prom / smooth_std
-        return bool(prom_ratio > threshold_ratio), peak_idx, float(j_ts[peak_idx]), prom_ratio
-
-    bg_90 = float(np.percentile(bg_proms, 90))
-    if bg_90 < 1e-10:
-        return False, peak_idx, float(j_ts[peak_idx]), 0.0
-
-    prom_ratio = window_prom / bg_90
-    has_peak   = bool(prom_ratio > threshold_ratio)
-    return has_peak, peak_idx, float(j_ts[peak_idx]), prom_ratio
-
 
 # ---------------------------------------------------------------------------
 # Core analysis: J jumps vs kinematic peaks
@@ -288,6 +193,16 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
     all_xcorr_accel  = []
     all_xcorr_vel    = []
     all_has_peak     = []
+    # Firing rate lags
+    all_fr_min_lag_accel = []
+    all_fr_min_lag_vel   = []
+    all_fr_max_lag_accel = []
+    all_fr_max_lag_vel   = []
+    # Energy lags
+    all_en_min_lag_accel = []
+    all_en_min_lag_vel   = []
+    all_en_max_lag_accel = []
+    all_en_max_lag_vel   = []
 
     for stim in sorted(stim_sessions_extrema):
         sessions = stim_sessions_extrema[stim]
@@ -303,6 +218,14 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
         stim_xcorr_accel = []
         stim_xcorr_vel   = []
         stim_has_peak    = []
+        stim_fr_min_lag_accel = []
+        stim_fr_min_lag_vel   = []
+        stim_fr_max_lag_accel = []
+        stim_fr_max_lag_vel   = []
+        stim_en_min_lag_accel = []
+        stim_en_min_lag_vel   = []
+        stim_en_max_lag_accel = []
+        stim_en_max_lag_vel   = []
         session_rows     = []
 
         if verbose:
@@ -323,6 +246,28 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             accel_peak_idx = int(sdata['acceleration'][1])
             vel_peak_idx   = int(sdata['velocity'][1])
 
+            # Firing rate & energy extrema (min/max within window from process_session_j)
+            fr_min_idx = int(sdata.get('firing_rate', (w_lo, w_lo))[0])
+            fr_max_idx = int(sdata.get('firing_rate', (w_lo, w_lo))[1])
+            en_min_idx = int(sdata.get('energy',      (w_lo, w_lo))[0])
+            en_max_idx = int(sdata.get('energy',      (w_lo, w_lo))[1])
+
+            fr_min_lag_accel = fr_min_idx - accel_peak_idx
+            fr_min_lag_vel   = fr_min_idx - vel_peak_idx
+            fr_max_lag_accel = fr_max_idx - accel_peak_idx
+            fr_max_lag_vel   = fr_max_idx - vel_peak_idx
+
+            en_min_lag_accel = en_min_idx - accel_peak_idx
+            en_min_lag_vel   = en_min_idx - vel_peak_idx
+            en_max_lag_accel = en_max_idx - accel_peak_idx
+            en_max_lag_vel   = en_max_idx - vel_peak_idx
+
+            # "Closer to" determination per extremum
+            fr_min_closer = 'accel' if abs(fr_min_lag_accel) <= abs(fr_min_lag_vel) else 'vel'
+            fr_max_closer = 'accel' if abs(fr_max_lag_accel) <= abs(fr_max_lag_vel) else 'vel'
+            en_min_closer = 'accel' if abs(en_min_lag_accel) <= abs(en_min_lag_vel) else 'vel'
+            en_max_closer = 'accel' if abs(en_max_lag_accel) <= abs(en_max_lag_vel) else 'vel'
+
             # Defaults in case original_data is missing
             j_jump_idx  = w_lo
             j_jump_mag  = np.nan
@@ -331,7 +276,7 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             xcorr_a     = np.nan
             xcorr_v     = np.nan
 
-            # Peak-detection defaults
+            # J peak-detection defaults
             has_j_peak          = False
             j_peak_idx          = np.nan
             j_peak_value        = np.nan
@@ -339,19 +284,51 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             j_peak_lag_to_accel = np.nan
             j_peak_lag_to_vel   = np.nan
 
+            # FR detected peak/trough defaults
+            has_fr_peak         = False
+            fr_peak_idx         = w_lo
+            fr_peak_value       = np.nan
+            fr_peak_z           = np.nan
+            fr_peak_lag_accel   = np.nan
+            fr_peak_lag_vel     = np.nan
+            has_fr_trough       = False
+            fr_trough_idx       = w_lo
+            fr_trough_value     = np.nan
+            fr_trough_z         = np.nan
+            fr_trough_lag_accel = np.nan
+            fr_trough_lag_vel   = np.nan
+
+            # Energy detected peak/trough defaults
+            has_en_peak         = False
+            en_peak_idx         = w_lo
+            en_peak_value       = np.nan
+            en_peak_z           = np.nan
+            en_peak_lag_accel   = np.nan
+            en_peak_lag_vel     = np.nan
+            has_en_trough       = False
+            en_trough_idx       = w_lo
+            en_trough_value     = np.nan
+            en_trough_z         = np.nan
+            en_trough_lag_accel = np.nan
+            en_trough_lag_vel   = np.nan
+
             if 'original_data' in sdata:
                 od = sdata['original_data']
                 od_stim = od[od['stim'] == stim]
                 if len(od_stim) > 0:
-                    j_ts     = _mean_timeseries(od_stim, 'j')
-                    accel_ts = _acceleration_timeseries(od_stim)
-                    vel_ts   = _velocity_timeseries(od_stim)
+                    j_ts      = _mean_timeseries(od_stim, 'j')
+                    accel_ts  = _acceleration_timeseries(od_stim)
+                    vel_ts    = _velocity_timeseries(od_stim)
+                    fr_ts_det = (_mean_timeseries(od_stim, 'firing_rate')
+                                 if 'firing_rate' in od_stim.columns else np.array([]))
+                    en_ts_det = (_mean_timeseries(od_stim, 'energy')
+                                 if 'energy' in od_stim.columns else np.array([]))
 
                     if len(j_ts) > 0:
                         # J jump: index of largest |dJ/dt| in window
                         j_jump_idx, j_jump_mag = _j_jump_index(j_ts, w_lo, w_hi)
 
-                        # J peak: test for a large, prominent maximum in window
+                        # J peak: prominent max in window (bump + step detection)
                         has_j_peak, _pk_idx, j_peak_value, j_peak_z = \
                             _j_peak_detect(j_ts, w_lo, w_hi,
                                            threshold_ratio=peak_threshold,
@@ -362,6 +339,50 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
                             j_peak_lag_to_vel   = j_peak_idx - vel_peak_idx
                         else:
                             j_peak_idx = int(_pk_idx)   # store anyway for plotting
+
+                    # ── Firing rate peak / trough detection ───────────────
+                    if len(fr_ts_det) > 0:
+                        has_fr_peak, _fpi, fr_peak_value, fr_peak_z = \
+                            _signal_extremum_detect(fr_ts_det, w_lo, w_hi,
+                                                    threshold_ratio=peak_threshold,
+                                                    smooth_sigma=smooth_sigma,
+                                                    kind='peak')
+                        fr_peak_idx = int(_fpi)
+                        if has_fr_peak:
+                            fr_peak_lag_accel = fr_peak_idx - accel_peak_idx
+                            fr_peak_lag_vel   = fr_peak_idx - vel_peak_idx
+
+                        has_fr_trough, _fti, fr_trough_value, fr_trough_z = \
+                            _signal_extremum_detect(fr_ts_det, w_lo, w_hi,
+                                                    threshold_ratio=peak_threshold,
+                                                    smooth_sigma=smooth_sigma,
+                                                    kind='trough')
+                        fr_trough_idx = int(_fti)
+                        if has_fr_trough:
+                            fr_trough_lag_accel = fr_trough_idx - accel_peak_idx
+                            fr_trough_lag_vel   = fr_trough_idx - vel_peak_idx
+
+                    # ── Energy peak / trough detection ────────────────────
+                    if len(en_ts_det) > 0:
+                        has_en_peak, _epi, en_peak_value, en_peak_z = \
+                            _signal_extremum_detect(en_ts_det, w_lo, w_hi,
+                                                    threshold_ratio=peak_threshold,
+                                                    smooth_sigma=smooth_sigma,
+                                                    kind='peak')
+                        en_peak_idx = int(_epi)
+                        if has_en_peak:
+                            en_peak_lag_accel = en_peak_idx - accel_peak_idx
+                            en_peak_lag_vel   = en_peak_idx - vel_peak_idx
+
+                        has_en_trough, _eti, en_trough_value, en_trough_z = \
+                            _signal_extremum_detect(en_ts_det, w_lo, w_hi,
+                                                    threshold_ratio=peak_threshold,
+                                                    smooth_sigma=smooth_sigma,
+                                                    kind='trough')
+                        en_trough_idx = int(_eti)
+                        if has_en_trough:
+                            en_trough_lag_accel = en_trough_idx - accel_peak_idx
+                            en_trough_lag_vel   = en_trough_idx - vel_peak_idx
 
                     # Pearson correlations
                     n_ja = min(len(j_ts), len(accel_ts))
@@ -399,11 +420,27 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             stim_dist_accel.append(dist_to_accel)
             stim_dist_vel.append(dist_to_vel)
             stim_has_peak.append(has_j_peak)
+            stim_fr_min_lag_accel.append(fr_min_lag_accel)
+            stim_fr_min_lag_vel.append(fr_min_lag_vel)
+            stim_fr_max_lag_accel.append(fr_max_lag_accel)
+            stim_fr_max_lag_vel.append(fr_max_lag_vel)
+            stim_en_min_lag_accel.append(en_min_lag_accel)
+            stim_en_min_lag_vel.append(en_min_lag_vel)
+            stim_en_max_lag_accel.append(en_max_lag_accel)
+            stim_en_max_lag_vel.append(en_max_lag_vel)
             all_lag_accel.append(lag_to_accel)
             all_lag_vel.append(lag_to_vel)
             all_dist_accel.append(dist_to_accel)
             all_dist_vel.append(dist_to_vel)
             all_has_peak.append(has_j_peak)
+            all_fr_min_lag_accel.append(fr_min_lag_accel)
+            all_fr_min_lag_vel.append(fr_min_lag_vel)
+            all_fr_max_lag_accel.append(fr_max_lag_accel)
+            all_fr_max_lag_vel.append(fr_max_lag_vel)
+            all_en_min_lag_accel.append(en_min_lag_accel)
+            all_en_min_lag_vel.append(en_min_lag_vel)
+            all_en_max_lag_accel.append(en_max_lag_accel)
+            all_en_max_lag_vel.append(en_max_lag_vel)
 
             # Timing relative to reference signal
             ref_lag = lag_to_accel if reference == 'acceleration' else lag_to_vel
@@ -412,10 +449,30 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
             row = {
                 'stimulus':             stim,
                 'session':              session,
-                'j_jump_idx':           j_jump_idx,
-                'j_jump_mag':           j_jump_mag,
+                # Kinematic reference peaks
                 'accel_peak_idx':       accel_peak_idx,
                 'vel_peak_idx':         vel_peak_idx,
+                # Firing rate extrema
+                'fr_min_idx':           fr_min_idx,
+                'fr_max_idx':           fr_max_idx,
+                'fr_min_lag_accel':     fr_min_lag_accel,
+                'fr_min_lag_vel':       fr_min_lag_vel,
+                'fr_max_lag_accel':     fr_max_lag_accel,
+                'fr_max_lag_vel':       fr_max_lag_vel,
+                'fr_min_closer':        fr_min_closer,
+                'fr_max_closer':        fr_max_closer,
+                # Energy extrema
+                'en_min_idx':           en_min_idx,
+                'en_max_idx':           en_max_idx,
+                'en_min_lag_accel':     en_min_lag_accel,
+                'en_min_lag_vel':       en_min_lag_vel,
+                'en_max_lag_accel':     en_max_lag_accel,
+                'en_max_lag_vel':       en_max_lag_vel,
+                'en_min_closer':        en_min_closer,
+                'en_max_closer':        en_max_closer,
+                # J jump
+                'j_jump_idx':           j_jump_idx,
+                'j_jump_mag':           j_jump_mag,
                 'lag_to_accel':         lag_to_accel,
                 'lag_to_vel':           lag_to_vel,
                 'dist_to_accel':        dist_to_accel,
@@ -425,12 +482,35 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
                 'xcorr_lag_accel':      xcorr_a,
                 'xcorr_lag_vel':        xcorr_v,
                 'timing':               timing,
+                # J peak
                 'has_j_peak':           has_j_peak,
                 'j_peak_idx':           j_peak_idx,
                 'j_peak_value':         j_peak_value,
                 'j_peak_z':             j_peak_z,
                 'j_peak_lag_to_accel':  j_peak_lag_to_accel,
                 'j_peak_lag_to_vel':    j_peak_lag_to_vel,
+                # Firing rate detected peak / trough
+                'has_fr_peak':          has_fr_peak,
+                'fr_peak_idx':          fr_peak_idx,
+                'fr_peak_z':            fr_peak_z,
+                'fr_peak_lag_accel':    fr_peak_lag_accel,
+                'fr_peak_lag_vel':      fr_peak_lag_vel,
+                'has_fr_trough':        has_fr_trough,
+                'fr_trough_idx':        fr_trough_idx,
+                'fr_trough_z':          fr_trough_z,
+                'fr_trough_lag_accel':  fr_trough_lag_accel,
+                'fr_trough_lag_vel':    fr_trough_lag_vel,
+                # Energy detected peak / trough
+                'has_en_peak':          has_en_peak,
+                'en_peak_idx':          en_peak_idx,
+                'en_peak_z':            en_peak_z,
+                'en_peak_lag_accel':    en_peak_lag_accel,
+                'en_peak_lag_vel':      en_peak_lag_vel,
+                'has_en_trough':        has_en_trough,
+                'en_trough_idx':        en_trough_idx,
+                'en_trough_z':          en_trough_z,
+                'en_trough_lag_accel':  en_trough_lag_accel,
+                'en_trough_lag_vel':    en_trough_lag_vel,
             }
             session_rows.append(row)
             results['all_sessions'].append(row)
@@ -465,24 +545,47 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
         pk_lags_v = [r['j_peak_lag_to_vel']   for r in session_rows
                      if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_vel'])]
 
+        def _mn(lst): return np.mean(lst)    if lst else np.nan
+        def _sd(lst): return np.std(lst)     if lst else np.nan
+        def _nmn(lst): return np.nanmean(lst) if lst else np.nan
+
         results['by_stimulus'][stim] = {
             'n_sessions':              n_sess,
             'n_j_leads':               n_leads,
             'n_j_lags':                n_lags,
             'n_simultaneous':          n_simul,
             'n_with_j_peak':           n_with_peak,
-            'mean_lag_accel':          np.mean(stim_lag_accel)    if stim_lag_accel   else np.nan,
-            'std_lag_accel':           np.std(stim_lag_accel)     if stim_lag_accel   else np.nan,
-            'mean_lag_vel':            np.mean(stim_lag_vel)      if stim_lag_vel     else np.nan,
-            'std_lag_vel':             np.std(stim_lag_vel)       if stim_lag_vel     else np.nan,
-            'mean_dist_accel':         np.mean(stim_dist_accel)   if stim_dist_accel  else np.nan,
-            'mean_dist_vel':           np.mean(stim_dist_vel)     if stim_dist_vel    else np.nan,
-            'mean_corr_j_accel':       np.nanmean(stim_corr_accel)  if stim_corr_accel  else np.nan,
-            'mean_corr_j_vel':         np.nanmean(stim_corr_vel)    if stim_corr_vel    else np.nan,
-            'mean_xcorr_accel':        np.nanmean(stim_xcorr_accel) if stim_xcorr_accel else np.nan,
-            'mean_xcorr_vel':          np.nanmean(stim_xcorr_vel)   if stim_xcorr_vel   else np.nan,
+            # J jump lags
+            'mean_lag_accel':          _mn(stim_lag_accel),
+            'std_lag_accel':           _sd(stim_lag_accel),
+            'mean_lag_vel':            _mn(stim_lag_vel),
+            'std_lag_vel':             _sd(stim_lag_vel),
+            'mean_dist_accel':         _mn(stim_dist_accel),
+            'mean_dist_vel':           _mn(stim_dist_vel),
+            'mean_corr_j_accel':       _nmn(stim_corr_accel),
+            'mean_corr_j_vel':         _nmn(stim_corr_vel),
+            'mean_xcorr_accel':        _nmn(stim_xcorr_accel),
+            'mean_xcorr_vel':          _nmn(stim_xcorr_vel),
             'mean_j_peak_lag_accel':   np.mean(pk_lags_a) if pk_lags_a else np.nan,
             'mean_j_peak_lag_vel':     np.mean(pk_lags_v) if pk_lags_v else np.nan,
+            # Firing rate extrema lags
+            'mean_fr_min_lag_accel':   _mn(stim_fr_min_lag_accel),
+            'std_fr_min_lag_accel':    _sd(stim_fr_min_lag_accel),
+            'mean_fr_min_lag_vel':     _mn(stim_fr_min_lag_vel),
+            'std_fr_min_lag_vel':      _sd(stim_fr_min_lag_vel),
+            'mean_fr_max_lag_accel':   _mn(stim_fr_max_lag_accel),
+            'std_fr_max_lag_accel':    _sd(stim_fr_max_lag_accel),
+            'mean_fr_max_lag_vel':     _mn(stim_fr_max_lag_vel),
+            'std_fr_max_lag_vel':      _sd(stim_fr_max_lag_vel),
+            # Energy extrema lags
+            'mean_en_min_lag_accel':   _mn(stim_en_min_lag_accel),
+            'std_en_min_lag_accel':    _sd(stim_en_min_lag_accel),
+            'mean_en_min_lag_vel':     _mn(stim_en_min_lag_vel),
+            'std_en_min_lag_vel':      _sd(stim_en_min_lag_vel),
+            'mean_en_max_lag_accel':   _mn(stim_en_max_lag_accel),
+            'std_en_max_lag_accel':    _sd(stim_en_max_lag_accel),
+            'mean_en_max_lag_vel':     _mn(stim_en_max_lag_vel),
+            'std_en_max_lag_vel':      _sd(stim_en_max_lag_vel),
             'sessions':                session_rows,
         }
 
@@ -515,21 +618,44 @@ def within_session_j_kinematics(stim_sessions_extrema, window, reference="accele
     all_pk_lags_v   = [r['j_peak_lag_to_vel']   for r in results['all_sessions']
                        if r['has_j_peak'] and not np.isnan(r['j_peak_lag_to_vel'])]
 
+    def _omn(lst): return np.mean(lst)    if lst else np.nan
+    def _osd(lst): return np.std(lst)     if lst else np.nan
+    def _onmn(lst): return np.nanmean(lst) if lst else np.nan
+
     results['overall'] = {
         'n_sessions':              total_sessions,
         'n_with_j_peak':           n_with_peak_all,
-        'mean_lag_accel':          np.mean(all_lag_accel)    if all_lag_accel   else np.nan,
-        'std_lag_accel':           np.std(all_lag_accel)     if all_lag_accel   else np.nan,
-        'mean_lag_vel':            np.mean(all_lag_vel)      if all_lag_vel     else np.nan,
-        'std_lag_vel':             np.std(all_lag_vel)       if all_lag_vel     else np.nan,
-        'mean_dist_accel':         np.mean(all_dist_accel)   if all_dist_accel  else np.nan,
-        'mean_dist_vel':           np.mean(all_dist_vel)     if all_dist_vel    else np.nan,
-        'mean_corr_j_accel':       np.nanmean(all_corr_accel)  if all_corr_accel  else np.nan,
-        'mean_corr_j_vel':         np.nanmean(all_corr_vel)    if all_corr_vel    else np.nan,
-        'mean_xcorr_accel':        np.nanmean(all_xcorr_accel) if all_xcorr_accel else np.nan,
-        'mean_xcorr_vel':          np.nanmean(all_xcorr_vel)   if all_xcorr_vel   else np.nan,
+        # J jump lags
+        'mean_lag_accel':          _omn(all_lag_accel),
+        'std_lag_accel':           _osd(all_lag_accel),
+        'mean_lag_vel':            _omn(all_lag_vel),
+        'std_lag_vel':             _osd(all_lag_vel),
+        'mean_dist_accel':         _omn(all_dist_accel),
+        'mean_dist_vel':           _omn(all_dist_vel),
+        'mean_corr_j_accel':       _onmn(all_corr_accel),
+        'mean_corr_j_vel':         _onmn(all_corr_vel),
+        'mean_xcorr_accel':        _onmn(all_xcorr_accel),
+        'mean_xcorr_vel':          _onmn(all_xcorr_vel),
         'mean_j_peak_lag_accel':   np.mean(all_pk_lags_a) if all_pk_lags_a else np.nan,
         'mean_j_peak_lag_vel':     np.mean(all_pk_lags_v) if all_pk_lags_v else np.nan,
+        # Firing rate extrema lags
+        'mean_fr_min_lag_accel':   _omn(all_fr_min_lag_accel),
+        'std_fr_min_lag_accel':    _osd(all_fr_min_lag_accel),
+        'mean_fr_min_lag_vel':     _omn(all_fr_min_lag_vel),
+        'std_fr_min_lag_vel':      _osd(all_fr_min_lag_vel),
+        'mean_fr_max_lag_accel':   _omn(all_fr_max_lag_accel),
+        'std_fr_max_lag_accel':    _osd(all_fr_max_lag_accel),
+        'mean_fr_max_lag_vel':     _omn(all_fr_max_lag_vel),
+        'std_fr_max_lag_vel':      _osd(all_fr_max_lag_vel),
+        # Energy extrema lags
+        'mean_en_min_lag_accel':   _omn(all_en_min_lag_accel),
+        'std_en_min_lag_accel':    _osd(all_en_min_lag_accel),
+        'mean_en_min_lag_vel':     _omn(all_en_min_lag_vel),
+        'std_en_min_lag_vel':      _osd(all_en_min_lag_vel),
+        'mean_en_max_lag_accel':   _omn(all_en_max_lag_accel),
+        'std_en_max_lag_accel':    _osd(all_en_max_lag_accel),
+        'mean_en_max_lag_vel':     _omn(all_en_max_lag_vel),
+        'std_en_max_lag_vel':      _osd(all_en_max_lag_vel),
     }
 
     if verbose:
@@ -580,25 +706,64 @@ def _plot_session_j_kinematics(session, stim, reference,
                                 j_peak_value=np.nan, j_peak_z=np.nan,
                                 j_peak_lag_to_accel=np.nan,
                                 j_peak_lag_to_vel=np.nan,
-                                smooth_sigma=5.0):
-    """3-panel figure: velocity | acceleration | J coupling with jump and peak marked."""
+                                smooth_sigma=5.0,
+                                fr_ts=None, energy_ts=None,
+                                fr_min_idx=None, fr_max_idx=None,
+                                fr_min_lag_accel=None, fr_min_lag_vel=None,
+                                fr_max_lag_accel=None, fr_max_lag_vel=None,
+                                en_min_idx=None, en_max_idx=None,
+                                en_min_lag_accel=None, en_min_lag_vel=None,
+                                en_max_lag_accel=None, en_max_lag_vel=None,
+                                window=None,
+                                has_fr_peak=False, fr_peak_idx=None,
+                                fr_peak_z=np.nan, fr_peak_lag_accel=None,
+                                fr_peak_lag_vel=None,
+                                has_fr_trough=False, fr_trough_idx=None,
+                                fr_trough_z=np.nan, fr_trough_lag_accel=None,
+                                fr_trough_lag_vel=None,
+                                has_en_peak=False, en_peak_idx=None,
+                                en_peak_z=np.nan, en_peak_lag_accel=None,
+                                en_peak_lag_vel=None,
+                                has_en_trough=False, en_trough_idx=None,
+                                en_trough_z=np.nan, en_trough_lag_accel=None,
+                                en_trough_lag_vel=None):
+    """5-panel figure: velocity | acceleration | firing rate | energy | J coupling."""
 
     na_fmt  = lambda v: f"{v:.3f}" if (isinstance(v, float) and not np.isnan(v)) else "n/a"
     nai_fmt = lambda v: f"{v:+d}"  if (isinstance(v, (int, np.integer))) else "n/a"
-    lag_dir = timing   # 'leads' | 'lags' | 'simultaneous'
+    lag_dir = timing
 
     panel_color = {'leads': 'limegreen', 'lags': 'tomato',
                    'simultaneous': 'gold'}[timing]
 
     peak_line = ""
     if has_j_peak and j_peak_idx is not None:
-        peak_line = (f"\nJ PEAK: idx={j_peak_idx}  prom/bg90={na_fmt(j_peak_z)}  "
-                     f"lag→accel={nai_fmt(j_peak_lag_to_accel)}  "
-                     f"lag→vel={nai_fmt(j_peak_lag_to_vel)}")
-    elif not has_j_peak:
-        peak_line = f"\nNo large J peak detected (prom/bg90={na_fmt(j_peak_z)})"
+        peak_line = (f"\nJ PEAK: idx={j_peak_idx}  ratio={na_fmt(j_peak_z)}  "
+                     f"lag→A={nai_fmt(j_peak_lag_to_accel)}  "
+                     f"lag→V={nai_fmt(j_peak_lag_to_vel)}")
+    else:
+        peak_line = f"\nNo large J peak (ratio={na_fmt(j_peak_z)})"
 
-    fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
+    fr_det_line = ""
+    if has_fr_peak:
+        fr_det_line += (f"\nFR PEAK: idx={fr_peak_idx}  ratio={na_fmt(fr_peak_z)}  "
+                        f"lag→A={fr_peak_lag_accel:+d}  lag→V={fr_peak_lag_vel:+d}"
+                        if fr_peak_lag_accel is not None else f"\nFR PEAK: idx={fr_peak_idx}  ratio={na_fmt(fr_peak_z)}")
+    if has_fr_trough:
+        fr_det_line += (f"\nFR TROUGH: idx={fr_trough_idx}  ratio={na_fmt(fr_trough_z)}  "
+                        f"lag→A={fr_trough_lag_accel:+d}  lag→V={fr_trough_lag_vel:+d}"
+                        if fr_trough_lag_accel is not None else f"\nFR TROUGH: idx={fr_trough_idx}  ratio={na_fmt(fr_trough_z)}")
+    en_det_line = ""
+    if has_en_peak:
+        en_det_line += (f"\nEN PEAK: idx={en_peak_idx}  ratio={na_fmt(en_peak_z)}  "
+                        f"lag→A={en_peak_lag_accel:+d}  lag→V={en_peak_lag_vel:+d}"
+                        if en_peak_lag_accel is not None else f"\nEN PEAK: idx={en_peak_idx}  ratio={na_fmt(en_peak_z)}")
+    if has_en_trough:
+        en_det_line += (f"\nEN TROUGH: idx={en_trough_idx}  ratio={na_fmt(en_trough_z)}  "
+                        f"lag→A={en_trough_lag_accel:+d}  lag→V={en_trough_lag_vel:+d}"
+                        if en_trough_lag_accel is not None else f"\nEN TROUGH: idx={en_trough_idx}  ratio={na_fmt(en_trough_z)}")
+
+    fig, axes = plt.subplots(5, 1, figsize=(14, 18), sharex=True)
     fig.suptitle(
         f"Session {session}  |  Stim {stim}  |  J {lag_dir.upper()} kinematics\n"
         f"J jump idx={j_jump_idx}  |ΔJ|={na_fmt(j_jump_mag)}\n"
@@ -606,71 +771,156 @@ def _plot_session_j_kinematics(session, stim, reference,
         f"Vel peak={vel_peak_idx} (lag {lag_to_vel:+d})\n"
         f"Corr(J,accel)={na_fmt(corr_j_accel)}  XClag={xcorr_lag_accel:+.0f}  |  "
         f"Corr(J,vel)={na_fmt(corr_j_vel)}  XClag={xcorr_lag_vel:+.0f}"
-        f"{peak_line}",
-        fontsize=9, fontweight='bold'
+        f"{peak_line}{fr_det_line}{en_det_line}",
+        fontsize=8, fontweight='bold'
     )
+
+    # Shared reference lines + window shading helper
+    w_lo = window[0] if window is not None else None
+    w_hi = window[1] if window is not None else None
+
+    def _ref_vlines(ax, extra_idx=None, extra_label=None, extra_color='crimson'):
+        # Highlight the search window as a shaded band
+        if w_lo is not None and w_hi is not None:
+            ax.axvspan(w_lo, w_hi, color='gold', alpha=0.15, zorder=0,
+                       label=f'Search window [{w_lo}–{w_hi}]')
+            ax.axvline(w_lo, color='goldenrod', linestyle='--', linewidth=1.0,
+                       alpha=0.55, zorder=1)
+            ax.axvline(w_hi, color='goldenrod', linestyle='--', linewidth=1.0,
+                       alpha=0.55, zorder=1)
+        ax.axvline(accel_peak_idx, color='green',       linestyle='--',
+                   linewidth=1.5, alpha=0.6, label=f'Accel peak ({accel_peak_idx})')
+        ax.axvline(vel_peak_idx,   color='deepskyblue', linestyle='--',
+                   linewidth=1.5, alpha=0.6, label=f'Vel peak ({vel_peak_idx})')
+        if extra_idx is not None:
+            ax.axvline(extra_idx, color=extra_color, linestyle=':', linewidth=1.5,
+                       alpha=0.8, label=extra_label)
 
     # ── Panel 1: Velocity ──────────────────────────────────────────────────
     axes[0].plot(vel_ts, color='navy', linewidth=1.5, label='X velocity')
-    axes[0].axvline(vel_peak_idx, color='deepskyblue', linestyle='--', linewidth=2,
-                    label=f'Vel peak (idx={vel_peak_idx})')
-    axes[0].axvline(j_jump_idx, color='crimson', linestyle=':', linewidth=1.5, alpha=0.7,
-                    label=f'J jump (idx={j_jump_idx})')
+    _ref_vlines(axes[0], j_jump_idx, f'J jump ({j_jump_idx})')
     axes[0].set_ylabel("X Velocity")
     axes[0].grid(alpha=0.3)
-    axes[0].legend(fontsize=8)
+    axes[0].legend(fontsize=7, loc='upper left')
 
     # ── Panel 2: Acceleration ─────────────────────────────────────────────
     axes[1].plot(accel_ts, color='steelblue', linewidth=1.5, label='X acceleration')
-    axes[1].axvline(accel_peak_idx, color='green', linestyle='--', linewidth=2,
-                    label=f'Accel peak (idx={accel_peak_idx})')
-    axes[1].axvline(j_jump_idx, color='crimson', linestyle=':', linewidth=1.5, alpha=0.7,
-                    label=f'J jump (idx={j_jump_idx})')
+    _ref_vlines(axes[1], j_jump_idx, f'J jump ({j_jump_idx})')
     axes[1].set_ylabel("X Acceleration")
     axes[1].grid(alpha=0.3)
-    axes[1].legend(fontsize=8)
+    axes[1].legend(fontsize=7, loc='upper left')
 
-    # ── Panel 3: J + dJ/dt with jump highlighted ──────────────────────────
-    ax3 = axes[2]
-    ax3_twin = ax3.twinx()
+    # ── Panel 3: Firing Rate ───────────────────────────────────────────────
+    ax_fr = axes[2]
+    if fr_ts is not None and len(fr_ts) > 0:
+        ax_fr.plot(fr_ts, color='darkgreen', linewidth=1.5, label='Firing rate')
+        # Raw window min/max (grey, background reference)
+        if fr_min_idx is not None:
+            ax_fr.axvline(fr_min_idx, color='silver', linestyle=':', linewidth=1.2, alpha=0.6,
+                          label=f'FR window min ({fr_min_idx})')
+        if fr_max_idx is not None:
+            ax_fr.axvline(fr_max_idx, color='gray',   linestyle=':', linewidth=1.2, alpha=0.6,
+                          label=f'FR window max ({fr_max_idx})')
+        # Detected peak (★ orange)
+        if has_fr_peak and fr_peak_idx is not None:
+            ax_fr.axvline(fr_peak_idx, color='darkorange', linestyle='-.', linewidth=2.2,
+                          label=f'FR PEAK ({fr_peak_idx})  ratio={na_fmt(fr_peak_z)}')
+            if fr_peak_idx < len(fr_ts):
+                ax_fr.scatter([fr_peak_idx], [fr_ts[fr_peak_idx]], color='darkorange',
+                              zorder=6, s=90, marker='*')
+        # Detected trough (★ purple)
+        if has_fr_trough and fr_trough_idx is not None:
+            ax_fr.axvline(fr_trough_idx, color='mediumpurple', linestyle='-.', linewidth=2.2,
+                          label=f'FR TROUGH ({fr_trough_idx})  ratio={na_fmt(fr_trough_z)}')
+            if fr_trough_idx < len(fr_ts):
+                ax_fr.scatter([fr_trough_idx], [fr_ts[fr_trough_idx]], color='mediumpurple',
+                              zorder=6, s=90, marker='*')
+        _ref_vlines(ax_fr, j_jump_idx, f'J jump ({j_jump_idx})')
+    else:
+        ax_fr.text(0.5, 0.5, 'No firing rate data', transform=ax_fr.transAxes,
+                   ha='center', va='center', color='gray')
+    ax_fr.set_ylabel("Firing Rate")
+    ax_fr.grid(alpha=0.3)
+    ax_fr.legend(fontsize=7, loc='upper left')
 
-    ax3.plot(j_ts, color='darkorchid', linewidth=1.0, alpha=0.5, label='J (raw)')
+    # ── Panel 4: Energy ────────────────────────────────────────────────────
+    ax_en = axes[3]
+    if energy_ts is not None and len(energy_ts) > 0:
+        ax_en.plot(energy_ts, color='saddlebrown', linewidth=1.5, label='Energy')
+        # Raw window min/max (grey, background reference)
+        if en_min_idx is not None:
+            ax_en.axvline(en_min_idx, color='silver', linestyle=':', linewidth=1.2, alpha=0.6,
+                          label=f'En window min ({en_min_idx})')
+        if en_max_idx is not None:
+            ax_en.axvline(en_max_idx, color='gray',   linestyle=':', linewidth=1.2, alpha=0.6,
+                          label=f'En window max ({en_max_idx})')
+        # Detected peak (★ red-orange)
+        if has_en_peak and en_peak_idx is not None:
+            ax_en.axvline(en_peak_idx, color='tomato', linestyle='-.', linewidth=2.2,
+                          label=f'EN PEAK ({en_peak_idx})  ratio={na_fmt(en_peak_z)}')
+            if en_peak_idx < len(energy_ts):
+                ax_en.scatter([en_peak_idx], [energy_ts[en_peak_idx]], color='tomato',
+                              zorder=6, s=90, marker='*')
+        # Detected trough (★ teal)
+        if has_en_trough and en_trough_idx is not None:
+            ax_en.axvline(en_trough_idx, color='teal', linestyle='-.', linewidth=2.2,
+                          label=f'EN TROUGH ({en_trough_idx})  ratio={na_fmt(en_trough_z)}')
+            if en_trough_idx < len(energy_ts):
+                ax_en.scatter([en_trough_idx], [energy_ts[en_trough_idx]], color='teal',
+                              zorder=6, s=90, marker='*')
+        _ref_vlines(ax_en, j_jump_idx, f'J jump ({j_jump_idx})')
+    else:
+        ax_en.text(0.5, 0.5, 'No energy data', transform=ax_en.transAxes,
+                   ha='center', va='center', color='gray')
+    ax_en.set_ylabel("Energy")
+    ax_en.grid(alpha=0.3)
+    ax_en.legend(fontsize=7, loc='upper left')
+
+    # ── Panel 5: J + dJ/dt with jump highlighted ──────────────────────────
+    ax5 = axes[4]
+    ax5_twin = ax5.twinx()
+
+    ax5.plot(j_ts, color='darkorchid', linewidth=1.0, alpha=0.5, label='J (raw)')
     if len(j_ts) > 2:
         j_smooth_plot = _gaussian_smooth(j_ts, smooth_sigma)
-        ax3.plot(j_smooth_plot, color='indigo', linewidth=2.0,
+        ax5.plot(j_smooth_plot, color='indigo', linewidth=2.0,
                  label=f'J smoothed (σ={smooth_sigma:.0f})')
-    ax3.axvline(j_jump_idx, color='crimson', linewidth=2.5,
+    if w_lo is not None and w_hi is not None:
+        ax5.axvspan(w_lo, w_hi, color='gold', alpha=0.15, zorder=0,
+                    label=f'Search window [{w_lo}–{w_hi}]')
+        ax5.axvline(w_lo, color='goldenrod', linestyle='--', linewidth=1.0, alpha=0.55, zorder=1)
+        ax5.axvline(w_hi, color='goldenrod', linestyle='--', linewidth=1.0, alpha=0.55, zorder=1)
+    ax5.axvline(j_jump_idx, color='crimson', linewidth=2.5,
                 label=f'J jump (|ΔJ|={na_fmt(j_jump_mag)})')
-    ax3.axvline(accel_peak_idx, color='green',      linestyle='--', linewidth=1.5, alpha=0.6,
+    ax5.axvline(accel_peak_idx, color='green',       linestyle='--', linewidth=1.5, alpha=0.6,
                 label='Accel peak')
-    ax3.axvline(vel_peak_idx,   color='deepskyblue', linestyle='--', linewidth=1.5, alpha=0.6,
+    ax5.axvline(vel_peak_idx,   color='deepskyblue', linestyle='--', linewidth=1.5, alpha=0.6,
                 label='Vel peak')
 
-    # J peak marker (only when a significant peak was detected)
     if has_j_peak and j_peak_idx is not None:
-        ax3.axvline(j_peak_idx, color='darkorange', linewidth=2.0, linestyle='-.',
+        ax5.axvline(j_peak_idx, color='darkorange', linewidth=2.0, linestyle='-.',
                     label=f'J PEAK (ratio={na_fmt(j_peak_z)}, lag→A={nai_fmt(j_peak_lag_to_accel)})')
         if not np.isnan(j_peak_value):
-            ax3.scatter([j_peak_idx], [j_peak_value], color='darkorange',
+            ax5.scatter([j_peak_idx], [j_peak_value], color='darkorange',
                         zorder=5, s=80, marker='*')
 
-    ax3.set_facecolor((*mcolors.to_rgb(panel_color), 0.10))
-    ax3.set_ylabel("J (coupling)", color='darkorchid')
-    ax3.tick_params(axis='y', labelcolor='darkorchid')
+    ax5.set_facecolor((*mcolors.to_rgb(panel_color), 0.10))
+    ax5.set_ylabel("J (coupling)", color='darkorchid')
+    ax5.tick_params(axis='y', labelcolor='darkorchid')
 
     if len(j_ts) > 1:
         dj = np.abs(np.diff(j_ts, prepend=j_ts[0]))
-        ax3_twin.plot(dj, color='salmon', linewidth=1.0, alpha=0.6, linestyle='-',
+        ax5_twin.plot(dj, color='salmon', linewidth=1.0, alpha=0.6, linestyle='-',
                       label='|dJ/dt|')
-        ax3_twin.set_ylabel("|dJ/dt|", color='salmon')
-        ax3_twin.tick_params(axis='y', labelcolor='salmon')
+        ax5_twin.set_ylabel("|dJ/dt|", color='salmon')
+        ax5_twin.tick_params(axis='y', labelcolor='salmon')
 
-    lines1, labels1 = ax3.get_legend_handles_labels()
-    lines2, labels2 = ax3_twin.get_legend_handles_labels()
-    ax3.legend(lines1 + lines2, labels1 + labels2, fontsize=7, loc='upper left')
+    lines1, labels1 = ax5.get_legend_handles_labels()
+    lines2, labels2 = ax5_twin.get_legend_handles_labels()
+    ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=7, loc='upper left')
 
-    ax3.set_xlabel("Time bin")
-    ax3.grid(alpha=0.3)
+    ax5.set_xlabel("Time bin")
+    ax5.grid(alpha=0.3)
 
     plt.tight_layout()
     fname = f"stim{stim}_{session}.png"
@@ -715,9 +965,11 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
         if len(od) == 0:
             continue
 
-        accel_ts = _acceleration_timeseries(od)
-        vel_ts   = _velocity_timeseries(od)
-        j_ts     = _mean_timeseries(od, 'j')
+        accel_ts  = _acceleration_timeseries(od)
+        vel_ts    = _velocity_timeseries(od)
+        j_ts      = _mean_timeseries(od, 'j')
+        fr_ts     = _mean_timeseries(od, 'firing_rate') if 'firing_rate' in od.columns else np.array([])
+        energy_ts = _mean_timeseries(od, 'energy')      if 'energy'       in od.columns else np.array([])
 
         timing   = row['timing']
         save_dir = leads_dir if timing == 'leads' else (lags_dir if timing == 'lags' else simul_dir)
@@ -741,16 +993,59 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
             j_peak_lag_to_accel=row['j_peak_lag_to_accel'],
             j_peak_lag_to_vel=row['j_peak_lag_to_vel'],
             smooth_sigma=smooth_sigma,
+            fr_ts=fr_ts,     energy_ts=energy_ts,
+            fr_min_idx=row['fr_min_idx'],   fr_max_idx=row['fr_max_idx'],
+            fr_min_lag_accel=row['fr_min_lag_accel'], fr_min_lag_vel=row['fr_min_lag_vel'],
+            fr_max_lag_accel=row['fr_max_lag_accel'], fr_max_lag_vel=row['fr_max_lag_vel'],
+            en_min_idx=row['en_min_idx'],   en_max_idx=row['en_max_idx'],
+            en_min_lag_accel=row['en_min_lag_accel'], en_min_lag_vel=row['en_min_lag_vel'],
+            en_max_lag_accel=row['en_max_lag_accel'], en_max_lag_vel=row['en_max_lag_vel'],
+            window=window,
+            has_fr_peak=row['has_fr_peak'],     fr_peak_idx=row['fr_peak_idx'],
+            fr_peak_z=row['fr_peak_z'],
+            fr_peak_lag_accel=row['fr_peak_lag_accel'] if not (isinstance(row['fr_peak_lag_accel'], float) and np.isnan(row['fr_peak_lag_accel'])) else None,
+            fr_peak_lag_vel=row['fr_peak_lag_vel']     if not (isinstance(row['fr_peak_lag_vel'],   float) and np.isnan(row['fr_peak_lag_vel']))   else None,
+            has_fr_trough=row['has_fr_trough'],   fr_trough_idx=row['fr_trough_idx'],
+            fr_trough_z=row['fr_trough_z'],
+            fr_trough_lag_accel=row['fr_trough_lag_accel'] if not (isinstance(row['fr_trough_lag_accel'], float) and np.isnan(row['fr_trough_lag_accel'])) else None,
+            fr_trough_lag_vel=row['fr_trough_lag_vel']     if not (isinstance(row['fr_trough_lag_vel'],   float) and np.isnan(row['fr_trough_lag_vel']))   else None,
+            has_en_peak=row['has_en_peak'],     en_peak_idx=row['en_peak_idx'],
+            en_peak_z=row['en_peak_z'],
+            en_peak_lag_accel=row['en_peak_lag_accel'] if not (isinstance(row['en_peak_lag_accel'], float) and np.isnan(row['en_peak_lag_accel'])) else None,
+            en_peak_lag_vel=row['en_peak_lag_vel']     if not (isinstance(row['en_peak_lag_vel'],   float) and np.isnan(row['en_peak_lag_vel']))   else None,
+            has_en_trough=row['has_en_trough'],   en_trough_idx=row['en_trough_idx'],
+            en_trough_z=row['en_trough_z'],
+            en_trough_lag_accel=row['en_trough_lag_accel'] if not (isinstance(row['en_trough_lag_accel'], float) and np.isnan(row['en_trough_lag_accel'])) else None,
+            en_trough_lag_vel=row['en_trough_lag_vel']     if not (isinstance(row['en_trough_lag_vel'],   float) and np.isnan(row['en_trough_lag_vel']))   else None,
         )
 
-    # Session-level CSV
+    # Session-level CSV (includes FR, Energy, and J fields)
     summary_df = pd.DataFrame([{
         'stimulus':             r['stimulus'],
         'session':              r['session'],
-        'j_jump_idx':           r['j_jump_idx'],
-        'j_jump_mag':           r['j_jump_mag'],
         'accel_peak_idx':       r['accel_peak_idx'],
         'vel_peak_idx':         r['vel_peak_idx'],
+        # Firing rate
+        'fr_min_idx':           r['fr_min_idx'],
+        'fr_max_idx':           r['fr_max_idx'],
+        'fr_min_lag_accel':     r['fr_min_lag_accel'],
+        'fr_min_lag_vel':       r['fr_min_lag_vel'],
+        'fr_max_lag_accel':     r['fr_max_lag_accel'],
+        'fr_max_lag_vel':       r['fr_max_lag_vel'],
+        'fr_min_closer':        r['fr_min_closer'],
+        'fr_max_closer':        r['fr_max_closer'],
+        # Energy
+        'en_min_idx':           r['en_min_idx'],
+        'en_max_idx':           r['en_max_idx'],
+        'en_min_lag_accel':     r['en_min_lag_accel'],
+        'en_min_lag_vel':       r['en_min_lag_vel'],
+        'en_max_lag_accel':     r['en_max_lag_accel'],
+        'en_max_lag_vel':       r['en_max_lag_vel'],
+        'en_min_closer':        r['en_min_closer'],
+        'en_max_closer':        r['en_max_closer'],
+        # J jump
+        'j_jump_idx':           r['j_jump_idx'],
+        'j_jump_mag':           r['j_jump_mag'],
         'lag_to_accel':         r['lag_to_accel'],
         'lag_to_vel':           r['lag_to_vel'],
         'dist_to_accel':        r['dist_to_accel'],
@@ -760,18 +1055,44 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
         'xcorr_lag_accel':      r['xcorr_lag_accel'],
         'xcorr_lag_vel':        r['xcorr_lag_vel'],
         'timing':               r['timing'],
+        # J peak
         'has_j_peak':           r['has_j_peak'],
         'j_peak_idx':           r['j_peak_idx'],
         'j_peak_value':         r['j_peak_value'],
         'j_peak_z':             r['j_peak_z'],
         'j_peak_lag_to_accel':  r['j_peak_lag_to_accel'],
         'j_peak_lag_to_vel':    r['j_peak_lag_to_vel'],
+        # FR detected peak/trough
+        'has_fr_peak':          r['has_fr_peak'],
+        'fr_peak_idx':          r['fr_peak_idx'],
+        'fr_peak_z':            r['fr_peak_z'],
+        'fr_peak_lag_accel':    r['fr_peak_lag_accel'],
+        'fr_peak_lag_vel':      r['fr_peak_lag_vel'],
+        'has_fr_trough':        r['has_fr_trough'],
+        'fr_trough_idx':        r['fr_trough_idx'],
+        'fr_trough_z':          r['fr_trough_z'],
+        'fr_trough_lag_accel':  r['fr_trough_lag_accel'],
+        'fr_trough_lag_vel':    r['fr_trough_lag_vel'],
+        # Energy detected peak/trough
+        'has_en_peak':          r['has_en_peak'],
+        'en_peak_idx':          r['en_peak_idx'],
+        'en_peak_z':            r['en_peak_z'],
+        'en_peak_lag_accel':    r['en_peak_lag_accel'],
+        'en_peak_lag_vel':      r['en_peak_lag_vel'],
+        'has_en_trough':        r['has_en_trough'],
+        'en_trough_idx':        r['en_trough_idx'],
+        'en_trough_z':          r['en_trough_z'],
+        'en_trough_lag_accel':  r['en_trough_lag_accel'],
+        'en_trough_lag_vel':    r['en_trough_lag_vel'],
     } for r in results['all_sessions']])
     summary_df.to_csv(os.path.join(output_dir, 'session_summary_j_kinematics.csv'), index=False)
 
     n_leads = (summary_df['timing'] == 'leads').sum()
     n_lags  = (summary_df['timing'] == 'lags').sum()
     n_sim   = (summary_df['timing'] == 'simultaneous').sum()
+
+    # Box-and-whisker arbitration plot
+    plot_arbitration_boxwhisker(results['all_sessions'], output_dir, window=window)
 
     if verbose:
         print(f"\n  Plots saved:")
@@ -784,8 +1105,308 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
 
 
 # ---------------------------------------------------------------------------
+# Box-and-whisker arbitration plot
+# ---------------------------------------------------------------------------
+
+def plot_arbitration_boxwhisker(all_sessions, output_dir, window=None):
+    """
+    Box-and-whisker plot showing the lag (in bins) of each signal's extremum
+    relative to velocity and acceleration peaks.
+
+    Six signal groups on the x-axis:
+        FR min | FR max | Energy min | Energy max | J jump | J peak
+
+    Each group has two boxes:
+        Blue  = lag relative to acceleration peak
+        Orange = lag relative to velocity peak
+
+    A horizontal dashed line at y=0 marks coincidence.
+    Negative lag → signal *leads* the kinematic event.
+    Positive lag → signal *lags* the kinematic event.
+    """
+    # ── Collect lag arrays ────────────────────────────────────────────────
+    signals = [
+        ('FR\nmin',    'fr_min_lag_accel',   'fr_min_lag_vel'),
+        ('FR\nmax',    'fr_max_lag_accel',   'fr_max_lag_vel'),
+        ('Energy\nmin','en_min_lag_accel',   'en_min_lag_vel'),
+        ('Energy\nmax','en_max_lag_accel',   'en_max_lag_vel'),
+        ('J pairwise\njump',    'lag_to_accel',       'lag_to_vel'),
+        ('J pairwise\npeak',    'j_peak_lag_to_accel','j_peak_lag_to_vel'),
+    ]
+
+    accel_data, vel_data, labels = [], [], []
+    for label, accel_key, vel_key in signals:
+        a_lags = [r[accel_key] for r in all_sessions
+                  if accel_key in r and not (isinstance(r[accel_key], float) and np.isnan(r[accel_key]))]
+        v_lags = [r[vel_key]   for r in all_sessions
+                  if vel_key   in r and not (isinstance(r[vel_key],   float) and np.isnan(r[vel_key]))]
+        accel_data.append(a_lags)
+        vel_data.append(v_lags)
+        labels.append(label)
+
+    n_groups = len(labels)
+    x = np.arange(n_groups)
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(14, 7))
+
+    def _bplot(ax, positions, data, color, label_str, flier_props):
+        bps = ax.boxplot(
+            data, positions=positions, widths=width * 0.9,
+            patch_artist=True, notch=False,
+            boxprops=dict(facecolor=color, alpha=0.7),
+            medianprops=dict(color='black', linewidth=2),
+            whiskerprops=dict(linewidth=1.5),
+            capprops=dict(linewidth=1.5),
+            flierprops=flier_props,
+            manage_ticks=False,
+        )
+        bps['boxes'][0].set_label(label_str)
+        return bps
+
+    fp_a = dict(marker='o', color='steelblue',   markersize=4, alpha=0.5, linestyle='none')
+    fp_v = dict(marker='o', color='darkorange',  markersize=4, alpha=0.5, linestyle='none')
+
+    for i, (a_dat, v_dat) in enumerate(zip(accel_data, vel_data)):
+        if a_dat:
+            _bplot(ax, [x[i] - width / 2], [a_dat], 'steelblue',
+                   'vs Acceleration' if i == 0 else '_nolegend_', fp_a)
+        if v_dat:
+            _bplot(ax, [x[i] + width / 2], [v_dat], 'darkorange',
+                   'vs Velocity' if i == 0 else '_nolegend_', fp_v)
+
+    ax.axhline(0, color='black', linestyle='--', linewidth=1.2, alpha=0.6,
+               label='Zero lag (coincident)')
+
+    # Compute y range for annotation placement
+    all_flat = [v for lst in accel_data + vel_data for v in lst]
+    y_top = (max(all_flat) * 1.08) if all_flat else 1.0
+
+    # Annotate each group with the winner ("closer to" vote)
+    for i, (label, accel_key, vel_key) in enumerate(signals):
+        a_lags = accel_data[i]
+        v_lags = vel_data[i]
+        if a_lags and v_lags:
+            med_a = np.median(np.abs(a_lags))
+            med_v = np.median(np.abs(v_lags))
+            winner = 'A' if med_a <= med_v else 'V'
+            color  = 'steelblue' if winner == 'A' else 'darkorange'
+            ax.text(x[i], y_top, f'→{winner}', ha='center', va='bottom',
+                    fontsize=9, fontweight='bold', color=color)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_xlabel("Signal / Extremum", fontsize=12)
+    ax.set_ylabel("Lag relative to kinematic peak (bins)\n(−  leads  |  +  lags)", fontsize=11)
+
+    n_sess = len(all_sessions)
+    win_str = f"window [{window[0]}–{window[1]}]" if window is not None else "window: n/a"
+    ax.set_title(
+        f"Arbitration: Signal extrema timing relative to Acceleration vs Velocity\n"
+        f"(Blue = vs Accel, Orange = vs Vel  |  →A / →V = median closer to Accel / Velocity)\n"
+        f"n = {n_sess} sessions  |  search {win_str}",
+        fontsize=12, fontweight='bold'
+    )
+    ax.legend(fontsize=10, loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    out_path = os.path.join(output_dir, 'arbitration_boxwhisker.png')
+    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f"  Arbitration box-whisker plot saved: {out_path}")
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Text report
+# ---------------------------------------------------------------------------
+
+def write_arbitration_text_report(all_sessions, overall, by_stimulus, output_dir, args):
+    """
+    Write a plain-text summary of the arbitration results.
+
+    Includes:
+    - Per-session lead/lag table for FR (min/max), Energy (min/max), J jump, J peak
+    - Per-stimulus summary: mean ± std and closer-to vote for each signal
+    - Overall summary across all sessions
+    """
+    out_path = os.path.join(output_dir, 'arbitration_results.txt')
+
+    def _fmt(v, fmt='+.1f'):
+        if v is None:
+            return '   n/a'
+        try:
+            if np.isnan(float(v)):
+                return '   n/a'
+        except (TypeError, ValueError):
+            pass
+        return format(v, fmt)
+
+    def _closer(mean_dist_a, mean_dist_v):
+        if np.isnan(mean_dist_a) or np.isnan(mean_dist_v):
+            return 'n/a'
+        return 'ACCEL' if mean_dist_a <= mean_dist_v else 'VEL'
+
+    lines = []
+    lines.append("=" * 110)
+    lines.append("  ARBITRATION RESULTS: Firing Rate, Energy, and J vs Acceleration & Velocity")
+    lines.append(f"  Generated: {date.today().isoformat()}")
+    lines.append(f"  Data folder: {getattr(args, 'data_folder', 'N/A')}")
+    lines.append(f"  Window: {getattr(args, 'window', 'N/A')}  |  "
+                 f"Reps: {getattr(args, 'rep_start', 'N/A')}–{getattr(args, 'rep_end_exclusive', 'N/A') - 1 if hasattr(args, 'rep_end_exclusive') else 'N/A'}  |  "
+                 f"Stimuli: {getattr(args, 'stim_min', 'N/A')}–{getattr(args, 'stim_max_exclusive', 'N/A') - 1 if hasattr(args, 'stim_max_exclusive') else 'N/A'}")
+    lines.append("")
+    lines.append("  LAG CONVENTION:")
+    lines.append("    lag = signal_extremum_index − kinematic_peak_index")
+    lines.append("    Negative → signal LEADS  kinematic event")
+    lines.append("    Positive → signal LAGS   kinematic event")
+    lines.append("    Zero     → coincident")
+    lines.append("=" * 110)
+    lines.append("")
+
+    # ── Per-session table ─────────────────────────────────────────────────
+    lines.append("─" * 110)
+    lines.append("  PER-SESSION DETAIL")
+    lines.append("─" * 110)
+    hdr = (f"  {'Session':<12} {'Stim':>4}  "
+           f"{'FR_min→A':>9} {'FR_min→V':>9} {'FR_max→A':>9} {'FR_max→V':>9}  "
+           f"{'En_min→A':>9} {'En_min→V':>9} {'En_max→A':>9} {'En_max→V':>9}  "
+           f"{'J_jump→A':>9} {'J_jump→V':>9}  "
+           f"{'J_pk→A':>8} {'J_pk→V':>8}")
+    lines.append(hdr)
+    lines.append("  " + "-" * (len(hdr) - 2))
+
+    for r in all_sessions:
+        sess = str(r['session'])
+        stim = str(r['stimulus'])
+        jpa  = _fmt(r.get('j_peak_lag_to_accel', float('nan')))
+        jpv  = _fmt(r.get('j_peak_lag_to_vel',   float('nan')))
+        lines.append(
+            f"  {sess:<12} {stim:>4}  "
+            f"{_fmt(r['fr_min_lag_accel']):>9} {_fmt(r['fr_min_lag_vel']):>9} "
+            f"{_fmt(r['fr_max_lag_accel']):>9} {_fmt(r['fr_max_lag_vel']):>9}  "
+            f"{_fmt(r['en_min_lag_accel']):>9} {_fmt(r['en_min_lag_vel']):>9} "
+            f"{_fmt(r['en_max_lag_accel']):>9} {_fmt(r['en_max_lag_vel']):>9}  "
+            f"{_fmt(r['lag_to_accel']):>9} {_fmt(r['lag_to_vel']):>9}  "
+            f"{jpa:>8} {jpv:>8}"
+        )
+
+    lines.append("")
+
+    # ── Per-stimulus summary ──────────────────────────────────────────────
+    lines.append("─" * 110)
+    lines.append("  PER-STIMULUS SUMMARY  (mean ± std of lag, bins)  [→A closer to Accel | →V closer to Vel]")
+    lines.append("─" * 110)
+
+    signal_keys = [
+        ('FR min',    'mean_fr_min_lag_accel', 'std_fr_min_lag_accel',
+                      'mean_fr_min_lag_vel',   'std_fr_min_lag_vel'),
+        ('FR max',    'mean_fr_max_lag_accel', 'std_fr_max_lag_accel',
+                      'mean_fr_max_lag_vel',   'std_fr_max_lag_vel'),
+        ('Energy min','mean_en_min_lag_accel', 'std_en_min_lag_accel',
+                      'mean_en_min_lag_vel',   'std_en_min_lag_vel'),
+        ('Energy max','mean_en_max_lag_accel', 'std_en_max_lag_accel',
+                      'mean_en_max_lag_vel',   'std_en_max_lag_vel'),
+        ('J jump',    'mean_lag_accel',        'std_lag_accel',
+                      'mean_lag_vel',          'std_lag_vel'),
+        ('J peak',    'mean_j_peak_lag_accel', None,
+                      'mean_j_peak_lag_vel',   None),
+    ]
+
+    for stim_id in sorted(by_stimulus):
+        s = by_stimulus[stim_id]
+        lines.append(f"\n  Stimulus {stim_id}  ({s['n_sessions']} sessions)")
+        lines.append(f"  {'Signal':<14} {'Mean→Accel':>12} {'Std→Accel':>10}  "
+                     f"{'Mean→Vel':>10} {'Std→Vel':>10}   {'Closer to':>12}")
+        lines.append("  " + "-" * 72)
+        for sig_name, mk_a, sk_a, mk_v, sk_v in signal_keys:
+            m_a = s.get(mk_a, float('nan'))
+            s_a = s.get(sk_a, float('nan')) if sk_a else float('nan')
+            m_v = s.get(mk_v, float('nan'))
+            s_v = s.get(sk_v, float('nan')) if sk_v else float('nan')
+            winner = _closer(abs(m_a) if not np.isnan(m_a) else float('nan'),
+                             abs(m_v) if not np.isnan(m_v) else float('nan'))
+            lines.append(
+                f"  {sig_name:<14} {_fmt(m_a):>12} {_fmt(s_a, '.1f'):>10}  "
+                f"{_fmt(m_v):>10} {_fmt(s_v, '.1f'):>10}   {winner:>12}"
+            )
+
+    lines.append("")
+
+    # ── Overall summary ───────────────────────────────────────────────────
+    lines.append("─" * 110)
+    lines.append(f"  OVERALL SUMMARY  ({overall['n_sessions']} sessions total)")
+    lines.append("─" * 110)
+    lines.append(f"  {'Signal':<14} {'Mean→Accel':>12} {'Std→Accel':>10}  "
+                 f"{'Mean→Vel':>10} {'Std→Vel':>10}   {'Closer to':>12}")
+    lines.append("  " + "-" * 72)
+    for sig_name, mk_a, sk_a, mk_v, sk_v in signal_keys:
+        m_a = overall.get(mk_a, float('nan'))
+        s_a = overall.get(sk_a, float('nan')) if sk_a else float('nan')
+        m_v = overall.get(mk_v, float('nan'))
+        s_v = overall.get(sk_v, float('nan')) if sk_v else float('nan')
+        winner = _closer(abs(m_a) if not np.isnan(m_a) else float('nan'),
+                         abs(m_v) if not np.isnan(m_v) else float('nan'))
+        lines.append(
+            f"  {sig_name:<14} {_fmt(m_a):>12} {_fmt(s_a, '.1f'):>10}  "
+            f"{_fmt(m_v):>10} {_fmt(s_v, '.1f'):>10}   {winner:>12}"
+        )
+
+    # Overall "closer to" vote count (per-session)
+    lines.append("")
+    lines.append("  Per-session closer-to vote counts (across all sessions):")
+    for label, accel_key, vel_key in [
+        ('FR min',     'fr_min_closer', None),
+        ('FR max',     'fr_max_closer', None),
+        ('Energy min', 'en_min_closer', None),
+        ('Energy max', 'en_max_closer', None),
+    ]:
+        n_a = sum(1 for r in all_sessions if r.get(accel_key) == 'accel')
+        n_v = sum(1 for r in all_sessions if r.get(accel_key) == 'vel')
+        total = n_a + n_v
+        lines.append(f"    {label:<14}: {n_a}/{total} closer to ACCEL  |  {n_v}/{total} closer to VEL")
+
+    n_j_a = sum(1 for r in all_sessions if r.get('dist_to_accel', float('inf')) <= r.get('dist_to_vel', float('inf')))
+    n_j_v = len(all_sessions) - n_j_a
+    lines.append(f"    {'J jump':<14}: {n_j_a}/{len(all_sessions)} closer to ACCEL  |  {n_j_v}/{len(all_sessions)} closer to VEL")
+
+    jpk_a = sum(1 for r in all_sessions if r.get('has_j_peak') and
+                not np.isnan(r.get('j_peak_lag_to_accel', float('nan'))) and
+                not np.isnan(r.get('j_peak_lag_to_vel',   float('nan'))) and
+                abs(r['j_peak_lag_to_accel']) <= abs(r['j_peak_lag_to_vel']))
+    jpk_v = sum(1 for r in all_sessions if r.get('has_j_peak') and
+                not np.isnan(r.get('j_peak_lag_to_accel', float('nan'))) and
+                not np.isnan(r.get('j_peak_lag_to_vel',   float('nan'))) and
+                abs(r['j_peak_lag_to_accel']) > abs(r['j_peak_lag_to_vel']))
+    jpk_tot = jpk_a + jpk_v
+    lines.append(f"    {'J peak':<14}: {jpk_a}/{jpk_tot} closer to ACCEL  |  {jpk_v}/{jpk_tot} closer to VEL"
+                 f"  (sessions with detected peak)")
+
+    lines.append("")
+    lines.append("=" * 110)
+
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    print(f"  Arbitration text report saved: {out_path}")
+    return out_path
+
+
+# ---------------------------------------------------------------------------
 # Results helpers
 # ---------------------------------------------------------------------------
+
+def _aggregate_overall(overall_list):
+    """Merge a list of per-rep overall dicts by pooling numeric arrays."""
+    if not overall_list:
+        return {}
+    keys = [k for k in overall_list[0] if k != 'n_sessions']
+    agg = {'n_sessions': sum(o.get('n_sessions', 0) for o in overall_list)}
+    for k in keys:
+        vals = [o[k] for o in overall_list if k in o and not (isinstance(o[k], float) and np.isnan(o[k]))]
+        agg[k] = float(np.mean(vals)) if vals else float('nan')
+    return agg
+
 
 def extract_stats_to_df(stats_dict, **kwargs):
     s = stats_dict
@@ -978,6 +1599,13 @@ def parse_args():
                    help="Gaussian smoothing width in time-bins applied to J "
                         "before peak detection (default 5.0). Larger values "
                         "require a broader, smoother bump to count as a peak.")
+    p.add_argument("--sessions", type=str, nargs="+", default=None,
+                   metavar="SESSION_ID",
+                   help="Optional whitelist of session IDs to process (e.g. "
+                        "--sessions 210425 210511 220515). The ID is matched "
+                        "against the 6-digit session identifier extracted from "
+                        "each per_reach_state.csv path. If omitted, all "
+                        "sessions found under --data_folder are used.")
     return p.parse_args()
 
 
@@ -1006,9 +1634,13 @@ def main() -> int:
         print(f"No per_reach_state.csv found under {data_folder}", file=sys.stderr)
         return 1
 
-    stim_range = range(args.stim_min, args.stim_max_exclusive)
-    window     = [w_lo, w_hi]
-    all_results = {}
+    stim_range       = range(args.stim_min, args.stim_max_exclusive)
+    window           = [w_lo, w_hi]
+    all_results      = {}
+    session_whitelist = set(args.sessions) if args.sessions else None
+
+    if session_whitelist:
+        print(f"Session filter active — processing only: {sorted(session_whitelist)}")
 
     for rep in range(args.rep_start, args.rep_end_exclusive):
         session_data = {}
@@ -1025,9 +1657,18 @@ def main() -> int:
                 continue
 
             session_id = _session_id_from_path(session)
+
+            if session_whitelist and session_id not in session_whitelist:
+                continue
+
             print(session)
             print(f"Session_id: {session_id}")
-            session_data[session_id] = pd.read_csv(session)
+            df = pd.read_csv(session)
+            if session_id in session_data:
+                session_data[session_id] = pd.concat(
+                    [session_data[session_id], df], ignore_index=True)
+            else:
+                session_data[session_id] = df
 
         if not session_data:
             print(f"No sessions matched rep={rep} and full_reach", file=sys.stderr)
@@ -1062,6 +1703,15 @@ def main() -> int:
         )
         all_results[rep] = results
 
+        # Text arbitration report (per-rep)
+        write_arbitration_text_report(
+            results['all_sessions'],
+            results['overall'],
+            results['by_stimulus'],
+            rep_out,
+            args,
+        )
+
         df_out = pd.concat(
             [extract_stats_to_df(results['by_stimulus'][stim], stim=stim, rep=rep)
              for stim in results['by_stimulus']],
@@ -1069,6 +1719,25 @@ def main() -> int:
         )
         df_out.to_csv(os.path.join(rep_out, "results_j_kinematics.csv"), index=False)
         print(f"Wrote {os.path.join(rep_out, 'results_j_kinematics.csv')}")
+
+    # Across-rep text report (aggregated)
+    if all_results:
+        all_sess_combined = [r for res in all_results.values()
+                             for r in res['all_sessions']]
+        # Build aggregated overall/by_stimulus from first available rep or combine
+        combined_overall = _aggregate_overall([res['overall'] for res in all_results.values()])
+        combined_by_stim = {}
+        for res in all_results.values():
+            for stim, sdata in res['by_stimulus'].items():
+                combined_by_stim.setdefault(stim, sdata)  # use first rep per stim
+
+        write_arbitration_text_report(
+            all_sess_combined,
+            combined_overall,
+            combined_by_stim,
+            out_base,
+            args,
+        )
 
     if args.report_dir and all_results:
         write_j_kinematics_markdown(all_results, out_base, args.report_dir, args)

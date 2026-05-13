@@ -4,13 +4,13 @@
 #SBATCH --nodes=1
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=256G
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=128G
 #SBATCH --output=./logs/single_test/ising_task_%j.log
 
 singularity exec ~/projectDir/singularity-env/inverse-ising-arm-2.sif /entrypoint.sh python main.py \
     --matlab_file  /data001/projects/enserrog/AbigailData/energy_over_time/210421_fChR2_bin10_spike.mat \
-    --output_dir /home/enserrog/ising_EnergyOverTime/energy_over_time_script/test_output_7 \
+    --output_dir /home/enserrog/ising_EnergyOverTime/energy_over_time_script/test_output_8 \
     --bin_size 1 \
     --sample_size 100000 \
     --n_cpus 64 \

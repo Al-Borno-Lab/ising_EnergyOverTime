@@ -315,7 +315,12 @@ def main() -> int:
             print(session)
             session_id = _session_id_from_path(session)
             print(f"Session_id: {session_id}")
-            session_data[session_id] = pd.read_csv(session)
+            df = pd.read_csv(session)
+            if session_id in session_data:
+                session_data[session_id] = pd.concat(
+                    [session_data[session_id], df], ignore_index=True)
+            else:
+                session_data[session_id] = df
 
         if not session_data:
             print(f"No sessions matched rep={rep} and full_reach under {data_folder}", file=sys.stderr)

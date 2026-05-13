@@ -169,7 +169,7 @@ def plot_phase_transition(results, output_dir):
     
     return CubicSpline(temp_range, pos_avg_energy)
 
-def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True, neural_data=None, window_size=10):
+def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True, neural_data=None, window_size=10, stim_idx_offset=0):
     """
     Plot energy and kinematic data (x, y, z coordinates) across time.
     
@@ -189,6 +189,10 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         List of neural data arrays where each stimulus contains trials of binary spike vectors (default=None)
     window_size : int, optional
         Size of the sliding window for firing rate calculation (default=10)
+    stim_idx_offset : int, optional
+        Added to the loop index when naming output files and plot titles, so that
+        a single-stimulus call from stim_2's pipeline saves stim_2 (not stim_0).
+        Default 0 preserves the original behaviour for multi-stimulus calls.
         
     Returns:
     --------
@@ -202,7 +206,8 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
     h_values = stats.get('h_values', None)
 
     
-    for i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
+    for _loop_i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
+        i = _loop_i + stim_idx_offset
         # Create figure with stacked subplots: X, Y, Z, Energy, and optionally Firing Rate
         n_subplots = 6 if neural_data is not None else 5
         plt.figure(figsize=(12, 3*n_subplots))

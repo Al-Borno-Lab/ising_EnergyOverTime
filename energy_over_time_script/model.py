@@ -251,7 +251,7 @@ def fit_ising_model(spike_data, sample_size=10000, n_cpus=8, max_iter=75, eta=1e
     # Define learning settings
     def learn_settings(i):
         print(f"Iteration {i}")
-        return {'maxdlamda': 1, 'eta': eta}
+        return {'maxdlamda': 1, 'eta': 1/(i+1)}
     
     # Solve for model parameters
     start_time = time.time()

@@ -1,21 +1,23 @@
 #!/usr/bin/env python
 # coding: utf-8
 """
-Find the highest J peak near max-velocity AND max-acceleration for a manually
-supplied list of session IDs, discovered by recursively searching a data folder.
+Find J peaks inside the max-velocity window for manually supplied session IDs.
 
 Workflow per session / stimulus:
   1. Recurse through --data_folder to find all per_reach_state.csv files.
   2. Match each file against the session IDs supplied via --sessions
      (last 6 characters before "_results" in the path, same convention as
-     arbitration_j_many.py).  Unrecognised IDs are reported and skipped.
+     arbitration_j_many.py).
   3. Compute mean x-velocity, x-acceleration, and firing rate across reaches.
-  4. Locate max-velocity and max-acceleration indices separately.
-  5. Apply an optional low-pass (Butterworth) filter to the J time-series.
-  6. Within ±half_window bins around each kinematic peak, find the highest
-     local maximum of J.  Falls back to the absolute max if no local max exists.
-  7. Report timing lags: j_peak_idx − max_vel_idx  and  j_peak_idx − max_accel_idx.
-  8. Save a four-panel plot (velocity | acceleration | firing rate | J) and a CSV.
+  4. Locate max-velocity index; define search window ±half_window bins around it.
+  5. Apply an optional low-pass (Butterworth) filter to J.
+  6. Find ALL local maxima of filtered J inside the velocity window (scipy
+     find_peaks).  Mark every peak on the plot; report lag for the HIGHEST one.
+  7. Read model_quality_summary_P_K.csv from the same directory to compute:
+       r_ising        = Pearson r(P_data, P_ising)
+       r_independent  = Pearson r(P_data, P_independent)
+  8. Save a 4-panel plot (velocity | acceleration | firing rate | J) and a
+     consolidated summary CSV with N_neurons, stim, peak info, and model fit.
 
 Usage
 -----
@@ -24,7 +26,7 @@ Usage
         --sessions 123456 789ABC DEF012 \\
         --stim_min 0 --stim_max_exclusive 3 \\
         --half_window 60 \\
-        --cutoff 0.08 --filter_order 4 \\
+        --cutoff 0.2 --filter_order 4 \\
         --output_dir ./peak_results
 
 Run  python peak_near_max_velocity.py --help  for all options.
@@ -123,76 +125,120 @@ def _apply_filter(
 
 
 # ---------------------------------------------------------------------------
-# Core analysis — generic: find J peak near any kinematic reference peak
+# Model quality helper
 # ---------------------------------------------------------------------------
 
-def find_j_peak_near_kinematic(
-    ref_ts: np.ndarray,
+def _read_model_quality(csv_dir: str) -> dict:
+    """
+    Read model_quality_summary_P_K.csv and _P_K_metadata.csv from *csv_dir*.
+
+    Returns a dict with:
+        n_neurons      : int   (from metadata; nan if unavailable)
+        r_ising        : float Pearson r(P_data, P_ising)
+        r_independent  : float Pearson r(P_data, P_independent)
+    All values are nan if the files are not found or cannot be parsed.
+    """
+    result = {"n_neurons": np.nan, "r_ising": np.nan, "r_independent": np.nan}
+
+    pk_path   = os.path.join(csv_dir, "model_quality_summary_P_K.csv")
+    meta_path = os.path.join(csv_dir, "model_quality_summary_P_K_metadata.csv")
+
+    if os.path.isfile(meta_path):
+        try:
+            meta = pd.read_csv(meta_path)
+            if "N_neurons" in meta.columns:
+                result["n_neurons"] = int(meta["N_neurons"].iloc[0])
+        except Exception:
+            pass
+
+    if os.path.isfile(pk_path):
+        try:
+            pk = pd.read_csv(pk_path)
+            required = {"P_data", "P_ising", "P_independent"}
+            if required.issubset(pk.columns) and len(pk) > 1:
+                p_data = pk["P_data"].values.astype(float)
+                p_ising = pk["P_ising"].values.astype(float)
+                p_indep = pk["P_independent"].values.astype(float)
+                result["r_ising"]       = float(np.corrcoef(p_data, p_ising)[0, 1])
+                result["r_independent"] = float(np.corrcoef(p_data, p_indep)[0, 1])
+        except Exception:
+            pass
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Core analysis — find ALL J peaks inside the velocity window
+# ---------------------------------------------------------------------------
+
+def find_j_peaks_near_velocity(
+    vel_ts: np.ndarray,
     j_ts: np.ndarray,
     j_filt: np.ndarray,
     half_window: int = 60,
     min_prominence: float = 0.0,
 ) -> dict:
     """
-    Find the highest J peak near the maximum of *ref_ts* (velocity or acceleration).
-
-    Parameters
-    ----------
-    ref_ts        : kinematic reference time series (velocity or acceleration)
-    j_ts          : raw J (coupling) time series
-    j_filt        : filtered J time series (pre-computed, same length as j_ts)
-    half_window   : search extends ±half_window bins from the kinematic peak
-    min_prominence: minimum peak prominence for scipy find_peaks
+    Find ALL local J maxima inside the ±half_window velocity window, and
+    identify the highest one.
 
     Returns
     -------
     dict with keys:
-        ref_peak_idx    : index of the kinematic maximum (|ref_ts|)
-        ref_peak_value  : value of ref_ts at that index
-        win_lo, win_hi  : search window bounds (clipped to signal length)
-        j_peak_idx      : index of the highest J local max in the window
-        j_peak_value    : raw J value at j_peak_idx
-        j_peak_value_filt : filtered J value at j_peak_idx
-        lag             : j_peak_idx − ref_peak_idx
-        found_local_max : True if a local maximum existed in the window
+        vel_peak_idx      : index of max |velocity|
+        vel_peak_value    : velocity value there
+        win_lo, win_hi    : search window bounds
+        all_peak_idxs     : list[int]   — all local-max indices in window
+        all_peak_values   : list[float] — raw J values at each peak
+        best_peak_idx     : int   — index of the highest peak (abs max if none)
+        best_peak_value   : float — raw J at best peak
+        best_peak_value_filt : float — filtered J at best peak
+        best_lag          : int   — best_peak_idx − vel_peak_idx
+        found_local_max   : bool  — True if ≥1 local max existed
     """
-    if len(ref_ts) == 0:
-        return {"error": "empty reference time series"}
+    if len(vel_ts) == 0:
+        return {"error": "empty velocity time series"}
     if len(j_ts) == 0:
         return {"error": "empty J time series"}
 
-    ref_peak_idx   = int(np.argmax(np.abs(ref_ts)))
-    ref_peak_value = float(ref_ts[ref_peak_idx])
+    vel_peak_idx   = int(np.argmax(np.abs(vel_ts)))
+    vel_peak_value = float(vel_ts[vel_peak_idx])
 
     n      = len(j_filt)
-    win_lo = max(0, ref_peak_idx - half_window)
-    win_hi = min(n, ref_peak_idx + half_window + 1)
+    win_lo = max(0, vel_peak_idx - half_window)
+    win_hi = min(n, vel_peak_idx + half_window + 1)
 
-    j_window  = j_filt[win_lo:win_hi]
-    peaks_rel, _ = find_peaks(j_window, prominence=min_prominence)
+    j_window      = j_filt[win_lo:win_hi]
+    peaks_rel, _  = find_peaks(j_window, prominence=min_prominence)
 
-    found_local_max = len(peaks_rel) > 0
+    found_local_max   = len(peaks_rel) > 0
+    all_peak_idxs     = [win_lo + int(r) for r in peaks_rel]
+    all_peak_values   = [float(j_ts[idx]) for idx in all_peak_idxs]
+
     if found_local_max:
-        best_rel   = peaks_rel[int(np.argmax(j_window[peaks_rel]))]
-        j_peak_idx = win_lo + best_rel
+        best_rel      = peaks_rel[int(np.argmax(j_window[peaks_rel]))]
+        best_peak_idx = win_lo + int(best_rel)
     else:
-        j_peak_idx = win_lo + int(np.argmax(j_window))
+        best_peak_idx = win_lo + int(np.argmax(j_window))
 
     return {
-        "ref_peak_idx":      ref_peak_idx,
-        "ref_peak_value":    ref_peak_value,
-        "win_lo":            win_lo,
-        "win_hi":            win_hi,
-        "j_peak_idx":        int(j_peak_idx),
-        "j_peak_value":      float(j_ts[j_peak_idx]),
-        "j_peak_value_filt": float(j_filt[j_peak_idx]),
-        "lag":               int(j_peak_idx) - ref_peak_idx,
-        "found_local_max":   found_local_max,
+        "vel_peak_idx":         vel_peak_idx,
+        "vel_peak_value":       vel_peak_value,
+        "win_lo":               win_lo,
+        "win_hi":               win_hi,
+        "all_peak_idxs":        all_peak_idxs,
+        "all_peak_values":      all_peak_values,
+        "best_peak_idx":        best_peak_idx,
+        "best_peak_value":      float(j_ts[best_peak_idx]),
+        "best_peak_value_filt": float(j_filt[best_peak_idx]),
+        "best_lag":             best_peak_idx - vel_peak_idx,
+        "found_local_max":      found_local_max,
     }
 
 
 # ---------------------------------------------------------------------------
 # Plotting — 4-panel: velocity | acceleration | firing rate | J
+# J peaks are searched in the velocity window only; all peaks are marked.
 # ---------------------------------------------------------------------------
 
 def _plot_session(
@@ -203,53 +249,70 @@ def _plot_session(
     fr_ts: np.ndarray,
     j_ts: np.ndarray,
     j_filt: np.ndarray,
-    res_vel: dict,
-    res_accel: dict,
+    res: dict,
     output_dir: str,
     filter_label: str,
 ) -> str:
-    """Four-panel figure: velocity | acceleration | firing rate | J coupling."""
+    """4-panel figure: velocity | acceleration | firing rate | J coupling.
 
+    J peak search uses the velocity window only.  All found peaks are marked
+    with small circles; the highest peak gets a star and lag annotation.
+    Acceleration is shown for visual reference only.
+    """
     def _lag_dir(lag: int) -> str:
         return "leads" if lag < 0 else ("lags" if lag > 0 else "simultaneous")
 
-    v_idx   = res_vel["ref_peak_idx"]
-    a_idx   = res_accel["ref_peak_idx"]
-    vj_idx  = res_vel["j_peak_idx"]
-    aj_idx  = res_accel["j_peak_idx"]
-    vj_lag  = res_vel["lag"]
-    aj_lag  = res_accel["lag"]
+    v_idx    = res["vel_peak_idx"]
+    win_lo   = res["win_lo"]
+    win_hi   = res["win_hi"]
+    best_idx = res["best_peak_idx"]
+    best_lag = res["best_lag"]
+    all_idxs = res["all_peak_idxs"]
+    all_vals = res["all_peak_values"]
+
+    # Acceleration peak (for display only)
+    a_idx = int(np.argmax(np.abs(accel_ts))) if len(accel_ts) else 0
+
+    found_local_max = res["found_local_max"]
+    n_peaks = len(all_idxs)
+    lag_dir = _lag_dir(best_lag)
+
+    # Title status line — prominent PEAK DETECTED / NO PEAK banner
+    if found_local_max:
+        peak_status = f"✓ PEAK DETECTED  ({n_peaks} local max in window)"
+        status_color = "darkgreen"
+    else:
+        peak_status = "✗ NO PEAK DETECTED  (showing abs max in window)"
+        status_color = "firebrick"
 
     fig, axes = plt.subplots(4, 1, figsize=(14, 16), sharex=True)
     fig.suptitle(
         f"Session: {session_label}  |  Stim: {stim}  |  Filter: {filter_label}\n"
-        f"Vel peak idx={v_idx}  →  J peak idx={vj_idx}  lag={vj_lag:+d} bins "
-        f"({_lag_dir(vj_lag)})\n"
-        f"Accel peak idx={a_idx}  →  J peak idx={aj_idx}  lag={aj_lag:+d} bins "
-        f"({_lag_dir(aj_lag)})",
-        fontsize=9, fontweight="bold",
+        f"Max-vel idx={v_idx}  |  {peak_status}\n"
+        f"Best J idx={best_idx}  lag={best_lag:+d} bins ({lag_dir})",
+        fontsize=9, fontweight="bold", color=status_color,
     )
 
-    WINDOW_ALPHA = 0.12
+    WIN_ALPHA = 0.12
 
     # ── Panel 1: Velocity ─────────────────────────────────────────────────
     ax = axes[0]
     ax.plot(vel_ts, color="navy", linewidth=1.5, label="X velocity")
+    ax.axvspan(win_lo, win_hi, alpha=WIN_ALPHA, color="deepskyblue",
+               label="J search window")
     ax.axvline(v_idx, color="deepskyblue", linestyle="--", linewidth=2,
                label=f"Max vel (idx={v_idx})")
-    ax.axvspan(res_vel["win_lo"], res_vel["win_hi"],
-               alpha=WINDOW_ALPHA, color="deepskyblue", label="Vel search window")
     ax.set_ylabel("X Velocity")
     ax.legend(fontsize=8, loc="upper right")
     ax.grid(alpha=0.3)
 
-    # ── Panel 2: Acceleration ─────────────────────────────────────────────
+    # ── Panel 2: Acceleration (reference only) ────────────────────────────
     ax = axes[1]
     ax.plot(accel_ts, color="steelblue", linewidth=1.5, label="X acceleration")
-    ax.axvline(a_idx, color="limegreen", linestyle="--", linewidth=2,
-               label=f"Max accel (idx={a_idx})")
-    ax.axvspan(res_accel["win_lo"], res_accel["win_hi"],
-               alpha=WINDOW_ALPHA, color="limegreen", label="Accel search window")
+    ax.axvline(a_idx, color="limegreen", linestyle="--", linewidth=1.8,
+               label=f"Max accel (idx={a_idx}, ref only)")
+    ax.axvspan(win_lo, win_hi, alpha=WIN_ALPHA, color="deepskyblue",
+               label="Vel J-search window")
     ax.set_ylabel("X Acceleration")
     ax.legend(fontsize=8, loc="upper right")
     ax.grid(alpha=0.3)
@@ -258,7 +321,6 @@ def _plot_session(
     ax = axes[2]
     if len(fr_ts) > 0:
         ax.plot(fr_ts, color="darkorange", linewidth=1.5, label="Firing rate")
-        # Reference lines from both kinematics for easy visual comparison
         ax.axvline(v_idx, color="deepskyblue", linestyle="--", linewidth=1.2,
                    alpha=0.6, label=f"Max vel (idx={v_idx})")
         ax.axvline(a_idx, color="limegreen", linestyle="--", linewidth=1.2,
@@ -270,30 +332,48 @@ def _plot_session(
     ax.legend(fontsize=8, loc="upper right")
     ax.grid(alpha=0.3)
 
-    # ── Panel 4: J coupling ───────────────────────────────────────────────
+    # ── Panel 4: J coupling — all peaks in vel window marked ──────────────
     ax = axes[3]
-    ax.plot(j_ts, color="darkorchid", linewidth=1.0, alpha=0.35, label="J (raw)")
-    ax.plot(j_filt, color="indigo", linewidth=2.0, label="J (filtered)")
-
-    # Velocity-anchored search window + J peak
-    ax.axvspan(res_vel["win_lo"], res_vel["win_hi"],
-               alpha=WINDOW_ALPHA, color="deepskyblue")
+    ax.plot(j_ts,   color="darkorchid", linewidth=1.0, alpha=0.35, label="J (raw)")
+    ax.plot(j_filt, color="indigo",     linewidth=2.0, label="J (filtered)")
+    ax.axvspan(win_lo, win_hi, alpha=WIN_ALPHA, color="deepskyblue",
+               label="Vel search window")
     ax.axvline(v_idx, color="deepskyblue", linestyle="--", linewidth=1.5,
                alpha=0.8, label=f"Max vel (idx={v_idx})")
-    ax.axvline(vj_idx, color="deepskyblue", linestyle="-.", linewidth=2.2,
-               label=f"J peak@vel win (idx={vj_idx}, lag={vj_lag:+d})")
-    ax.scatter([vj_idx], [res_vel["j_peak_value"]], color="deepskyblue",
-               zorder=6, s=120, marker="*")
+    ax.axvline(a_idx, color="limegreen", linestyle="--", linewidth=1.2,
+               alpha=0.5, label=f"Max accel (idx={a_idx}, ref)")
 
-    # Acceleration-anchored search window + J peak
-    ax.axvspan(res_accel["win_lo"], res_accel["win_hi"],
-               alpha=WINDOW_ALPHA, color="limegreen")
-    ax.axvline(a_idx, color="limegreen", linestyle="--", linewidth=1.5,
-               alpha=0.8, label=f"Max accel (idx={a_idx})")
-    ax.axvline(aj_idx, color="limegreen", linestyle="-.", linewidth=2.2,
-               label=f"J peak@accel win (idx={aj_idx}, lag={aj_lag:+d})")
-    ax.scatter([aj_idx], [res_accel["j_peak_value"]], color="limegreen",
-               zorder=6, s=120, marker="^")
+    # All detected local peaks — orange circles
+    if all_idxs:
+        filt_at_peaks = [float(j_filt[i]) for i in all_idxs]
+        ax.scatter(all_idxs, filt_at_peaks,
+                   color="orange", zorder=5, s=60, marker="o",
+                   label=f"Local peaks in window ({n_peaks})")
+
+    # Best point — appearance depends on whether a real peak was found
+    if found_local_max:
+        # Green star = genuine local maximum detected
+        best_color  = "green"
+        best_marker = "*"
+        best_label  = (f"PEAK DETECTED idx={best_idx} "
+                       f"lag={best_lag:+d}  J={res['best_peak_value']:.4f}")
+    else:
+        # Red X = no local max; this is just the highest point in the range
+        best_color  = "firebrick"
+        best_marker = "X"
+        best_label  = (f"NO PEAK — abs max idx={best_idx} "
+                       f"lag={best_lag:+d}  J={res['best_peak_value']:.4f}")
+
+    ax.axvline(best_idx, color=best_color, linestyle="-.", linewidth=2.2,
+               label=best_label)
+    ax.scatter([best_idx], [res["best_peak_value"]],
+               color=best_color, zorder=6, s=180, marker=best_marker)
+
+    # Status text box in the J panel
+    ax.text(0.01, 0.97, peak_status,
+            transform=ax.transAxes, fontsize=9, fontweight="bold",
+            color=status_color, va="top", ha="left",
+            bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=status_color, alpha=0.85))
 
     ax.set_ylabel("J (coupling)", color="darkorchid")
     ax.tick_params(axis="y", labelcolor="darkorchid")
@@ -321,29 +401,41 @@ def _session_id_from_path(path: str) -> str:
 
 def _resolve_sessions(
     data_folder: str,
-    requested_ids: list[str],
+    requested_ids: list[str] | None,
     verbose_find: bool,
-) -> dict[str, str]:
+) -> dict[str, list[str]]:
     """
-    Recursively find all per_reach_state.csv under *data_folder* and return
-    only those whose session ID appears in *requested_ids*.
+    Recursively find all per_reach_state.csv under *data_folder*.
 
-    Returns  dict  session_id -> csv_path
+    If *requested_ids* is None or empty every discovered session is returned.
+    Otherwise only sessions whose ID appears in *requested_ids* are returned.
+
+    Handles both the old layout (one CSV per session with all stims) and the
+    new per-stim layout (one CSV per stim subdir, same session ID).
+
+    Returns  dict  session_id -> [csv_path, ...]
     """
     all_csvs = find_file_recursive(
         data_folder, "per_reach_state.csv", verbose=verbose_find
     )
 
-    found_map: dict[str, str] = {}
+    # Accumulate all paths per session ID
+    found_map: dict[str, list[str]] = {}
     for csv_path in all_csvs:
         try:
             sid = _session_id_from_path(csv_path)
         except (IndexError, ValueError):
             continue
-        found_map[sid] = csv_path
+        found_map.setdefault(sid, []).append(csv_path)
+
+    # If no filter given, return everything
+    if not requested_ids:
+        print(f"[INFO] No --sessions filter given — processing all "
+              f"{len(found_map)} session(s) found.")
+        return dict(found_map)
 
     requested_set = set(requested_ids)
-    matched: dict[str, str] = {}
+    matched: dict[str, list[str]] = {}
     for sid in requested_ids:
         if sid in found_map:
             matched[sid] = found_map[sid]
@@ -363,7 +455,7 @@ def _resolve_sessions(
 # ---------------------------------------------------------------------------
 
 def run_sessions(
-    matched: dict[str, str],
+    matched: dict[str, list[str]],
     stim_range: range,
     half_window: int,
     cutoff: float,
@@ -383,123 +475,125 @@ def run_sessions(
     else:
         filter_label = "No filter"
 
+    def _dir(lag: int) -> str:
+        return "leads" if lag < 0 else ("lags" if lag > 0 else "simultaneous")
+
     rows: list[dict] = []
 
-    for session_id, csv_path in matched.items():
-        try:
-            df = pd.read_csv(csv_path)
-        except Exception as e:
-            print(f"[WARN] Could not read {csv_path}: {e}", file=sys.stderr)
-            continue
-
+    for session_id, csv_paths in matched.items():
         if verbose:
             sep = "─" * 100
             print(f"\n{sep}")
-            print(f"  Session ID: {session_id}")
-            print(f"  File:       {csv_path}")
+            print(f"  Session ID: {session_id}  ({len(csv_paths)} file(s))")
             print(sep)
 
-        available_stims = sorted(df["stim"].unique()) if "stim" in df.columns else []
-        stims_to_process = [s for s in stim_range if s in available_stims] or available_stims
-
-        if verbose:
-            hdr = (
-                f"  {'Stim':>5}  "
-                f"{'VelPk':>7}  {'JpkV':>6}  {'LagV':>6}  {'DirV':>14}  {'LMV':>5}  "
-                f"{'AccPk':>7}  {'JpkA':>6}  {'LagA':>6}  {'DirA':>14}  {'LMA':>5}"
-            )
-            print(hdr)
-            print("  " + "-" * (len(hdr) - 2))
-
-        for stim in stims_to_process:
-            df_stim = df[df["stim"] == stim]
-            if len(df_stim) == 0:
+        # Process each CSV file separately so model quality can be resolved
+        # from its own directory (per-stim layout) or shared directory (old layout).
+        for csv_path in csv_paths:
+            try:
+                df = pd.read_csv(csv_path)
+            except Exception as e:
+                print(f"[WARN] Could not read {csv_path}: {e}", file=sys.stderr)
                 continue
 
-            vel_ts   = _velocity_timeseries(df_stim)
-            accel_ts = _acceleration_timeseries(df_stim)
-            j_ts     = _mean_timeseries(df_stim, "j")
-            fr_ts    = _mean_timeseries(df_stim, "firing_rate")
-
-            if len(vel_ts) == 0 or len(accel_ts) == 0 or len(j_ts) == 0:
-                if verbose:
-                    print(f"  {stim:>5}  [no data]")
-                continue
-
-            # Filter J once, reuse for both kinematic references
-            j_filt = _apply_filter(j_ts, cutoff, filter_order, use_gaussian, smooth_sigma)
-
-            res_vel = find_j_peak_near_kinematic(
-                ref_ts=vel_ts, j_ts=j_ts, j_filt=j_filt,
-                half_window=half_window, min_prominence=min_prominence,
-            )
-            res_accel = find_j_peak_near_kinematic(
-                ref_ts=accel_ts, j_ts=j_ts, j_filt=j_filt,
-                half_window=half_window, min_prominence=min_prominence,
-            )
-
-            if "error" in res_vel or "error" in res_accel:
-                errs = "; ".join(filter(None, [res_vel.get("error"), res_accel.get("error")]))
-                if verbose:
-                    print(f"  {stim:>5}  [error: {errs}]")
-                continue
-
-            def _dir(lag: int) -> str:
-                return "leads" if lag < 0 else ("lags" if lag > 0 else "simultaneous")
-
-            plot_path = _plot_session(
-                session_label=session_id,
-                stim=stim,
-                vel_ts=vel_ts,
-                accel_ts=accel_ts,
-                fr_ts=fr_ts,
-                j_ts=j_ts,
-                j_filt=j_filt,
-                res_vel=res_vel,
-                res_accel=res_accel,
-                output_dir=output_dir,
-                filter_label=filter_label,
-            )
+            csv_dir = os.path.dirname(csv_path)
+            mq = _read_model_quality(csv_dir)
 
             if verbose:
-                lmv = "yes" if res_vel["found_local_max"]   else "no"
-                lma = "yes" if res_accel["found_local_max"] else "no"
-                print(
-                    f"  {stim:>5}  "
-                    f"{res_vel['ref_peak_idx']:>7d}  {res_vel['j_peak_idx']:>6d}  "
-                    f"{res_vel['lag']:>+6d}  {_dir(res_vel['lag']):>14}  {lmv:>5}  "
-                    f"{res_accel['ref_peak_idx']:>7d}  {res_accel['j_peak_idx']:>6d}  "
-                    f"{res_accel['lag']:>+6d}  {_dir(res_accel['lag']):>14}  {lma:>5}"
+                print(f"  File: {csv_path}")
+                n_str = str(int(mq["n_neurons"])) if not np.isnan(mq["n_neurons"]) else "n/a"
+                print(f"  N_neurons={n_str}  r_ising={mq['r_ising']:.4f}"
+                      f"  r_independent={mq['r_independent']:.4f}"
+                      if not np.isnan(mq["r_ising"])
+                      else f"  N_neurons={n_str}  (model quality CSVs not found)")
+
+            available_stims = sorted(df["stim"].unique()) if "stim" in df.columns else []
+            stims_to_process = [s for s in stim_range if s in available_stims] or available_stims
+
+            if verbose:
+                hdr = (f"  {'Stim':>5}  {'VelPk':>7}  {'#Peaks':>7}  "
+                       f"{'BestIdx':>8}  {'BestLag':>8}  {'Dir':>14}  {'PeakFound':>12}")
+                print(hdr)
+                print("  " + "-" * (len(hdr) - 2))
+
+            for stim in stims_to_process:
+                df_stim = df[df["stim"] == stim]
+                if len(df_stim) == 0:
+                    continue
+
+                vel_ts   = _velocity_timeseries(df_stim)
+                accel_ts = _acceleration_timeseries(df_stim)
+                j_ts     = _mean_timeseries(df_stim, "j")
+                fr_ts    = _mean_timeseries(df_stim, "firing_rate")
+
+                if len(vel_ts) == 0 or len(j_ts) == 0:
+                    if verbose:
+                        print(f"  {stim:>5}  [no data]")
+                    continue
+
+                j_filt = _apply_filter(j_ts, cutoff, filter_order, use_gaussian, smooth_sigma)
+
+                res = find_j_peaks_near_velocity(
+                    vel_ts=vel_ts, j_ts=j_ts, j_filt=j_filt,
+                    half_window=half_window, min_prominence=min_prominence,
                 )
 
-            rows.append({
-                "session_id":            session_id,
-                "csv_path":              csv_path,
-                "stim":                  stim,
-                # Velocity-anchored results
-                "vel_peak_idx":          res_vel["ref_peak_idx"],
-                "vel_peak_value":        res_vel["ref_peak_value"],
-                "vel_win_lo":            res_vel["win_lo"],
-                "vel_win_hi":            res_vel["win_hi"],
-                "j_peak_idx_vel":        res_vel["j_peak_idx"],
-                "j_peak_value_vel":      res_vel["j_peak_value"],
-                "j_peak_value_filt_vel": res_vel["j_peak_value_filt"],
-                "lag_vel":               res_vel["lag"],
-                "direction_vel":         _dir(res_vel["lag"]),
-                "found_local_max_vel":   res_vel["found_local_max"],
-                # Acceleration-anchored results
-                "accel_peak_idx":        res_accel["ref_peak_idx"],
-                "accel_peak_value":      res_accel["ref_peak_value"],
-                "accel_win_lo":          res_accel["win_lo"],
-                "accel_win_hi":          res_accel["win_hi"],
-                "j_peak_idx_accel":      res_accel["j_peak_idx"],
-                "j_peak_value_accel":    res_accel["j_peak_value"],
-                "j_peak_value_filt_accel": res_accel["j_peak_value_filt"],
-                "lag_accel":             res_accel["lag"],
-                "direction_accel":       _dir(res_accel["lag"]),
-                "found_local_max_accel": res_accel["found_local_max"],
-                "plot_path":             plot_path,
-            })
+                if "error" in res:
+                    if verbose:
+                        print(f"  {stim:>5}  [error: {res['error']}]")
+                    continue
+
+                plot_path = _plot_session(
+                    session_label=session_id,
+                    stim=stim,
+                    vel_ts=vel_ts,
+                    accel_ts=accel_ts,
+                    fr_ts=fr_ts,
+                    j_ts=j_ts,
+                    j_filt=j_filt,
+                    res=res,
+                    output_dir=output_dir,
+                    filter_label=filter_label,
+                )
+
+                if verbose:
+                    if res["found_local_max"]:
+                        peak_col = "*** PEAK ***"
+                    else:
+                        peak_col = "  no peak   "
+                    print(
+                        f"  {stim:>5}  {res['vel_peak_idx']:>7d}  "
+                        f"{len(res['all_peak_idxs']):>7d}  "
+                        f"{res['best_peak_idx']:>8d}  {res['best_lag']:>+8d}  "
+                        f"{_dir(res['best_lag']):>14}  {peak_col:>12}"
+                    )
+
+                rows.append({
+                    "session_id":        session_id,
+                    "csv_path":          csv_path,
+                    "stim":              stim,
+                    # Model metadata
+                    "n_neurons":         mq["n_neurons"],
+                    "r_ising":           mq["r_ising"],
+                    "r_independent":     mq["r_independent"],
+                    # Kinematics
+                    "vel_peak_idx":      res["vel_peak_idx"],
+                    "vel_peak_value":    res["vel_peak_value"],
+                    "accel_peak_idx":    int(np.argmax(np.abs(accel_ts))) if len(accel_ts) else np.nan,
+                    "win_lo":            res["win_lo"],
+                    "win_hi":            res["win_hi"],
+                    # All peaks
+                    "n_j_peaks_in_window": len(res["all_peak_idxs"]),
+                    "all_peak_idxs":     ";".join(str(i) for i in res["all_peak_idxs"]),
+                    "all_peak_values":   ";".join(f"{v:.6f}" for v in res["all_peak_values"]),
+                    # Highest peak
+                    "has_j_peak":        res["found_local_max"],
+                    "best_peak_idx":     res["best_peak_idx"],
+                    "best_peak_value":   res["best_peak_value"],
+                    "best_lag":          res["best_lag"],
+                    "best_lag_direction": _dir(res["best_lag"]),
+                    "plot_path":         plot_path,
+                })
 
     return rows
 
@@ -511,9 +605,9 @@ def run_sessions(
 def parse_args():
     p = argparse.ArgumentParser(
         description=(
-            "Find the highest J peak near max velocity AND max acceleration, "
-            "for a manually supplied list of session IDs discovered by recursively "
-            "searching a data folder."
+            "Find ALL J peaks inside the max-velocity window for manually supplied "
+            "session IDs. Acceleration is shown for reference. Reports lag for the "
+            "highest peak. Includes N_neurons and model-vs-independent fit in output CSV."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
@@ -525,10 +619,11 @@ def parse_args():
         help="Root folder to search recursively for per_reach_state.csv files.",
     )
     p.add_argument(
-        "--sessions", nargs="+", required=True, metavar="SESSION_ID",
+        "--sessions", nargs="+", default=None, metavar="SESSION_ID",
         help=(
             "One or more session IDs to process (6-character IDs as they appear "
-            "before '_results' in the path, e.g. 123456 789ABC)."
+            "before '_results' in the path, e.g. 123456 789ABC). "
+            "If omitted, every session found under --data_folder is processed."
         ),
     )
 
@@ -609,9 +704,11 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    print(f"\nMatched {len(matched)}/{len(args.sessions)} requested session(s):")
-    for sid, path in matched.items():
-        print(f"  {sid}  →  {path}")
+    n_requested = len(args.sessions) if args.sessions else len(matched)
+    print(f"\nProcessing {len(matched)}/{n_requested} session(s):")
+    for sid, paths in matched.items():
+        for path in paths:
+            print(f"  {sid}  →  {path}")
 
     rows = run_sessions(
         matched=matched,
@@ -636,17 +733,25 @@ def main() -> int:
     print(f"\nSummary CSV written to: {csv_out}")
     print(f"Plots saved in:         {output_dir}")
 
-    # Brief overall stats for both kinematic references
-    for ref, col in [("velocity", "vel"), ("acceleration", "accel")]:
-        n_leads  = (summary_df[f"direction_{col}"] == "leads").sum()
-        n_lags   = (summary_df[f"direction_{col}"] == "lags").sum()
-        n_sim    = (summary_df[f"direction_{col}"] == "simultaneous").sum()
-        mean_lag = summary_df[f"lag_{col}"].mean()
-        print(f"\nVs {ref} ({len(summary_df)} session×stim pairs):")
-        print(f"  J leads  : {n_leads}")
-        print(f"  J lags   : {n_lags}")
-        print(f"  Simult.  : {n_sim}")
-        print(f"  Mean lag : {mean_lag:+.1f} bins")
+    n_total    = len(summary_df)
+    n_has_peak = summary_df["has_j_peak"].sum()
+    n_leads    = (summary_df["best_lag_direction"] == "leads").sum()
+    n_lags     = (summary_df["best_lag_direction"] == "lags").sum()
+    n_sim      = (summary_df["best_lag_direction"] == "simultaneous").sum()
+    mean_lag   = summary_df["best_lag"].mean()
+
+    print(f"\nOverall ({n_total} session×stim pairs):")
+    print(f"  Has local J peak in vel window : {n_has_peak}/{n_total}")
+    print(f"  J leads vel peak               : {n_leads}")
+    print(f"  J lags  vel peak               : {n_lags}")
+    print(f"  Simultaneous                   : {n_sim}")
+    print(f"  Mean lag (best peak, bins)     : {mean_lag:+.1f}")
+
+    if "r_ising" in summary_df.columns:
+        mean_ri = summary_df["r_ising"].mean()
+        mean_rind = summary_df["r_independent"].mean()
+        print(f"  Mean r(P_data, P_ising)        : {mean_ri:.4f}")
+        print(f"  Mean r(P_data, P_independent)  : {mean_rind:.4f}")
 
     return 0
 

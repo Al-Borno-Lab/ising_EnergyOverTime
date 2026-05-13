@@ -1,0 +1,208 @@
+"""
+peak_detection.py
+-----------------
+Utilities for detecting significant peaks, troughs, and level-shifts in
+1-D time series within a specified search window.
+
+Public API
+----------
+gaussian_smooth(arr, sigma)
+    Convolve a signal with a Gaussian kernel.
+
+local_prominence(signal, idx, half)
+    Local prominence of a candidate peak at `idx`.
+
+detect_j_peak(j_ts, w_lo, w_hi, threshold_ratio, smooth_sigma)
+    Detect a significant event in a J-coupling time series (bump OR step).
+
+detect_signal_extremum(ts, w_lo, w_hi, threshold_ratio, smooth_sigma, kind)
+    Generalised peak/trough detector for any signal.
+"""
+
+import numpy as np
+
+
+# ---------------------------------------------------------------------------
+# Smoothing helpers
+# ---------------------------------------------------------------------------
+
+def gaussian_smooth(arr: np.ndarray, sigma: float) -> np.ndarray:
+    """Convolve *arr* with a Gaussian kernel of given *sigma* (in samples)."""
+    if sigma <= 0 or len(arr) < 3:
+        return arr.astype(float)
+    r      = int(np.ceil(3 * sigma))
+    x      = np.arange(-r, r + 1, dtype=float)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel /= kernel.sum()
+    return np.convolve(arr.astype(float), kernel, mode='same')
+
+
+def local_prominence(signal: np.ndarray, idx: int, half: int) -> float:
+    """
+    Prominence of a candidate peak at *idx* in *signal*:
+        peak_value − max(left_valley_min, right_valley_min)
+    where the valleys are searched within ±*half* bins of the peak.
+    """
+    left_seg  = signal[max(0, idx - half) : idx]
+    right_seg = signal[idx + 1 : min(len(signal), idx + half + 1)]
+    left_val  = float(left_seg.min())  if len(left_seg)  else float(signal[idx])
+    right_val = float(right_seg.min()) if len(right_seg) else float(signal[idx])
+    return float(signal[idx]) - max(left_val, right_val)
+
+
+# ---------------------------------------------------------------------------
+# Internal shared detection core
+# ---------------------------------------------------------------------------
+
+def _detect_peak_core(ts_work: np.ndarray, orig_ts: np.ndarray,
+                      w_lo: int, w_hi: int,
+                      threshold_ratio: float, smooth_sigma: float):
+    """
+    Shared detection logic used by both detect_j_peak and
+    detect_signal_extremum.  Always searches for a *maximum* in ts_work
+    (callers flip the signal for trough detection).
+
+    Returns (has_event, event_idx, event_raw_value, ratio).
+    """
+    w_lo = max(0, int(w_lo))
+    w_hi = min(len(ts_work), int(w_hi))
+    if w_hi <= w_lo + 1 or len(ts_work) < 3:
+        return False, w_lo, np.nan, np.nan
+
+    smoothed = gaussian_smooth(ts_work, smooth_sigma)
+    half     = max(10, (w_hi - w_lo) // 2)
+
+    # Flat-signal guard: nothing can be exceptional if the range is negligible.
+    signal_range = float(smoothed.max() - smoothed.min())
+    if signal_range < 1e-6:
+        return False, w_lo, float(orig_ts[w_lo]), 0.0
+
+    # ── Candidate: tallest local maximum of the smoothed signal ──────────
+    # Smoothing suppresses noise bumps, so the tallest local max is the
+    # true peak — no prominence scoring needed for candidate selection
+    # (prominence would penalise peaks near the window edge).
+    win_local_maxima = [
+        i for i in range(w_lo + 1, w_hi - 1)
+        if smoothed[i] > smoothed[i - 1] and smoothed[i] > smoothed[i + 1]
+    ]
+    if win_local_maxima:
+        event_idx = max(win_local_maxima, key=lambda i: smoothed[i])
+    else:
+        # Monotonic segment — fall back to global argmax within window.
+        event_idx = w_lo + int(np.argmax(smoothed[w_lo:w_hi]))
+
+    window_prom = local_prominence(smoothed, event_idx, half)
+
+    # ── Criterion 1: Prominence (bump detection) ──────────────────────────
+    bg_proms = []
+    for i in range(1, len(smoothed) - 1):
+        if w_lo <= i < w_hi:
+            continue
+        if smoothed[i] > smoothed[i - 1] and smoothed[i] > smoothed[i + 1]:
+            bg_proms.append(local_prominence(smoothed, i, half))
+
+    if bg_proms:
+        bg_90    = float(np.percentile(bg_proms, 90))
+        prom_c1  = (window_prom / bg_90) if bg_90 > 1e-10 else 0.0
+    else:
+        # No background peaks: normalise against full-signal std.
+        # Use range/4 as a floor so residual noise on a flat signal never
+        # inflates the ratio into a false positive.
+        smooth_std = max(float(smoothed.std()), signal_range / 4.0, 1e-10)
+        prom_c1    = window_prom / smooth_std
+
+    # ── Criterion 2: Level shift (step / sustained excursion) ────────────
+    bg_mask = np.ones(len(smoothed), dtype=bool)
+    bg_mask[w_lo:w_hi] = False
+    bg_vals = smoothed[bg_mask]
+    level_z = 0.0
+    if len(bg_vals) > 1:
+        bg_mean = float(bg_vals.mean())
+        bg_std  = float(bg_vals.std())
+        # Same range/4 floor prevents floating-point noise inflation on a
+        # flat background.
+        bg_std   = max(bg_std, signal_range / 4.0, 1e-10)
+        peak_val = float(smoothed[event_idx])
+        win_min  = float(smoothed[w_lo:w_hi].min())
+        level_z  = max((peak_val - bg_mean) / bg_std,
+                       (bg_mean  - win_min)  / bg_std)
+
+    # ── Combine ───────────────────────────────────────────────────────────
+    ratio     = max(prom_c1, level_z)
+    has_event = bool(prom_c1 > threshold_ratio or level_z > threshold_ratio)
+    return has_event, event_idx, float(orig_ts[event_idx]), ratio
+
+
+# ---------------------------------------------------------------------------
+# Public detectors
+# ---------------------------------------------------------------------------
+
+def detect_j_peak(j_ts: np.ndarray, w_lo: int, w_hi: int,
+                  threshold_ratio: float = 2.0,
+                  smooth_sigma: float = 5.0):
+    """
+    Test whether the J-coupling signal has an exceptional event within the
+    window [w_lo, w_hi].
+
+    Two parallel criteria are tested; EITHER one is sufficient to flag the
+    window as containing a meaningful event:
+
+    Criterion 1 — Prominence (bump detection)
+        Compares the smoothed-signal prominence of the window's tallest local
+        maximum against the 90th-percentile prominence of all background local
+        maxima outside the window.  Fires when the ratio exceeds
+        *threshold_ratio*.  Works well for clear bump-shaped peaks.
+
+    Criterion 2 — Level shift (step detection)
+        Compares the window's maximum (or minimum) level to the background
+        mean ± background std.  Fires when the z-score exceeds
+        *threshold_ratio*.  Catches sustained plateaus or step-shifts that
+        have no clear descent back to baseline.
+
+    Parameters
+    ----------
+    j_ts            : full J time-series (numpy array)
+    w_lo, w_hi      : search window boundaries (indices into j_ts)
+    threshold_ratio : detection threshold applied to both criteria (default 2.0)
+    smooth_sigma    : Gaussian smoothing width in time-bins (default 5)
+
+    Returns
+    -------
+    has_peak    : bool  — True if either criterion fires
+    peak_idx    : int   — index of the candidate peak inside the window
+    peak_value  : float — raw J value at peak_idx
+    prom_ratio  : float — max(prominence_ratio, level_shift_z)
+    """
+    j_ts = np.asarray(j_ts, dtype=float)
+    return _detect_peak_core(j_ts, j_ts, w_lo, w_hi, threshold_ratio, smooth_sigma)
+
+
+def detect_signal_extremum(ts: np.ndarray, w_lo: int, w_hi: int,
+                           threshold_ratio: float = 2.0,
+                           smooth_sigma: float = 5.0,
+                           kind: str = 'peak'):
+    """
+    Detect a prominent peak or trough in any signal within [w_lo, w_hi].
+
+    Uses the same dual-criterion strategy as detect_j_peak (Criterion 1:
+    prominence; Criterion 2: level shift).  For trough detection the signal
+    is negated internally so the same peak-finding logic applies.
+
+    Parameters
+    ----------
+    ts              : signal time series (numpy array)
+    w_lo, w_hi      : search window boundaries
+    threshold_ratio : detection threshold for both criteria (default 2.0)
+    smooth_sigma    : Gaussian smoothing width in bins (default 5.0)
+    kind            : ``'peak'`` (maximum) or ``'trough'`` (minimum)
+
+    Returns
+    -------
+    has_event   : bool
+    event_idx   : int   — index of the detected extremum in the original ts
+    event_value : float — raw signal value at event_idx
+    ratio       : float — max(prominence_ratio, level_z) test statistic
+    """
+    ts      = np.asarray(ts, dtype=float)
+    ts_work = -ts if kind == 'trough' else ts
+    return _detect_peak_core(ts_work, ts, w_lo, w_hi, threshold_ratio, smooth_sigma)

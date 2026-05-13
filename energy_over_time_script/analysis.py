@@ -269,6 +269,122 @@ def analyze_neural_stimuli(neural_stim, continous_stim, multipliers, critical_en
     
     return results
 
+
+def analyze_single_stimulus(neural_stim_i, continous_stim_i, multipliers, critical_energy,
+                             stim_idx=0, fr_window=10, energy_temp_spline=None, output_dir=None):
+    """
+    Run the full analysis pipeline for a *single* stimulus using its own Ising model.
+
+    This mirrors the per-stimulus logic inside analyze_neural_stimuli but operates
+    on one stimulus at a time so each stim can have its own fitted multipliers.
+
+    Parameters
+    ----------
+    neural_stim_i    : list of arrays — spike data for one stimulus (one entry per reach)
+    continous_stim_i : list of arrays — kinematic data for the same stimulus
+    multipliers      : ndarray — Ising model parameters (h, J) fitted to THIS stimulus
+    critical_energy  : float — critical energy from phase transition analysis
+    stim_idx         : int — stimulus index used for labelling outputs (default 0)
+    fr_window        : int — window size for time-dependent firing rate (default 10)
+    energy_temp_spline : CubicSpline or None
+    output_dir       : str or None — directory to save per_reach_state.csv and summary
+
+    Returns
+    -------
+    dict compatible with calculate_statistics_across_trials (single-element lists)
+    """
+    from model import calc_e_with_terms
+
+    x_s = np.array([continous_stim_i[j][:, 0] for j in range(len(continous_stim_i))])
+    y_s = np.array([continous_stim_i[j][:, 1] for j in range(len(continous_stim_i))])
+    z_s = np.array([continous_stim_i[j][:, 2] for j in range(len(continous_stim_i))])
+
+    neural_s = (np.asarray([neural_stim_i[j][:, :] for j in range(len(neural_stim_i))]) > 0) * 1
+    neural_s_ising = 2 * neural_s - 1
+
+    e_s = np.asarray([calc_e_with_terms(k, multipliers) for k in neural_s_ising])
+    j_s = e_s[:, 1]
+    h_s = e_s[:, 2]
+    e_s = e_s[:, 0]
+
+    from utils import calculate_time_dependent_firing_rate
+    f_s = [np.asarray(calculate_time_dependent_firing_rate(n, window_size=fr_window))
+           for n in neural_s]
+
+    reach_idx_s = [[j] * len(v) for j, v in enumerate(continous_stim_i)]
+
+    # Wrap in single-element lists so calculate_statistics_across_trials works unchanged
+    results = {
+        'x_stim_data':       [x_s],
+        'y_stim_data':       [y_s],
+        'z_stim_data':       [z_s],
+        'neural_binary':     [neural_s],
+        'energy_values':     [e_s],
+        'firing_rate_values': [f_s],
+        'j_values':          [j_s],
+        'h_values':          [h_s],
+        'critical_energy':   critical_energy,
+    }
+
+    if output_dir:
+        stim_label = f'Stim_{stim_idx}'
+        stim_summary = {
+            'Stim_Index':    [stim_idx],
+            'Stim_Type':     [stim_label],
+            'Num_Trials':    [neural_s.shape[0]],
+            'Num_Timepoints': [neural_s.shape[1]],
+            'Num_Neurons':   [neural_s.shape[2]],
+            'Mean_Energy':   [np.mean(e_s)],
+            'Min_Energy':    [np.min(e_s)],
+            'Max_Energy':    [np.max(e_s)],
+            'Mean_J':        [np.mean(j_s)],
+            'Min_J':         [np.min(j_s)],
+            'Max_J':         [np.max(j_s)],
+            'Mean_H':        [np.mean(h_s)],
+            'Min_H':         [np.min(h_s)],
+            'Max_H':         [np.max(h_s)],
+        }
+        pd.DataFrame(stim_summary).to_csv(
+            os.path.join(output_dir, "neural_stimuli_summary.csv"), index=False)
+
+        all_reaches = {
+            "reach_idx": [], "stim": [],
+            "x": [], "y": [], "z": [],
+            "firing_rate": [], "energy": [], "j": [], "h": [],
+        }
+        for i in range(len(continous_stim_i)):
+            all_reaches["reach_idx"]   += reach_idx_s[i]
+            all_reaches["stim"]        += [stim_idx] * len(reach_idx_s[i])
+            all_reaches["x"]           += x_s[i].tolist()
+            all_reaches["y"]           += y_s[i].tolist()
+            all_reaches["z"]           += z_s[i].tolist()
+            all_reaches["firing_rate"] += f_s[i].tolist()
+            all_reaches["energy"]      += e_s[i].tolist()
+            all_reaches["j"]           += j_s[i].tolist()
+            all_reaches["h"]           += h_s[i].tolist()
+        pd.DataFrame(all_reaches).to_csv(
+            os.path.join(output_dir, "per_reach_state.csv"), index=False)
+
+        if energy_temp_spline is not None:
+            try:
+                spline_x_min = energy_temp_spline.x[0]
+                spline_x_max = energy_temp_spline.x[-1]
+                temps = np.linspace(0.1, 2.0, 100)
+                spline_energies = energy_temp_spline(temps)
+                mean_e = float(np.mean(e_s))
+                clipped = np.clip(mean_e, spline_x_min, spline_x_max)
+                eff_temp = temps[np.abs(spline_energies - clipped).argmin()]
+                pd.DataFrame({
+                    'Stim_Type':            [stim_label],
+                    'Mean_Energy':          [mean_e],
+                    'Effective_Temperature': [eff_temp],
+                }).to_csv(os.path.join(output_dir, "energy_temperature_mapping.csv"), index=False)
+            except Exception as ex:
+                print(f"Warning: Could not map energy to temperature: {ex}")
+
+    return results
+
+
 def analyze_neural_stimuli_wells(neural_stim, continous_stim, multipliers, critical_energy, energy_temp_spline=None, output_dir=None):
     """
     Analyze neural stimuli data with respect to the Ising model.
