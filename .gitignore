@@ -187,6 +187,12 @@ plots/
 notes/session_report/
 energy_over_time_script/notes/session_report/
 
+# Keep neural simulation notes (writeup, plots, summaries)
+!energy_over_time_script/notes/neural_simulation/
+!energy_over_time_script/notes/neural_simulation/**
+!energy_over_time_script/notes/pk_analysis/
+!energy_over_time_script/notes/pk_analysis/**
+
 # Temporary scratch files
 temp/
 energy_over_time_script/temp/

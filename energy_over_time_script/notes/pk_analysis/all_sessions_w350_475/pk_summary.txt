@@ -1,0 +1,152 @@
+P(K) × J-peak Hypothesis Report
+============================================================
+
+Data folder  : /data001/projects/enserrog/AbigailData/energy_over_time/energy_decomp_may12_stimDecon/
+Window       : [350, 475)
+Peak thresh  : 1.75
+Sessions     : 21
+Stim/session : 42 rows total
+
+HYPOTHESIS
+----------------------------------------
+A J peak co-occurs when:
+  1. Ising fits data at least as well as independent
+     (r_ising >= r_independent - 0.02, allowing a 0.02 tolerance for near-ties)
+  2. Ising and independent distributions diverge  (ising_indep_dist > 0.1)
+Both conditions must hold simultaneously.
+
+CONTINGENCY TABLE  (ising_closer AND ising_indep_dist > 0.1)
+----------------------------------------
+Columns indicate whether the network was in a collective Ising-like state.
+The hypothesis predicts: collective state present ↔ J peak present.
+
+                        Collective     Collective
+                        state present  state absent
+  J peak present :            23                2       (n=25)  ← true pos / false pos
+  No J peak      :             6               11       (n=17)  ← false neg / true neg
+
+
+  RESULTS SUMMARY
+  Outcome                           n   Total    Rate  Interpretation
+  ---------------------------------------------------------------------------
+  True Positive  (TP)              23      25     92%  J peak present & collective state
+  True Negative  (TN)              11      17     65%  No J peak & not collective
+  False Positive (FP)               2      25      8%  J peak present but not collective
+  False Negative (FN)               6      17     35%  No J peak but collective state present
+  ---------------------------------------------------------------------------
+  Total sessions                   42
+
+Chi-squared test: χ²=12.687  df=1  p=0.0004
+→ Statistically significant association (p < 0.05)
+
+
+STIM 0 (BASELINE) vs STIM 1 (PERTURBATION) — PAIRED COMPARISON
+------------------------------------------------------------
+  Shapiro-Wilk (Δcollective_score): W=0.5095  p=0.0000  [non-normal → Wilcoxon appropriate ✓]
+  Shapiro-Wilk (Δising_indep_dist): W=0.8455  p=0.0036  [non-normal → Wilcoxon appropriate ✓]
+  Wilcoxon: collective_score  : W=102.0  p=0.6578  median Δ=+0.003  ↑ increased stim0→stim1
+  Wilcoxon: ising_indep_dist  : W=69.0  p=0.1111  median Δ=+0.014  ↑ increased stim0→stim1
+
+  McNemar test on J peak (stim0 vs stim1):
+    Both peak    (1→1):  11
+    Peak lost    (1→0):   0
+    Peak gained  (0→1):   3
+    Neither peak (0→0):   7
+    McNemar χ²=1.333  p=0.2482  (stim1 has more peaks)
+
+  Animal      s0_score  s1_score   Δscore  s0_dist  s1_dist   Δdist  s0pk  s1pk
+  210421        +0.063    +0.079   +0.017   +0.063   +0.079  +0.017     n     n
+  210422        +0.261    -0.599   -0.859   +0.261   +0.599  +0.338     n     n
+  210423        +0.144    +0.026   -0.117   +0.144   +0.026  -0.117     n     n
+  210425        +0.368    +0.468   +0.099   +0.368   +0.468  +0.099     Y     Y
+  210511        +0.082    +0.067   -0.015   +0.082   +0.067  -0.015     n     Y
+  210512        +0.539    +0.590   +0.051   +0.539   +0.590  +0.051     Y     Y
+  210514        -0.255    -0.282   -0.027   +0.255   +0.282  +0.027     n     n
+  210515        +0.149    +0.152   +0.003   +0.149   +0.152  +0.003     Y     Y
+  210606        +0.137    +0.142   +0.005   +0.137   +0.142  +0.005     n     Y
+  210608        +0.145    +0.147   +0.002   +0.145   +0.147  +0.002     Y     Y
+  210614        +0.146    +0.138   -0.008   +0.146   +0.138  -0.008     n     n
+  210619        +0.126    +0.066   -0.060   +0.126   +0.066  -0.060     Y     Y
+  210620        +0.234    +0.248   +0.014   +0.234   +0.248  +0.014     n     Y
+  210622        +0.046    +0.023   -0.023   +0.046   +0.023  -0.023     n     n
+  210623        +0.048    +0.065   +0.017   +0.048   +0.065  +0.017     n     n
+  220515        +0.459    +0.440   -0.019   +0.459   +0.440  -0.019     Y     Y
+  220516        +0.964    +1.072   +0.108   +0.964   +1.072  +0.108     Y     Y
+  220517        +0.637    +0.625   -0.012   +0.637   +0.625  -0.012     Y     Y
+  220518        +0.674    +0.796   +0.122   +0.674   +0.796  +0.122     Y     Y
+  220519        +0.218    +0.282   +0.064   +0.218   +0.282  +0.064     Y     Y
+  220520        +0.375    +0.510   +0.135   +0.375   +0.510  +0.135     Y     Y
+
+MEAN P(K) METRICS BY J-PEAK STATUS
+----------------------------------------
+  Metric                        J peak     No J peak
+  r_ising                 0.954 ± 0.070  0.973 ± 0.076
+  r_indep                 0.876 ± 0.173  0.977 ± 0.058
+  r_ising_vs_indep        0.874 ± 0.173  0.982 ± 0.039
+  ising_indep_dist        0.410 ± 0.274  0.155 ± 0.139
+
+PER-SESSION RESULTS BY CATEGORY
+============================================================
+
+TP — TRUE POSITIVES  — J peak present & collective state  (n=23)
+     J coupling peaked AND Ising model outperforms independent
+------------------------------------------------------------
+  Session    Stim   ratio  r_ising  r_indep    dist  col_score
+  210425        0   2.408    0.936    0.855   0.368      0.368
+  210425        1   4.397    0.665    0.470   0.468      0.468
+  210512        0   2.954    0.876    0.769   0.539      0.539
+  210512        1   2.054    0.923    0.801   0.590      0.590
+  210515        0   5.252    1.000    0.992   0.149      0.149
+  210515        1   4.207    0.999    0.991   0.152      0.152
+  210606        1   2.261    0.998    0.993   0.142      0.142
+  210608        0   3.171    0.999    0.994   0.145      0.145
+  210608        1   2.828    0.999    0.991   0.147      0.147
+  210619        0   1.958    0.999    0.997   0.126      0.126
+  210620        1   2.025    0.999    0.980   0.248      0.248
+  220515        0   5.310    0.941    0.950   0.459      0.459
+  220515        1   6.595    0.946    0.961   0.440      0.440
+  220516        0   4.502    0.892    0.562   0.964      0.964
+  220516        1   4.691    0.921    0.345   1.072      1.072
+  220517        0   6.096    0.924    0.886   0.637      0.637
+  220517        1   2.774    0.961    0.855   0.625      0.625
+  220518        0  16.267    0.950    0.886   0.674      0.674
+  220518        1   5.152    0.946    0.757   0.796      0.796
+  220519        0   4.714    0.998    0.981   0.218      0.218
+  220519        1   5.213    0.997    0.964   0.282      0.282
+  220520        0   2.100    0.993    0.977   0.375      0.375
+  220520        1   5.701    0.985    0.955   0.510      0.510
+
+TN — TRUE NEGATIVES  — No J peak & not collective  (n=11)
+     No peak AND independent model sufficient
+------------------------------------------------------------
+  Session    Stim   ratio  r_ising  r_indep    dist  col_score
+  210421        0   0.000    1.000    0.999   0.063      0.063
+  210421        1   0.000    1.000    0.997   0.079      0.079
+  210422        1   1.206    0.678    0.747   0.599     -0.599
+  210423        1   0.000    1.000    0.999   0.026      0.026
+  210511        0   1.723    1.000    0.998   0.082      0.082
+  210514        0   1.271    0.952    0.974   0.255     -0.255
+  210514        1   0.952    0.938    0.963   0.282     -0.282
+  210622        0   0.000    1.000    1.000   0.046      0.046
+  210622        1   0.000    1.000    1.000   0.023      0.023
+  210623        0   0.000    1.000    0.998   0.048      0.048
+  210623        1   0.000    0.999    1.000   0.065      0.065
+
+FP — FALSE POSITIVES — J peak present but not collective  (n=2)
+     Peak detected but network not in collective state
+------------------------------------------------------------
+  Session    Stim   ratio  r_ising  r_indep    dist  col_score
+  210511        1   1.850    1.000    0.997   0.067      0.067
+  210619        1   2.520    0.999    0.999   0.066      0.066
+
+FN — FALSE NEGATIVES — No J peak but collective state present  (n=6)
+     Network is collective but no J peak occurred
+------------------------------------------------------------
+  Session    Stim   ratio  r_ising  r_indep    dist  col_score
+  210422        0   0.867    0.976    0.981   0.261      0.261
+  210423        0   0.000    0.997    0.980   0.144      0.144
+  210606        0   1.041    0.998    0.994   0.137      0.137
+  210614        0   0.625    1.000    0.994   0.146      0.146
+  210614        1   1.129    0.999    0.995   0.138      0.138
+  210620        0   1.180    0.999    0.984   0.234      0.234
+

@@ -1,0 +1,26 @@
+Neural Simulation + Ising Analysis Summary
+==================================================
+Total time          : 5000 ms  (50000 steps, dt=0.1 ms)
+Network             : 100 principal (Purkinje cells) + 25 interneurons (Basket/Stellate)
+Regime blocks       : 13 random | 12 collective  (2000 steps = 200 ms each)
+Collective regime   : 200 Hz burst / 20 Hz quiet  (burst frac ≈ 0.20,  mean ≈ 56 Hz)
+Random regime       : 60 Hz independent Poisson
+
+Mean firing rates:
+  Purkinje cells  Random=59.56 Hz   Collective=52.83 Hz
+  Basket/Stellate  Random=30.43 Hz   Collective=53.12 Hz
+
+Ising model  (N=15 neurons):
+  Spike bins  : 1000  (5.0 ms each, 50 raw steps)
+  ⟨σ⟩ range   : [-0.602, -0.494]
+  h params    : mean=-0.2277  std=0.0863
+  J params    : mean=0.0554  std=0.0481
+  Energy      : random -3.251  collective -4.838
+  J-term      : random 1.541  collective 2.831
+  h-term      : random 1.711  collective 2.007
+
+Outputs:
+  spike_activity_overview.png
+  spike_raster_detailed.png
+  block_firing_rates.png
+  model_quality_summary.png
