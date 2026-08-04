@@ -16,6 +16,29 @@ import pandas as pd
 from scipy.interpolate import CubicSpline
 from utils import calculate_time_dependent_firing_rate
 
+plt.rcParams.update({
+    "axes.grid":        False,
+    "font.size":        13,
+    "axes.titlesize":   14,
+    "axes.labelsize":   13,
+    "xtick.labelsize":  11,
+    "ytick.labelsize":  11,
+    "legend.fontsize":  11,
+    "figure.titlesize": 14,
+})
+
+
+def _savefig(fig, path: str, **kwargs):
+    """Save *fig* as PNG then as SVG (with svg.fonttype=none for Affinity compatibility)."""
+    import os as _os
+    fig.savefig(path, **kwargs)
+    svg_path = _os.path.splitext(path)[0] + ".svg"
+    svg_kwargs = {k: v for k, v in kwargs.items() if k != "dpi"}
+    with plt.rc_context({"svg.fonttype": "none"}):
+        fig.savefig(svg_path, **svg_kwargs)
+
+
+
 def create_output_directory(output_dir):
     """
     Create output directory for saving plots.
@@ -76,8 +99,7 @@ def plot_phase_transition(results, output_dir):
     plt.xlabel("Temperature")
     plt.ylabel("Average Spin / N²")
     plt.legend()
-    plt.grid(alpha=0.3)
-    plt.savefig(os.path.join(output_dir, "avg_spin_vs_temp.png"))
+    _savefig(plt.gcf(), os.path.join(output_dir, "avg_spin_vs_temp.png"))
     plt.close()
     
     # Save data to CSV
@@ -102,8 +124,7 @@ def plot_phase_transition(results, output_dir):
     plt.xlabel("Temperature")
     plt.ylabel("Heat Capacity")
     plt.legend()
-    plt.grid(alpha=0.3)
-    plt.savefig(os.path.join(output_dir, "heat_capacity.png"))
+    _savefig(plt.gcf(), os.path.join(output_dir, "heat_capacity.png"))
     plt.close()
     
     # Save data to CSV
@@ -131,8 +152,7 @@ def plot_phase_transition(results, output_dir):
     plt.xlabel("Temperature")
     plt.ylabel("Energy")
     plt.legend()
-    plt.grid(alpha=0.3)
-    plt.savefig(os.path.join(output_dir, "energy_vs_temp.png"))
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_vs_temp.png"))
     plt.close()
     
     # Save data to CSV
@@ -237,7 +257,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         plt.ylabel("X Position")
         plt.legend()
-        plt.grid(alpha=0.3)
         
         # Y-coordinate subplot
         plt.subplot(n_subplots, 1, 2)
@@ -264,7 +283,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         plt.ylabel("Y Position")
         plt.legend()
-        plt.grid(alpha=0.3)
         
         # Z-coordinate subplot
         plt.subplot(n_subplots, 1, 3)
@@ -291,7 +309,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         plt.ylabel("Z Position")
         plt.legend()
-        plt.grid(alpha=0.3)
 
         # Energy subplot --
         plt.subplot(n_subplots, 1, 4)
@@ -322,7 +339,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
         
         plt.ylabel("Energy")
         plt.legend()
-        plt.grid(alpha=0.3)
         
         # ── Subplot 5: h & J values ──────────────────────────────────────
         plt.subplot(n_subplots, 1, 5)
@@ -339,7 +355,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
 
         plt.ylabel("Energy")
         plt.legend()
-        plt.grid(alpha=0.3)
 
         # Firing rate subplot if neural data is provided
         if neural_data is not None:
@@ -385,7 +400,6 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             plt.xlabel("Time")
             plt.ylabel("Firing Rate")
             plt.legend()
-            plt.grid(alpha=0.3)
             
             # Save firing rate data to CSV
             firing_df = pd.DataFrame({
@@ -401,7 +415,7 @@ def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="",
             plt.xlabel("Time")
         
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"), dpi=300, bbox_inches='tight')
+        _savefig(plt.gcf(), os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"), dpi=300, bbox_inches='tight')
         plt.close()
         
         # Save data to CSV files
@@ -564,21 +578,18 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
         plt.Line2D([0], [0], color='blue', linestyle=':', label='Firing rate transition'),
         plt.Line2D([0], [0], color='purple', linestyle='-', linewidth=2, label='Both (shared)')
     ], loc='upper right')
-    plt.grid(alpha=0.3)
     
     # Subplot 2: Velocity
     plt.subplot(n_subplots, 1, 2)
     plt.plot(time_axis, velocity, '-g', linewidth=1.5, label='Velocity')
     _add_transition_lines()
     plt.ylabel("Velocity")
-    plt.grid(alpha=0.3)
     
     # Subplot 3: Acceleration
     plt.subplot(n_subplots, 1, 3)
     plt.plot(time_axis, acceleration, '-m', linewidth=1.5, label='Acceleration')
     _add_transition_lines()
     plt.ylabel("Acceleration")
-    plt.grid(alpha=0.3)
     
     # Subplot 4: Energy
     plt.subplot(n_subplots, 1, 4)
@@ -587,7 +598,6 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
     plt.ylabel("Energy")
     if firing_rate_data is None:
         plt.xlabel("Time")
-    plt.grid(alpha=0.3)
     
     # Subplot 5: Firing Rate (if available)
     if firing_rate_data is not None:
@@ -595,7 +605,6 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
         plt.plot(time_axis, firing_rate_data, '-', color='orange', linewidth=1.5, label='Firing Rate')
         _add_transition_lines()
         plt.ylabel("Firing Rate")
-        plt.grid(alpha=0.3)
         
         # Subplot 6: change in firing rate (same derivative used for firing-rate transitions)
         plt.subplot(n_subplots, 1, 6)
@@ -610,10 +619,9 @@ def plot_transition_points(energy_data, kinematic_data, energy_transition_points
         _add_transition_lines()
         plt.xlabel("Time")
         plt.ylabel("Firing rate change")
-        plt.grid(alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, f"transition_points_stim_{stim_idx}.png"), dpi=300, bbox_inches='tight')
+    _savefig(plt.gcf(), os.path.join(output_dir, f"transition_points_stim_{stim_idx}.png"), dpi=300, bbox_inches='tight')
     plt.close()
     
     # Save data to CSV with position, velocity, acceleration, energy, firing rate, and both transition types
@@ -678,9 +686,8 @@ def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0
     plt.xlabel("Energy")
     plt.ylabel("Density")
     plt.legend()
-    plt.grid(alpha=0.3)
     
-    plt.savefig(os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.png"))
+    _savefig(plt.gcf(), os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.png"))
     plt.close()
     
     # Save histogram data to CSV
@@ -775,7 +782,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     ax_pair.set_xlabel(r"measured $C_{ij}$")
     ax_pair.set_ylabel(r"reconstructed $C_{ij}$")
     ax_pair.set_title("Pairwise correlation ($k=2$)")
-    ax_pair.grid(alpha=0.3)
     ax_pair.text(0.02, 0.98, "(a)", transform=ax_pair.transAxes, fontsize=12, fontweight="bold",
                  va="top", ha="left")
 
@@ -789,7 +795,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
         ax_in.set_ylim(-lim, lim)
         ax_in.set_title("zoom", fontsize=8)
         ax_in.tick_params(labelsize=7)
-        ax_in.grid(alpha=0.3)
     except Exception:
         pass
 
@@ -800,7 +805,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     ax_j.set_xlabel(r"coupling $J$")
     ax_j.set_ylabel(r"$P(J)$")
     ax_j.set_title("Distribution of pairwise couplings in multipliers")
-    ax_j.grid(alpha=0.3)
     ax_j.text(0.02, 0.98, "(b)", transform=ax_j.transAxes, fontsize=12, fontweight="bold",
               va="top", ha="left")
 
@@ -822,7 +826,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     ax_trip.set_ylabel(r"predicted $\langle \sigma_i \sigma_j \sigma_k \rangle$")
     ax_trip.set_title("Triplet correlation ($k=3$): Ising vs independent")
     ax_trip.legend(loc="upper left", fontsize=8)
-    ax_trip.grid(alpha=0.3)
     ax_trip.text(0.02, 0.98, "(c)", transform=ax_trip.transAxes, fontsize=12, fontweight="bold",
                  va="top", ha="left")
 
@@ -871,7 +874,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
         r"($p_i=\langle\sigma_i\rangle_{\mathrm{data}}$)"
     )
     ax_pk.legend(loc="upper right", fontsize=8)
-    ax_pk.grid(alpha=0.3)
     k_hi = float(N if max_k_plot is None else min(N, max_k_plot))
     ax_pk.set_xlim(-0.5, k_hi + 0.5)
     ax_pk.text(0.02, 0.98, "(d)", transform=ax_pk.transAxes, fontsize=12, fontweight="bold",
@@ -879,7 +881,7 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
 
     fig.tight_layout()
     out_path = os.path.join(output_dir, filename)
-    plt.savefig(out_path, dpi=300, bbox_inches="tight")
+    _savefig(plt.gcf(), out_path, dpi=300, bbox_inches="tight")
     plt.close()
 
     n_data = len(original_data)
@@ -973,7 +975,6 @@ def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=
         
         plt.xlabel("Original Data Correlation")
         plt.ylabel("Model Correlation")
-        plt.grid(alpha=0.3)
         plt.legend()
         
         # Calculate correlation coefficient
@@ -982,7 +983,7 @@ def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=
                 transform=plt.gca().transAxes, fontsize=12, 
                 bbox=dict(facecolor='white', alpha=0.8))
         
-        plt.savefig(os.path.join(output_dir, f"correlation_order_{i}.png"))
+        _savefig(plt.gcf(), os.path.join(output_dir, f"correlation_order_{i}.png"))
         plt.close()
         
         # Save correlation data to CSV
@@ -1074,10 +1075,9 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
     cbar.set_label('Normalized Frequency', fontsize=11)
     
     # Add grid for better readability
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "energy_distribution_by_k_heatmap.png"), dpi=300, bbox_inches='tight')
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_distribution_by_k_heatmap.png"), dpi=300, bbox_inches='tight')
     plt.close()
     
     # Also create a version with raw counts (not normalized)
@@ -1099,10 +1099,9 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
     cbar2 = plt.colorbar(im2, ax=ax2)
     cbar2.set_label('Count', fontsize=11)
     
-    ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "energy_distribution_by_k_heatmap_counts.png"), dpi=300, bbox_inches='tight')
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_distribution_by_k_heatmap_counts.png"), dpi=300, bbox_inches='tight')
     plt.close()
     
     # Save data to CSV

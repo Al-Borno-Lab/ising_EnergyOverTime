@@ -347,14 +347,18 @@ def analyze_single_stimulus(neural_stim_i, continous_stim_i, multipliers, critic
         pd.DataFrame(stim_summary).to_csv(
             os.path.join(output_dir, "neural_stimuli_summary.csv"), index=False)
 
+        n_neurons = neural_s.shape[2] if neural_s.ndim == 3 else 0
+        spike_keys = [f"spike_n{k}" for k in range(n_neurons)]
         all_reaches = {
             "reach_idx": [], "stim": [],
             "x": [], "y": [], "z": [],
             "firing_rate": [], "energy": [], "j": [], "h": [],
+            **{k: [] for k in spike_keys},
         }
         for i in range(len(continous_stim_i)):
+            n_t = len(reach_idx_s[i])
             all_reaches["reach_idx"]   += reach_idx_s[i]
-            all_reaches["stim"]        += [stim_idx] * len(reach_idx_s[i])
+            all_reaches["stim"]        += [stim_idx] * n_t
             all_reaches["x"]           += x_s[i].tolist()
             all_reaches["y"]           += y_s[i].tolist()
             all_reaches["z"]           += z_s[i].tolist()
@@ -362,6 +366,9 @@ def analyze_single_stimulus(neural_stim_i, continous_stim_i, multipliers, critic
             all_reaches["energy"]      += e_s[i].tolist()
             all_reaches["j"]           += j_s[i].tolist()
             all_reaches["h"]           += h_s[i].tolist()
+            # Per-neuron binary spikes (0/1)
+            for k in range(n_neurons):
+                all_reaches[f"spike_n{k}"] += neural_s[i, :n_t, k].tolist()
         pd.DataFrame(all_reaches).to_csv(
             os.path.join(output_dir, "per_reach_state.csv"), index=False)
 

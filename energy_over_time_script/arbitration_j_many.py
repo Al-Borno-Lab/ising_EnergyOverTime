@@ -726,7 +726,8 @@ def _plot_session_j_kinematics(session, stim, reference,
                                 en_peak_lag_vel=None,
                                 has_en_trough=False, en_trough_idx=None,
                                 en_trough_z=np.nan, en_trough_lag_accel=None,
-                                en_trough_lag_vel=None):
+                                en_trough_lag_vel=None,
+                                h_ts=None):
     """5-panel figure: velocity | acceleration | firing rate | energy | J coupling."""
 
     na_fmt  = lambda v: f"{v:.3f}" if (isinstance(v, float) and not np.isnan(v)) else "n/a"
@@ -840,13 +841,14 @@ def _plot_session_j_kinematics(session, stim, reference,
         ax_fr.text(0.5, 0.5, 'No firing rate data', transform=ax_fr.transAxes,
                    ha='center', va='center', color='gray')
     ax_fr.set_ylabel("Firing Rate")
-    ax_fr.grid(alpha=0.3)
     ax_fr.legend(fontsize=7, loc='upper left')
 
     # ── Panel 4: Energy ────────────────────────────────────────────────────
     ax_en = axes[3]
     if energy_ts is not None and len(energy_ts) > 0:
         ax_en.plot(energy_ts, color='saddlebrown', linewidth=1.5, label='Energy')
+        ax_en.axhline(np.nanmean(energy_ts), color='saddlebrown', linestyle='--',
+                      linewidth=1.2, alpha=0.5, label=f'Energy mean ({np.nanmean(energy_ts):.3f})')
         # Raw window min/max (grey, background reference)
         if en_min_idx is not None:
             ax_en.axvline(en_min_idx, color='silver', linestyle=':', linewidth=1.2, alpha=0.6,
@@ -873,7 +875,6 @@ def _plot_session_j_kinematics(session, stim, reference,
         ax_en.text(0.5, 0.5, 'No energy data', transform=ax_en.transAxes,
                    ha='center', va='center', color='gray')
     ax_en.set_ylabel("Energy")
-    ax_en.grid(alpha=0.3)
     ax_en.legend(fontsize=7, loc='upper left')
 
     # ── Panel 5: J + dJ/dt with jump highlighted ──────────────────────────
@@ -881,6 +882,8 @@ def _plot_session_j_kinematics(session, stim, reference,
     ax5_twin = ax5.twinx()
 
     ax5.plot(j_ts, color='darkorchid', linewidth=1.0, alpha=0.5, label='J (raw)')
+    ax5.axhline(np.nanmean(j_ts), color='darkorchid', linestyle='--',
+                linewidth=1.2, alpha=0.5, label=f'J mean ({np.nanmean(j_ts):.3f})')
     if len(j_ts) > 2:
         j_smooth_plot = _gaussian_smooth(j_ts, smooth_sigma)
         ax5.plot(j_smooth_plot, color='indigo', linewidth=2.0,
@@ -904,6 +907,14 @@ def _plot_session_j_kinematics(session, stim, reference,
             ax5.scatter([j_peak_idx], [j_peak_value], color='darkorange',
                         zorder=5, s=80, marker='*')
 
+    if h_ts is not None and len(h_ts) > 0:
+        ax5_h = ax5.twinx()
+        ax5_h.plot(h_ts, color='firebrick', linewidth=1.0, alpha=0.65, label='H field')
+        ax5_h.axhline(np.nanmean(h_ts), color='firebrick', linestyle='--',
+                      linewidth=1.2, alpha=0.45, label=f'H mean ({np.nanmean(h_ts):.3f})')
+        ax5_h.set_ylabel('H field', color='firebrick')
+        ax5_h.tick_params(axis='y', labelcolor='firebrick')
+
     ax5.set_facecolor((*mcolors.to_rgb(panel_color), 0.10))
     ax5.set_ylabel("J (coupling)", color='darkorchid')
     ax5.tick_params(axis='y', labelcolor='darkorchid')
@@ -920,11 +931,10 @@ def _plot_session_j_kinematics(session, stim, reference,
     ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=7, loc='upper left')
 
     ax5.set_xlabel("Time bin")
-    ax5.grid(alpha=0.3)
 
     plt.tight_layout()
     fname = f"stim{stim}_{session}.png"
-    plt.savefig(os.path.join(save_dir, fname), dpi=150, bbox_inches='tight')
+    _savefig(plt.gcf(), os.path.join(save_dir, fname), dpi=150, bbox_inches='tight')
     plt.close(fig)
 
 
@@ -1000,6 +1010,7 @@ def j_kinematics_with_plots(stim_sessions_extrema, window, output_dir,
             en_min_idx=row['en_min_idx'],   en_max_idx=row['en_max_idx'],
             en_min_lag_accel=row['en_min_lag_accel'], en_min_lag_vel=row['en_min_lag_vel'],
             en_max_lag_accel=row['en_max_lag_accel'], en_max_lag_vel=row['en_max_lag_vel'],
+            h_ts=_mean_timeseries(od, 'h') if 'h' in od.columns else None,
             window=window,
             has_fr_peak=row['has_fr_peak'],     fr_peak_idx=row['fr_peak_idx'],
             fr_peak_z=row['fr_peak_z'],
@@ -1208,11 +1219,10 @@ def plot_arbitration_boxwhisker(all_sessions, output_dir, window=None):
         fontsize=12, fontweight='bold'
     )
     ax.legend(fontsize=10, loc='upper right')
-    ax.grid(axis='y', alpha=0.3)
 
     plt.tight_layout()
     out_path = os.path.join(output_dir, 'arbitration_boxwhisker.png')
-    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    _savefig(plt.gcf(), out_path, dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f"  Arbitration box-whisker plot saved: {out_path}")
     return out_path
