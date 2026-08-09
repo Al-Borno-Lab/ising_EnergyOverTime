@@ -43,15 +43,20 @@ from src.peak_detection import (
     gaussian_smooth        as _gaussian_smooth,
 )
 
+# Each row of per_reach_state.csv is one 10 ms time bin; x/y/z positions are
+# recorded in cm. Used to convert bin indices to ms and position deltas to
+# cm/s, cm/s^2 for axis labels and unit-correct kinematic traces.
+BIN_MS = 10.0
+
 plt.rcParams.update({
     "axes.grid":        False,
-    "font.size":        17,
-    "axes.titlesize":   19,
-    "axes.labelsize":   17,
-    "xtick.labelsize":  16,
-    "ytick.labelsize":  16,
-    "legend.fontsize":  16,
-    "figure.titlesize": 19,
+    "font.size":        21,
+    "axes.titlesize":   24,
+    "axes.labelsize":   21,
+    "xtick.labelsize":  19,
+    "ytick.labelsize":  19,
+    "legend.fontsize":  19,
+    "figure.titlesize": 24,
 })
 
 
@@ -66,6 +71,31 @@ def _savefig(fig, path: str, **kwargs):
     svg_kwargs = {k: v for k, v in kwargs.items() if k != "dpi"}
     with plt.rc_context({"svg.fonttype": "none"}):
         fig.savefig(svg_path, **svg_kwargs)
+
+
+def _tighten(fig, w_pad=0.02, h_pad=0.02, wspace=0.03, hspace=0.04):
+    """Compact spacing shared by every figure in this script.
+
+    Uses the constrained-layout engine rather than ``tight_layout`` because the
+    latter ignores ``suptitle``, which pushed multi-line titles down onto the
+    y-axis label.
+    """
+    engine = fig.get_layout_engine()
+    if engine is not None:
+        engine.set(w_pad=w_pad, h_pad=h_pad, wspace=wspace, hspace=hspace)
+
+
+def _bottom_note(fig, text, fontsize=15):
+    """Attach a supplementary note under the axes.
+
+    Uses ``supxlabel`` so the constrained-layout engine reserves room for it;
+    placing these boxes inside the axes corner made them collide with the tick
+    labels.
+    """
+    t = fig.supxlabel(text, fontsize=fontsize)
+    t.set_bbox(dict(boxstyle="round,pad=0.3", facecolor="lightyellow",
+                    edgecolor="goldenrod", alpha=0.9))
+    return t
 
 
 def _stars(p: float) -> str:
@@ -95,20 +125,24 @@ def _mean_ts(df: pd.DataFrame, col: str) -> np.ndarray:
     return np.mean([p[:n] for p in parts], axis=0)
 
 
-def _velocity_ts(df: pd.DataFrame) -> np.ndarray:
+def _velocity_ts(df: pd.DataFrame, bin_ms: float = BIN_MS) -> np.ndarray:
+    """X velocity in cm/s (x is recorded in cm; bins are ``bin_ms`` wide)."""
+    dt_s = bin_ms / 1000.0
     parts = []
     for _, grp in df.groupby("reach_idx"):
         x = grp["x"].values
-        parts.append(np.diff(x, prepend=x[0]))
+        parts.append(np.diff(x, prepend=x[0]) / dt_s)
     if not parts:
         return np.array([])
     n = min(len(p) for p in parts)
     return np.mean([p[:n] for p in parts], axis=0)
 
 
-def _acceleration_ts(df: pd.DataFrame) -> np.ndarray:
-    v = _velocity_ts(df)
-    return np.diff(v, prepend=v[0]) if len(v) else np.array([])
+def _acceleration_ts(df: pd.DataFrame, bin_ms: float = BIN_MS) -> np.ndarray:
+    """X acceleration in cm/s^2."""
+    dt_s = bin_ms / 1000.0
+    v = _velocity_ts(df, bin_ms)
+    return np.diff(v, prepend=v[0]) / dt_s if len(v) else np.array([])
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +218,7 @@ def _session_id_from_path(path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Per-session 6-panel plot
+# Per-session 5-panel plot
 # ---------------------------------------------------------------------------
 
 def _plot_session(session_id: str, stim: int,
@@ -199,13 +233,15 @@ def _plot_session(session_id: str, stim: int,
                   h_ts=None, h_peak_idx=None,
                   fr_peak_idx=None, fr_trough_idx=None):
     """
-    6-panel figure per session:
-      0: X velocity
-      1: X acceleration
-      2: Firing rate   + mean line + peak/trough markers
+    5-panel figure per session (no legends -- markers/colors are explained in
+    the figure caption):
+      0: X velocity (cm/s)
+      1: X acceleration (cm/s^2)
+      2: Firing rate + mean line + peak/trough markers
       3: Ising energy
-      4: J coupling + H field (twin y-axis)
-      5: P(K) data vs Ising vs independent + hypothesis annotation
+      4: J coupling + H field (twin y-axis) + peak markers
+    Time axis is in ms (BIN_MS per bin); the P(K) panel previously shown here
+    lives in the summary figures instead.
     """
     is_collective = (
         pk_mets["ising_closer"] and pk_mets["ising_indep_dist"] > 0.1
@@ -228,163 +264,100 @@ def _plot_session(session_id: str, stim: int,
             f"Hypothesis={'MET \u2713' if hypothesis_met else 'not met'}"
         )
 
-    fig, axes = plt.subplots(6, 1, figsize=(14, 30), sharex=False)
-    fig.suptitle(title, fontsize=17, fontweight="bold")
+    fig, axes = plt.subplots(5, 1, figsize=(15, 20), sharex=False,
+                             layout="constrained")
+    _tighten(fig, hspace=0.03)
+    fig.suptitle(title, fontsize=21, fontweight="bold")
+
+    def _t(idx_array):
+        return np.asarray(idx_array) * BIN_MS
+
+    w_lo_ms, w_hi_ms = w_lo * BIN_MS, w_hi * BIN_MS
+    accel_peak_ms = accel_peak_idx * BIN_MS
+    vel_peak_ms   = vel_peak_idx * BIN_MS
 
     def _shade(ax):
-        ax.axvspan(w_lo, w_hi, color="gold", alpha=0.12, zorder=0)
-        ax.axvline(w_lo, color="goldenrod", linestyle="--", lw=0.9, alpha=0.5)
-        ax.axvline(w_hi, color="goldenrod", linestyle="--", lw=0.9, alpha=0.5)
-        ax.axvline(accel_peak_idx, color="green", linestyle="--", lw=1.4, alpha=0.6,
-                   label="Accel peak")
-        ax.axvline(vel_peak_idx,   color="deepskyblue", linestyle="--", lw=1.4, alpha=0.6,
-                   label="Vel peak")
+        ax.axvspan(w_lo_ms, w_hi_ms, color="gold", alpha=0.12, zorder=0)
+        ax.axvline(w_lo_ms, color="goldenrod", linestyle="--", lw=0.9, alpha=0.5)
+        ax.axvline(w_hi_ms, color="goldenrod", linestyle="--", lw=0.9, alpha=0.5)
+        ax.axvline(accel_peak_ms, color="green", linestyle="--", lw=1.4, alpha=0.6)
+        ax.axvline(vel_peak_ms,   color="deepskyblue", linestyle="--", lw=1.4, alpha=0.6)
+
+    def _panel_letter(ax, letter):
+        ax.text(0.01, 0.97, letter, transform=ax.transAxes,
+                fontsize=24, fontweight="bold", va="top", ha="left", zorder=6)
+
+    panel_letters = "ABCDE"
 
     # ── Panel 0: Velocity ────────────────────────────────────────────────
-    axes[0].plot(vel_ts, color="navy", lw=1.5, label="X velocity")
+    axes[0].plot(_t(np.arange(len(vel_ts))), vel_ts, color="navy", lw=1.5)
     _shade(axes[0])
-    axes[0].set_ylabel("X Velocity")
-    axes[0].legend(fontsize=16, loc="upper right", frameon=True, framealpha=1.0)
+    axes[0].set_ylabel("X Velocity (cm/s)")
+    _panel_letter(axes[0], panel_letters[0])
 
     # ── Panel 1: Acceleration ────────────────────────────────────────────
-    axes[1].plot(accel_ts, color="steelblue", lw=1.5, label="X acceleration")
+    axes[1].plot(_t(np.arange(len(accel_ts))), accel_ts, color="steelblue", lw=1.5)
     _shade(axes[1])
-    axes[1].set_ylabel("X Acceleration")
-    axes[1].legend(fontsize=16, loc="lower right", frameon=True, framealpha=1.0)
+    axes[1].set_ylabel(r"X Acceleration (cm/s$^2$)")
+    _panel_letter(axes[1], panel_letters[1])
 
     # ── Panel 2: Firing rate ─────────────────────────────────────────────
-    axes[2].plot(fr_ts, color="darkgreen", lw=1.5, label="Firing rate")
+    axes[2].plot(_t(np.arange(len(fr_ts))), fr_ts, color="darkgreen", lw=1.5)
     fr_mean = np.nanmean(fr_ts) if len(fr_ts) > 0 else np.nan
-    axes[2].axhline(fr_mean, color="darkgreen", linestyle="--",
-                    lw=1.2, alpha=0.5, label="_nolegend_")
+    axes[2].axhline(fr_mean, color="darkgreen", linestyle="--", lw=1.2, alpha=0.5)
     _shade(axes[2])
     if fr_peak_idx is not None and not (isinstance(fr_peak_idx, float) and np.isnan(fr_peak_idx)):
         idx = int(fr_peak_idx)
-        axes[2].axvline(idx, color="limegreen", linestyle=":", lw=1.8, alpha=0.9)
-        axes[2].plot(idx, fr_ts[idx], "^", color="limegreen", markersize=10,
-                     zorder=5, label=f"FR peak (idx={idx})")
+        axes[2].axvline(_t(idx), color="limegreen", linestyle=":", lw=1.8, alpha=0.9)
+        axes[2].plot(_t(idx), fr_ts[idx], "^", color="limegreen", markersize=10, zorder=5)
     if fr_trough_idx is not None and not (isinstance(fr_trough_idx, float) and np.isnan(fr_trough_idx)):
         idx = int(fr_trough_idx)
-        axes[2].axvline(idx, color="darkred", linestyle=":", lw=1.8, alpha=0.9)
-        axes[2].plot(idx, fr_ts[idx], "v", color="darkred", markersize=10,
-                     zorder=5, label=f"FR trough (idx={idx})")
+        axes[2].axvline(_t(idx), color="darkred", linestyle=":", lw=1.8, alpha=0.9)
+        axes[2].plot(_t(idx), fr_ts[idx], "v", color="darkred", markersize=10, zorder=5)
     axes[2].set_ylabel("Firing Rate")
-    axes[2].legend(fontsize=16, loc="lower right", frameon=True, framealpha=1.0)
+    _panel_letter(axes[2], panel_letters[2])
 
     # ── Panel 3: Energy ──────────────────────────────────────────────────
-    axes[3].plot(energy_ts, color="darkorange", lw=1.5, label="Ising energy")
+    axes[3].plot(_t(np.arange(len(energy_ts))), energy_ts, color="darkorange", lw=1.5)
     _shade(axes[3])
     axes[3].set_ylabel("Energy")
-    axes[3].legend(fontsize=16, loc="lower right", frameon=True, framealpha=1.0)
+    _panel_letter(axes[3], panel_letters[3])
 
     # ── Panel 4: J coupling + H field ────────────────────────────────────
     j_color = "steelblue"
     h_color = "firebrick"
-    axes[4].plot(j_ts, color=j_color, lw=1.5, label="J coupling")
+    axes[4].plot(_t(np.arange(len(j_ts))), j_ts, color=j_color, lw=1.5)
     _shade(axes[4])
+    _panel_letter(axes[4], panel_letters[4])
     if has_j_peak and j_peak_idx is not None:
-        axes[4].axvline(j_peak_idx, color="darkorange", linestyle=":", lw=2.0, alpha=0.9)
-        axes[4].plot(j_peak_idx, j_ts[int(j_peak_idx)], "o", color="darkorange",
-                     markersize=9, zorder=5, label=f"J peak (idx={j_peak_idx})")
+        axes[4].axvline(_t(j_peak_idx), color="darkorange", linestyle=":", lw=2.0, alpha=0.9)
+        axes[4].plot(_t(j_peak_idx), j_ts[int(j_peak_idx)], "o", color="darkorange",
+                     markersize=9, zorder=5)
     axes[4].set_ylabel("J Coupling", color=j_color)
     axes[4].tick_params(axis="y", labelcolor=j_color)
-    axes[4].set_xlabel("Time bin")
+    axes[4].set_xlabel("Time (ms)")
 
-    # Extend y-axis top 30% for legend room
     j_vals = j_ts[np.isfinite(j_ts)]
     if len(j_vals):
         j_lo, j_hi = j_vals.min(), j_vals.max()
         j_rng = j_hi - j_lo if j_hi != j_lo else 1.0
-        axes[4].set_ylim(j_lo - 0.05 * j_rng, j_hi + 0.30 * j_rng)
+        axes[4].set_ylim(j_lo - 0.05 * j_rng, j_hi + 0.10 * j_rng)
 
     if h_ts is not None and len(h_ts) > 0:
         ax_h = axes[4].twinx()
-        ax_h.plot(h_ts, color=h_color, lw=1.2, alpha=0.75, label="H field")
+        ax_h.plot(_t(np.arange(len(h_ts))), h_ts, color=h_color, lw=1.2, alpha=0.75)
         h_vals = h_ts[np.isfinite(h_ts)]
         if len(h_vals):
             h_lo, h_hi = h_vals.min(), h_vals.max()
             h_rng = h_hi - h_lo if h_hi != h_lo else 1.0
-            ax_h.set_ylim(h_lo - 0.05 * h_rng, h_hi + 0.30 * h_rng)
+            ax_h.set_ylim(h_lo - 0.05 * h_rng, h_hi + 0.10 * h_rng)
         if h_peak_idx is not None and not (isinstance(h_peak_idx, float) and np.isnan(h_peak_idx)):
             hidx = int(h_peak_idx)
-            ax_h.axvline(hidx, color="salmon", linestyle=":", lw=1.8, alpha=0.9)
-            ax_h.plot(hidx, h_ts[hidx], "D", color="salmon", markersize=9,
-                      zorder=5, label=f"H peak (idx={hidx})")
+            ax_h.axvline(_t(hidx), color="salmon", linestyle=":", lw=1.8, alpha=0.9)
+            ax_h.plot(_t(hidx), h_ts[hidx], "D", color="salmon", markersize=9, zorder=5)
         ax_h.set_ylabel("H Field", color=h_color)
         ax_h.tick_params(axis="y", labelcolor=h_color)
-        # Merge legends on ax_h (topmost layer); exclude raw time-series labels
-        _exclude = {"J coupling", "H field"}
-        lines_j, labels_j = axes[4].get_legend_handles_labels()
-        lines_h, labels_h = ax_h.get_legend_handles_labels()
-        all_lines  = lines_j  + lines_h
-        all_labels = labels_j + labels_h
-        filtered = [(h, l) for h, l in zip(all_lines, all_labels)
-                    if l not in _exclude]
-        if filtered:
-            fh, fl = zip(*filtered)
-            ax_h.legend(fh, fl, fontsize=16, loc="upper right",
-                        frameon=True, framealpha=1.0)
-    else:
-        # No H: show J panel legend with only markers
-        _exclude = {"J coupling"}
-        lines_j, labels_j = axes[4].get_legend_handles_labels()
-        filtered = [(h, l) for h, l in zip(lines_j, labels_j)
-                    if l not in _exclude]
-        if filtered:
-            fh, fl = zip(*filtered)
-            axes[4].legend(fh, fl, fontsize=16, loc="upper right",
-                           frameon=True, framealpha=1.0)
 
-    # ── Panel 5: P(K) ────────────────────────────────────────────────────
-    ax_pk = axes[5]
-    ax_pk.set_xlabel("K  (active neurons)")
-    ax_pk.set_ylabel("P(K)")
-    if pk_df is not None and len(pk_df) > 0:
-        k_vals = pk_df["K"].values
-        ax_pk.plot(k_vals, pk_df["P_data"].values,        "o-", color="black",
-                   lw=1.8, markersize=5, label="P_data")
-        ax_pk.plot(k_vals, pk_df["P_ising"].values,       "s-", color="crimson",
-                   lw=1.8, markersize=5,
-                   label=f"P_ising (r={_na(pk_mets['r_ising'])})")
-        ax_pk.plot(k_vals, pk_df["P_independent"].values, "^-", color="royalblue",
-                   lw=1.8, markersize=5,
-                   label=f"P_indep (r={_na(pk_mets['r_independent'])})")
-        ax_pk.fill_between(k_vals, pk_df["P_ising"].values,
-                           pk_df["P_independent"].values,
-                           alpha=0.18, color="mediumpurple",
-                           label=f"Ising\u2013indep gap (dist={_na(pk_mets['ising_indep_dist'])})")
-        ax_pk.legend(fontsize=16, loc="upper right", frameon=True, framealpha=1.0)
-
-        # Hypothesis annotation (top-left)
-        c1 = pk_mets["ising_closer"]
-        c2 = pk_mets["ising_indep_dist"] > 0.1
-        both = c1 and c2
-        tick = "\u2713"; cross = "\u2717"
-        annot = (
-            f"Hypothesis conditions:\n"
-            f"  {tick if c1 else cross} Ising closer to data than independent:\n"
-            f"    (r_ising={_na(pk_mets['r_ising'])} \u2265 "
-            f"r_indep={_na(pk_mets['r_independent'])} \u2212 0.02)\n"
-            f"  {tick if c2 else cross} Ising\u2013indep dist \u2265 0.10\n"
-            f"    (dist = {_na(pk_mets['ising_indep_dist'])})\n"
-            f"  \u2192 Ising model closer: {tick if both else cross} "
-            f"{'MET' if both else 'NOT MET'}"
-        )
-        ax_pk.annotate(
-            annot,
-            xy=(0.02, 0.97), xycoords="axes fraction",
-            ha="left", va="top", fontsize=16,
-            color="darkgreen" if both else "firebrick",
-            bbox=dict(boxstyle="round,pad=0.4", facecolor="white",
-                      edgecolor="darkgreen" if both else "firebrick",
-                      alpha=0.9),
-        )
-    else:
-        ax_pk.text(0.5, 0.5, "P(K) data unavailable",
-                   ha="center", va="center", transform=ax_pk.transAxes,
-                   fontsize=16, color="gray")
-
-    plt.tight_layout()
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     _savefig(fig, save_path, dpi=130, bbox_inches="tight")
     plt.close(fig)
@@ -398,7 +371,8 @@ def _plot_hypothesis_scatter(rows: list, output_dir: str):
     peaks    = [r for r in rows if r["has_j_peak"]]
     no_peaks = [r for r in rows if not r["has_j_peak"]]
 
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(12, 7.5), layout="constrained")
+    _tighten(fig)
     fig.suptitle(
         "P(K) hypothesis: Ising\u2013independent divergence vs J peak\n"
         "Hypothesis: peaks appear in top-right (Ising better + differs from indep.)",
@@ -437,8 +411,10 @@ def _plot_hypothesis_scatter(rows: list, output_dir: str):
     ax.set_xlabel("ising_indep_dist  (sum |P_ising \u2212 P_independent|)")
     ax.set_ylabel("r_ising \u2212 r_independent  (Ising fit advantage)")
     ax.set_xlim(0, xlim_hi)
-    ax.legend(fontsize=16, loc="upper left", frameon=True, framealpha=1.0)
-    plt.tight_layout()
+    # Without this the axes autoscaled to the shaded region instead of the
+    # points, leaving the top half of the panel empty.
+    ax.set_ylim(*ylim)
+    ax.legend(fontsize=17, loc="upper left", frameon=True, framealpha=1.0)
     path = os.path.join(output_dir, "pk_hypothesis_scatter.png")
     _savefig(fig, path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -463,11 +439,13 @@ def _plot_fit_bars(rows: list, output_dir: str):
     r_in_m, r_in_se = _ms([r["r_ising"]       for r in nopeak_rows])
     r_dn_m, r_dn_se = _ms([r["r_independent"] for r in nopeak_rows])
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10.5, 7), layout="constrained")
+    _tighten(fig)
     fig.suptitle("P(K) fit quality: Ising vs Independent by J peak status",
                  fontweight="bold")
 
-    x = np.array([0.0, 0.5, 1.4, 1.9])
+    # Groups pulled closer together (was a 0.9 gap against 0.5 within-group)
+    x = np.array([0.0, 0.45, 1.15, 1.60])
     means  = [r_ip_m, r_dp_m, r_in_m, r_dn_m]
     ses    = [r_ip_se, r_dp_se, r_in_se, r_dn_se]
     colors = ["crimson", "salmon", "steelblue", "lightcyan"]
@@ -481,13 +459,15 @@ def _plot_fit_bars(rows: list, output_dir: str):
         ax.bar(xi, m, 0.4, yerr=se, capsize=5, color=c,
                edgecolor="black", lw=0.8, label=lbl, alpha=0.90)
 
-    ax.set_xticks([0.25, 1.65])
+    ax.set_xticks([0.225, 1.375])
     ax.set_xticklabels([f"J peak sessions\n(n={len(peak_rows)})",
                         f"No-peak sessions\n(n={len(nopeak_rows)})"])
     ax.set_ylabel("Mean Pearson r  (\u00b1 SE)")
-    ax.set_ylim(0, 1.05)
-    ax.legend(fontsize=14, loc="lower right", frameon=True, framealpha=1.0)
-    plt.tight_layout()
+    # Headroom so the legend clears the bars instead of covering them.
+    ax.set_ylim(0, 1.32)
+    ax.set_yticks(np.arange(0, 1.01, 0.2))
+    ax.legend(fontsize=15, loc="upper center", ncol=2, frameon=True,
+              framealpha=1.0)
     path = os.path.join(output_dir, "pk_fit_bars.png")
     _savefig(fig, path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -513,10 +493,11 @@ def _plot_global_boxplot(rows: list, output_dir: str):
     sw_ri, sw_ri_p = shapiro(r_ising[:min(len(r_ising), 50)])
     sw_rd, sw_rd_p = shapiro(r_indep[:min(len(r_indep), 50)])
 
-    fig, ax = plt.subplots(figsize=(7, 8))
+    fig, ax = plt.subplots(figsize=(9, 8), layout="constrained")
+    _tighten(fig)
     fig.suptitle(
         "Global fit quality: Ising vs Independent\n"
-        "Independent Wilcoxon\n(Mann-Whitney U)",
+        "Independent Wilcoxon (Mann-Whitney U)",
         fontweight="bold"
     )
 
@@ -539,37 +520,30 @@ def _plot_global_boxplot(rows: list, output_dir: str):
     y_min = all_vals.min(); y_max = all_vals.max()
     y_rng = max(y_max - y_min, 0.05)
     y_lo  = y_min - 0.05 * y_rng
-    y_hi  = y_max + 0.28 * y_rng
+    y_hi  = y_max + 0.40 * y_rng
     ax.set_ylim(y_lo, y_hi)
 
     # Significance bracket (data coords)
-    br_y  = y_lo + 0.87 * (y_hi - y_lo)
+    br_y  = y_lo + 0.84 * (y_hi - y_lo)
     br_dh = 0.012 * y_rng
     ax.plot([1, 1, 2, 2], [br_y, br_y + br_dh, br_y + br_dh, br_y],
             color="black", lw=1.3)
-    s = _stars(p_mw)
-    ax.text(1.5, br_y + 2 * br_dh, s,
-            ha="center", va="bottom", fontsize=18, fontweight="bold")
-    ax.text(1.5, br_y + 5 * br_dh,
-            f"p = {p_mw:.4f}  (U={stat_u:.0f})",
-            ha="center", va="bottom", fontsize=14)
-
-    # Shapiro-Wilk annotation
-    sw_text = (
-        f"SW(r_ising): W={sw_ri:.3f} p={sw_ri_p:.4f} "
-        f"[{'non-normal \u2713' if sw_ri_p < 0.05 else 'normal'}]\n"
-        f"SW(r_indep): W={sw_rd:.3f} p={sw_rd_p:.4f} "
-        f"[{'non-normal \u2713' if sw_rd_p < 0.05 else 'normal'}]"
-    )
-    ax.annotate(sw_text, xy=(0.02, 0.02), xycoords="axes fraction",
-                ha="left", va="bottom", fontsize=13,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow",
-                          edgecolor="goldenrod", alpha=0.9))
+    # Stars above stats, matching _plot_ising_vs_indep_by_peak.
+    ax.text(0.5, 0.99, _stars(p_mw), transform=ax.transAxes,
+            ha="center", va="top", fontsize=22, fontweight="bold")
+    ax.text(0.5, 0.925, f"p = {p_mw:.4f}  (U={stat_u:.0f})",
+            transform=ax.transAxes, ha="center", va="top", fontsize=16)
 
     ax.set_xticks([1, 2])
     ax.set_xticklabels(["r_ising\n(Ising vs data)", "r_independent\n(Indep. vs data)"])
     ax.set_ylabel("Pearson r  (P(K) model vs data)")
-    plt.tight_layout()
+
+    _bottom_note(fig, (
+        f"SW(r_ising): W={sw_ri:.3f} p={sw_ri_p:.4f} "
+        f"[{'non-normal \u2713' if sw_ri_p < 0.05 else 'normal'}]    "
+        f"SW(r_indep): W={sw_rd:.3f} p={sw_rd_p:.4f} "
+        f"[{'non-normal \u2713' if sw_rd_p < 0.05 else 'normal'}]"
+    ))
     path = os.path.join(output_dir, "pk_pearson_boxplot_indep_wilcoxon.png")
     _savefig(fig, path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -594,20 +568,23 @@ def _plot_ising_vs_indep_by_peak(rows: list, output_dir: str):
                    and not np.isnan(r["r_ising"])
                    and not np.isnan(r["r_independent"])]
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 8), sharey=False)
+    fig, axes = plt.subplots(1, 2, figsize=(12.5, 7.5), sharey=False,
+                             layout="constrained")
+    _tighten(fig, h_pad=0.06, wspace=0.05)
     fig.suptitle(
         "Ising vs Independent fit quality \u2014 split by J-peak status\n"
         "Hypothesis: Ising closer when peak present; Independent closer when absent",
-        fontweight="bold", y=1.02
+        fontweight="bold"
     )
 
+    sw_notes = []
     groups = [
         (axes[0], peak_rows,   f"J-peak sessions  (n={len(peak_rows)})"),
         (axes[1], nopeak_rows, f"No-peak sessions  (n={len(nopeak_rows)})"),
     ]
 
     for ax, pairs, title in groups:
-        ax.set_title(title, fontweight="bold", pad=14)
+        ax.set_title(title, fontweight="bold", pad=10)
 
         if not pairs:
             ax.text(0.5, 0.5, "No data", ha="center", va="center",
@@ -650,48 +627,45 @@ def _plot_ising_vs_indep_by_peak(rows: list, output_dir: str):
         y_max = all_vals.max()
         y_rng = max(y_max - y_min, 0.05)
         y_lo  = y_min - 0.08 * y_rng
-        # Top headroom: 35% of range for bracket + text + Shapiro at bottom
-        y_hi  = y_max + 0.35 * y_rng
+        # Top headroom: 55% of range for bracket + stats text
+        y_hi  = y_max + 0.55 * y_rng
         ax.set_ylim(y_lo, y_hi)
 
-        # Bracket connecting the two boxes (in data coords)
-        # Place bracket at 88% of the y-axis visible range
-        br_y  = y_lo + 0.88 * (y_hi - y_lo)
+        # Stacked top to bottom in the headroom: stars, stats, bracket.
+        br_y  = y_lo + 0.78 * (y_hi - y_lo)
         br_dh = 0.015 * y_rng          # vertical tick height
         ax.plot([1, 1, 2, 2],
                 [br_y, br_y + br_dh, br_y + br_dh, br_y],
-                color="black", lw=1.3, clip_on=False)
+                color="black", lw=1.3)
 
-        # Significance stars just above bracket
         s = _stars(p_w) if not np.isnan(p_w) else "n/a"
-        ax.text(1.5, br_y + 2 * br_dh, s,
-                ha="center", va="bottom", fontsize=18, fontweight="bold")
+        ax.text(0.5, 0.99, s, transform=ax.transAxes,
+                ha="center", va="top", fontsize=22, fontweight="bold")
 
-        # Wilcoxon stats text inside plot — upper portion, centred
         med_diff = float(np.median(diffs))
         stats_line = f"Wilcoxon W={wstat:.0f}  p={p_w:.4f}\nmedian diff={med_diff:+.3f}"
-        ax.text(0.5, 0.80, stats_line,
-                transform=ax.transAxes, ha="center", va="top",
-                fontsize=14,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
-                          edgecolor="none", alpha=0.0))
+        ax.text(0.5, 0.91, stats_line,
+                transform=ax.transAxes, ha="center", va="top", fontsize=16)
 
-        # Shapiro-Wilk annotation in a coloured box at the bottom
-        sw_text = (
-            f"Shapiro-Wilk (diff): W={sw_w:.3f} p={sw_p:.4f} "
+        # Collected into a single caption below both panels; boxed inside the
+        # axes these ran off the bottom edge and clipped the tick labels.
+        sw_notes.append(
+            f"{title.split('  (')[0]}: W={sw_w:.3f} p={sw_p:.4f} "
             f"[{'non-normal \u2713' if sw_p < 0.05 else 'normal'}]"
         )
-        ax.annotate(sw_text, xy=(0.02, 0.02), xycoords="axes fraction",
-                    ha="left", va="bottom", fontsize=13,
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow",
-                              edgecolor="goldenrod", alpha=0.9))
 
         ax.set_xticks([1, 2])
         ax.set_xticklabels(["r_ising\n(Ising vs data)",
                              "r_independent\n(Indep. vs data)"])
-        ax.set_ylabel("Pearson r  (P(K) model vs data)")
+        # Y-label only on the left panel — the right panel keeps its own
+        # ticks (independent scale) but drops the duplicate label text.
+        if ax is axes[0]:
+            ax.set_ylabel("Pearson r  (P(K) model vs data)")
 
-    fig.tight_layout()
+    if sw_notes:
+        _bottom_note(fig, "Shapiro-Wilk (diff)   " + "    ".join(sw_notes),
+                     fontsize=14)
+
     path = os.path.join(output_dir, "pk_ising_vs_indep_by_peak.png")
     _savefig(fig, path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -713,7 +687,8 @@ def _plot_stim_comparison(rows: list, output_dir: str):
     if not common:
         return
 
-    fig, ax = plt.subplots(figsize=(9, 8))
+    fig, ax = plt.subplots(figsize=(10.5, 9), layout="constrained")
+    _tighten(fig)
     fig.suptitle(
         "Baseline vs Perturbation: collective state\n"
         "(positive = Ising wins, negative = independent wins)",
@@ -734,9 +709,6 @@ def _plot_stim_comparison(rows: list, output_dir: str):
             c = "darkorange"; lbl = "Peak in one stim only"
         ax.scatter(x, y, color=c, s=70, alpha=0.85, edgecolors="black",
                    linewidths=0.5, zorder=3, label=lbl)
-        ax.annotate(sid, (x, y), fontsize=12, ha="left", va="bottom",
-                    xytext=(4, 3), textcoords="offset points",
-                    color="dimgray", alpha=0.8)
 
     # Deduplicate legend
     handles, labels = ax.get_legend_handles_labels()
@@ -744,19 +716,62 @@ def _plot_stim_comparison(rows: list, output_dir: str):
     for h, l in zip(handles, labels):
         if l not in seen:
             seen[l] = h
-    ax.legend(seen.values(), seen.keys(), fontsize=15, loc="lower right",
+    # Points sit along the diagonal, so the upper-left corner is the only
+    # reliably empty region; "lower right" covered the session labels.
+    ax.legend(seen.values(), seen.keys(), fontsize=16, loc="upper left",
               frameon=True, framealpha=1.0)
 
-    all_vals = xs + ys
-    lim = max(abs(min(all_vals, default=0)), abs(max(all_vals, default=1))) * 1.15
-    ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim)
+    # Square limits spanning the data and zero (so the sign quadrants stay
+    # readable) rather than a symmetric range that left one quadrant empty.
+    all_vals = (xs + ys) or [0.0, 1.0]
+    lo = min(min(all_vals), 0.0)
+    hi = max(max(all_vals), 0.0)
+    pad = 0.12 * max(hi - lo, 0.1)
+    lo -= pad
+    hi += pad
+    ax.set_xlim(lo, hi); ax.set_ylim(lo, hi)
     ax.axhline(0, color="gray", lw=0.8, linestyle="--", alpha=0.5)
     ax.axvline(0, color="gray", lw=0.8, linestyle="--", alpha=0.5)
-    ax.plot([-lim, lim], [-lim, lim], color="gray", lw=0.8,
+    ax.plot([lo, hi], [lo, hi], color="gray", lw=0.8,
             linestyle=":", alpha=0.6)
     ax.set_xlabel(f"Collective score  \u2014  Stim {s0} (baseline)")
     ax.set_ylabel(f"Collective score  \u2014  Stim {s1} (perturbation)")
-    plt.tight_layout()
+
+    # Session labels, stacked outward where points crowd together. Most
+    # sessions sit in a tight clump near the origin and a single fixed offset
+    # printed them on top of one another.
+    # Greedy placement against actual label extents: walk top-down and lift
+    # each label until its box clears everything already placed.
+    fig.canvas.draw()
+    fs = 13
+    lab_h = fs * 1.35
+    to_points = 72.0 / fig.dpi
+    boxes = []
+    for sid, x, y in sorted(zip(common, xs, ys), key=lambda t: (-t[2], t[1])):
+        text = str(sid)
+        px, py = ax.transData.transform((x, y))
+        px *= to_points
+        py *= to_points
+        w = 0.60 * fs * len(text)
+        dx, dy = 5.0, 3.0
+        for _ in range(40):
+            bx, by = px + dx, py + dy
+            if not any(bx < ox + ow and ox < bx + w
+                       and by < oy + oh and oy < by + lab_h
+                       for ox, oy, ow, oh in boxes):
+                break
+            dy += lab_h * 0.9
+        boxes.append((px + dx, py + dy, w, lab_h))
+        # Lifted labels need a leader line, otherwise it is not clear which
+        # point in the cluster they belong to.
+        arrow = (dict(arrowstyle="-", lw=0.6, color="gray", alpha=0.55,
+                      shrinkA=0, shrinkB=3)
+                 if dy > 3.0 + lab_h else None)
+        ax.annotate(text, (x, y), fontsize=fs, ha="left", va="bottom",
+                    xytext=(dx, dy), textcoords="offset points",
+                    color="dimgray", alpha=0.85, annotation_clip=False,
+                    arrowprops=arrow)
+
     path = os.path.join(output_dir, "pk_stim_comparison.png")
     _savefig(fig, path, dpi=150, bbox_inches="tight")
     plt.close(fig)

@@ -18,13 +18,13 @@ from utils import calculate_time_dependent_firing_rate
 
 plt.rcParams.update({
     "axes.grid":        False,
-    "font.size":        13,
-    "axes.titlesize":   14,
-    "axes.labelsize":   13,
-    "xtick.labelsize":  11,
-    "ytick.labelsize":  11,
-    "legend.fontsize":  11,
-    "figure.titlesize": 14,
+    "font.size":        17,
+    "axes.titlesize":   19,
+    "axes.labelsize":   17,
+    "xtick.labelsize":  15,
+    "ytick.labelsize":  15,
+    "legend.fontsize":  15,
+    "figure.titlesize": 19,
 })
 
 
@@ -769,68 +769,85 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     corr3_indep = np.array([si[i] * si[j] * si[k]
                              for i, j, k in combinations(range(N), 3)])
 
-    fig = plt.figure(figsize=(12, 14))
-    gs = gridspec.GridSpec(3, 2, figure=fig, height_ratios=[1.15, 1.0, 1.15],
-                           width_ratios=[1, 1], hspace=0.35, wspace=0.28)
+    # Constrained layout with small pads keeps the four panels close together;
+    # sized so a pair of these sits side by side on a page.
+    fig = plt.figure(figsize=(12.5, 10.0), layout="constrained")
+    fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01, wspace=0.03, hspace=0.04)
+    gs = fig.add_gridspec(2, 2)
 
-    # --- (a) Pairwise k-corr: full width ---
-    ax_pair = fig.add_subplot(gs[0, :])
-    ax_pair.scatter(corr2_orig, corr2_model, s=12, alpha=0.5, c="k", edgecolors="none")
-    lo = float(min(corr2_orig.min(), corr2_model.min(), 0))
-    hi = float(max(corr2_orig.max(), corr2_model.max(), 1))
-    ax_pair.plot([lo, hi], [lo, hi], "k--", lw=1, label="identity")
+    def _sym_limits(*arrays, pad_frac=0.06):
+        """Shared axis limits spanning all *arrays* with a small margin."""
+        allv = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
+        lo, hi = float(allv.min()), float(allv.max())
+        pad = pad_frac * (hi - lo) if hi > lo else max(abs(hi), 0.1) * 0.1
+        return lo - pad, hi + pad
+
+    # --- (a) Pairwise k-corr ---
+    ax_pair = fig.add_subplot(gs[0, 0])
+    ax_pair.scatter(corr2_orig, corr2_model, s=14, alpha=0.5, c="k", edgecolors="none")
+    # Scale to the data rather than forcing the full [0, 1] range, which left
+    # most of the panel empty.
+    lo, hi = _sym_limits(corr2_orig, corr2_model)
+    ax_pair.plot([lo, hi], [lo, hi], "k--", lw=1.2, label="identity")
+    # Matched x/y limits put the identity line corner to corner, so no explicit
+    # aspect is needed -- forcing one would only shrink the axes inside its cell.
+    ax_pair.set_xlim(lo, hi)
+    ax_pair.set_ylim(lo, hi)
+    ax_pair.locator_params(nbins=5)
     ax_pair.set_xlabel(r"measured $C_{ij}$")
     ax_pair.set_ylabel(r"reconstructed $C_{ij}$")
-    ax_pair.set_title("Pairwise correlation ($k=2$)")
-    ax_pair.text(0.02, 0.98, "(a)", transform=ax_pair.transAxes, fontsize=12, fontweight="bold",
-                 va="top", ha="left")
+    ax_pair.set_title("(a)  Pairwise correlation ($k=2$)", loc="left", fontweight="bold")
 
-    # Inset: zoom near origin (small correlations)
+    # Inset: zoom on the densest cluster of small correlations.  Only drawn
+    # when a meaningful share of points actually falls inside the zoom window,
+    # otherwise it renders as an empty box.
     try:
-        ax_in = ax_pair.inset_axes([0.55, 0.08, 0.42, 0.38])
-        ax_in.scatter(corr2_orig, corr2_model, s=8, alpha=0.45, c="gray")
-        ax_in.plot([lo, hi], [lo, hi], "k--", lw=0.8)
         lim = max(0.002, min(0.01, np.percentile(np.abs(corr2_orig), 95) * 2))
-        ax_in.set_xlim(-lim, lim)
-        ax_in.set_ylim(-lim, lim)
-        ax_in.set_title("zoom", fontsize=8)
-        ax_in.tick_params(labelsize=7)
+        inside = np.mean((np.abs(corr2_orig) <= lim) & (np.abs(corr2_model) <= lim))
+        # Redundant if the main panel is already at the zoom scale.
+        if inside > 0.05 and (hi - lo) > 4 * (2 * lim):
+            ax_in = ax_pair.inset_axes([0.60, 0.07, 0.37, 0.33])
+            ax_in.scatter(corr2_orig, corr2_model, s=7, alpha=0.45, c="gray")
+            ax_in.plot([-lim, lim], [-lim, lim], "k--", lw=0.8)
+            ax_in.set_xlim(-lim, lim)
+            ax_in.set_ylim(-lim, lim)
+            ax_in.set_title("zoom", fontsize=12, pad=3)
+            ax_in.tick_params(labelsize=9, pad=1)
+            ax_in.set_facecolor("white")
     except Exception:
         pass
 
-    # --- (b) J distribution: full width ---
-    ax_j = fig.add_subplot(gs[1, :])
+    # --- (b) J distribution ---
+    ax_j = fig.add_subplot(gs[0, 1])
     ax_j.hist(J_params, bins=min(50, max(10, len(J_params) // 5)), density=True,
               color="steelblue", edgecolor="white", alpha=0.85)
     ax_j.set_xlabel(r"coupling $J$")
     ax_j.set_ylabel(r"$P(J)$")
-    ax_j.set_title("Distribution of pairwise couplings in multipliers")
-    ax_j.text(0.02, 0.98, "(b)", transform=ax_j.transAxes, fontsize=12, fontweight="bold",
-              va="top", ha="left")
+    ax_j.set_title("(b)  Distribution of pairwise couplings", loc="left", fontweight="bold")
 
     # --- (c) Triplet correlations: Ising vs data, and independent vs data ---
-    ax_trip = fig.add_subplot(gs[2, 0])
+    ax_trip = fig.add_subplot(gs[1, 0])
 
     # Ising model (red)
-    ax_trip.scatter(corr3_orig, corr3_model, s=10, alpha=0.5, c="red",
+    ax_trip.scatter(corr3_orig, corr3_model, s=11, alpha=0.5, c="red",
                     edgecolors="none", label="Ising", zorder=3)
     # Independent model ⟨σᵢ⟩⟨σⱼ⟩⟨σₖ⟩ (black circles)
-    ax_trip.scatter(corr3_orig, corr3_indep, s=10, alpha=0.4, c="black",
+    ax_trip.scatter(corr3_orig, corr3_indep, s=11, alpha=0.4, c="black",
                     edgecolors="none", label="independent", zorder=2)
 
-    lo3 = float(min(corr3_orig.min(), corr3_model.min(), corr3_indep.min()))
-    hi3 = float(max(corr3_orig.max(), corr3_model.max(), corr3_indep.max()))
-    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1, label="identity")
+    lo3, hi3 = _sym_limits(corr3_orig, corr3_model, corr3_indep)
+    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1.2, label="identity")
+    ax_trip.set_xlim(lo3, hi3)
+    ax_trip.set_ylim(lo3, hi3)
+    ax_trip.locator_params(nbins=5)
 
     ax_trip.set_xlabel(r"measured $\langle \sigma_i \sigma_j \sigma_k \rangle$")
     ax_trip.set_ylabel(r"predicted $\langle \sigma_i \sigma_j \sigma_k \rangle$")
-    ax_trip.set_title("Triplet correlation ($k=3$): Ising vs independent")
-    ax_trip.legend(loc="upper left", fontsize=8)
-    ax_trip.text(0.02, 0.98, "(c)", transform=ax_trip.transAxes, fontsize=12, fontweight="bold",
-                 va="top", ha="left")
+    ax_trip.set_title("(c)  Triplet correlation ($k=3$)", loc="left", fontweight="bold")
+    ax_trip.legend(loc="upper left", fontsize=13, frameon=True, framealpha=0.9)
 
     # --- (d) P(K): data vs Ising vs independent (Poisson-binomial from empirical p_i) ---
-    ax_pk = fig.add_subplot(gs[2, 1])
+    ax_pk = fig.add_subplot(gs[1, 1])
 
     def _binary_spike_matrix(X):
         X = np.asarray(X, dtype=float)
@@ -856,30 +873,25 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     P_data = np.bincount(K_data, minlength=N + 1).astype(float) / max(len(K_data), 1)
     P_ising = np.bincount(K_model, minlength=N + 1).astype(float) / max(len(K_model), 1)
 
-    sigma = (original_data + 1) / 2  # should be {0,1}
-    print("Unique values after conversion:", np.unique(sigma))
-    print("K=0 count:", np.sum(sigma.sum(axis=1) == 0))
-    print("K=1 count:", np.sum(sigma.sum(axis=1) == 1))
-    print("Mean K:", sigma.sum(axis=1).mean())
-
     eps = 1e-12
-    ax_pk.semilogy(k_axis, np.maximum(P_data, eps), "o-", color="blue", ms=4, lw=1.2, label="data")
-    ax_pk.semilogy(k_axis, np.maximum(P_ising, eps), "o-", color="red", ms=4, lw=1.2, label="Ising")
-    ax_pk.semilogy(k_axis, np.maximum(P_indep, eps), "-", color="black", lw=1.5,
+    ax_pk.semilogy(k_axis, np.maximum(P_data, eps), "o-", color="blue", ms=5, lw=1.4, label="data")
+    ax_pk.semilogy(k_axis, np.maximum(P_ising, eps), "o-", color="red", ms=5, lw=1.4, label="Ising")
+    ax_pk.semilogy(k_axis, np.maximum(P_indep, eps), "-", color="black", lw=1.8,
                    label="independent")
     ax_pk.set_xlabel(r"$K$ (simultaneous spikes per bin)")
     ax_pk.set_ylabel(r"$P(K)$")
-    ax_pk.set_title(
-        r"$P(K)$: data vs fitted Ising vs independent Bernoullis "
-        r"($p_i=\langle\sigma_i\rangle_{\mathrm{data}}$)"
-    )
-    ax_pk.legend(loc="upper right", fontsize=8)
+    # Short title; the independent-model definition lives in the docstring
+    # rather than overflowing the panel.
+    ax_pk.set_title("(d)  $P(K)$: data vs Ising vs independent",
+                    loc="left", fontweight="bold")
+    ax_pk.legend(loc="upper right", fontsize=13, frameon=True, framealpha=0.9)
     k_hi = float(N if max_k_plot is None else min(N, max_k_plot))
     ax_pk.set_xlim(-0.5, k_hi + 0.5)
-    ax_pk.text(0.02, 0.98, "(d)", transform=ax_pk.transAxes, fontsize=12, fontweight="bold",
-            va="top", ha="left")
+    # Clip the log axis just below the smallest real probability so empty
+    # decades don't stretch the panel.
+    pk_floor = min(v for v in np.concatenate([P_data, P_ising, P_indep]) if v > eps)
+    ax_pk.set_ylim(pk_floor * 0.4, 1.6)
 
-    fig.tight_layout()
     out_path = os.path.join(output_dir, filename)
     _savefig(plt.gcf(), out_path, dpi=300, bbox_inches="tight")
     plt.close()
@@ -980,7 +992,7 @@ def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=
         # Calculate correlation coefficient
         corr_coef = np.corrcoef(original_corr, model_corr)[0, 1]
         plt.text(0.05, 0.95, f"Correlation: {corr_coef:.4f}", 
-                transform=plt.gca().transAxes, fontsize=12, 
+                transform=plt.gca().transAxes, fontsize=16, 
                 bbox=dict(facecolor='white', alpha=0.8))
         
         _savefig(plt.gcf(), os.path.join(output_dir, f"correlation_order_{i}.png"))
@@ -1056,9 +1068,9 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
                    origin='lower', interpolation='nearest')
     
     # Set ticks and labels
-    ax.set_xlabel('Energy Bin', fontsize=12)
-    ax.set_ylabel('Number of Neurons On (k)', fontsize=12)
-    ax.set_title('Energy Distribution Heatmap by Number of Neurons On', fontsize=14, fontweight='bold')
+    ax.set_xlabel('Energy Bin', fontsize=16)
+    ax.set_ylabel('Number of Neurons On (k)', fontsize=16)
+    ax.set_title('Energy Distribution Heatmap by Number of Neurons On', fontsize=19, fontweight='bold')
     
     # Set x-axis ticks (show fewer ticks for readability)
     n_x_ticks = min(10, num_bins)
@@ -1072,7 +1084,7 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
     
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Normalized Frequency', fontsize=11)
+    cbar.set_label('Normalized Frequency', fontsize=15)
     
     # Add grid for better readability
     
@@ -1086,10 +1098,10 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
     im2 = ax2.imshow(histogram_matrix, aspect='auto', cmap='viridis', 
                      origin='lower', interpolation='nearest')
     
-    ax2.set_xlabel('Energy Bin', fontsize=12)
-    ax2.set_ylabel('Number of Neurons On (k)', fontsize=12)
+    ax2.set_xlabel('Energy Bin', fontsize=16)
+    ax2.set_ylabel('Number of Neurons On (k)', fontsize=16)
     ax2.set_title('Energy Distribution Heatmap by Number of Neurons On (Raw Counts)', 
-                  fontsize=14, fontweight='bold')
+                  fontsize=19, fontweight='bold')
     
     ax2.set_xticks(x_tick_indices)
     ax2.set_xticklabels([f'{energy_centers[idx]:.2f}' for idx in x_tick_indices], rotation=45)
@@ -1097,7 +1109,7 @@ def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
     ax2.set_yticklabels(k_values)
     
     cbar2 = plt.colorbar(im2, ax=ax2)
-    cbar2.set_label('Count', fontsize=11)
+    cbar2.set_label('Count', fontsize=15)
     
     
     plt.tight_layout()

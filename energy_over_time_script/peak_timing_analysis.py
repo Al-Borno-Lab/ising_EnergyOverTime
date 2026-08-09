@@ -48,13 +48,13 @@ import pandas as pd
 
 plt.rcParams.update({
     "axes.grid":        False,
-    "font.size":        17,
-    "axes.titlesize":   19,
-    "axes.labelsize":   17,
-    "xtick.labelsize":  15,
-    "ytick.labelsize":  15,
-    "legend.fontsize":  15,
-    "figure.titlesize": 19,
+    "font.size":        21,
+    "axes.titlesize":   24,
+    "axes.labelsize":   21,
+    "xtick.labelsize":  19,
+    "ytick.labelsize":  19,
+    "legend.fontsize":  19,
+    "figure.titlesize": 24,
 })
 
 # ---------------------------------------------------------------------------
@@ -158,7 +158,7 @@ def plot_closest_counts(lag_all: pd.DataFrame, lag_coll: pd.DataFrame,
         for bar, v in zip(bars, vals):
             if v > 0:
                 ax.text(bar.get_x() + bar.get_width() / 2, v + 0.1,
-                        str(v), ha="center", va="bottom", fontsize=15)
+                        str(v), ha="center", va="bottom", fontsize=19)
         ax.set_xticks(x)
         ax.set_xticklabels(labels)
         ax.set_ylabel("Number of sessions  (winner)")

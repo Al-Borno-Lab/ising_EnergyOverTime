@@ -25,6 +25,17 @@ from multiprocessing import Pool
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.colors as mcolors
+
+plt.rcParams.update({
+    "axes.grid":        False,
+    "font.size":        15,
+    "axes.titlesize":   17,
+    "axes.labelsize":   15,
+    "xtick.labelsize":  13,
+    "ytick.labelsize":  13,
+    "legend.fontsize":  13,
+    "figure.titlesize": 17,
+})
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -773,7 +784,7 @@ def _plot_session_j_kinematics(session, stim, reference,
         f"Corr(J,accel)={na_fmt(corr_j_accel)}  XClag={xcorr_lag_accel:+.0f}  |  "
         f"Corr(J,vel)={na_fmt(corr_j_vel)}  XClag={xcorr_lag_vel:+.0f}"
         f"{peak_line}{fr_det_line}{en_det_line}",
-        fontsize=8, fontweight='bold'
+        fontsize=13, fontweight='bold'
     )
 
     # Shared reference lines + window shading helper
@@ -802,14 +813,14 @@ def _plot_session_j_kinematics(session, stim, reference,
     _ref_vlines(axes[0], j_jump_idx, f'J jump ({j_jump_idx})')
     axes[0].set_ylabel("X Velocity")
     axes[0].grid(alpha=0.3)
-    axes[0].legend(fontsize=7, loc='upper left')
+    axes[0].legend(fontsize=12, loc='upper left')
 
     # ── Panel 2: Acceleration ─────────────────────────────────────────────
     axes[1].plot(accel_ts, color='steelblue', linewidth=1.5, label='X acceleration')
     _ref_vlines(axes[1], j_jump_idx, f'J jump ({j_jump_idx})')
     axes[1].set_ylabel("X Acceleration")
     axes[1].grid(alpha=0.3)
-    axes[1].legend(fontsize=7, loc='upper left')
+    axes[1].legend(fontsize=12, loc='upper left')
 
     # ── Panel 3: Firing Rate ───────────────────────────────────────────────
     ax_fr = axes[2]
@@ -841,7 +852,7 @@ def _plot_session_j_kinematics(session, stim, reference,
         ax_fr.text(0.5, 0.5, 'No firing rate data', transform=ax_fr.transAxes,
                    ha='center', va='center', color='gray')
     ax_fr.set_ylabel("Firing Rate")
-    ax_fr.legend(fontsize=7, loc='upper left')
+    ax_fr.legend(fontsize=12, loc='upper left')
 
     # ── Panel 4: Energy ────────────────────────────────────────────────────
     ax_en = axes[3]
@@ -875,7 +886,7 @@ def _plot_session_j_kinematics(session, stim, reference,
         ax_en.text(0.5, 0.5, 'No energy data', transform=ax_en.transAxes,
                    ha='center', va='center', color='gray')
     ax_en.set_ylabel("Energy")
-    ax_en.legend(fontsize=7, loc='upper left')
+    ax_en.legend(fontsize=12, loc='upper left')
 
     # ── Panel 5: J + dJ/dt with jump highlighted ──────────────────────────
     ax5 = axes[4]
@@ -928,7 +939,7 @@ def _plot_session_j_kinematics(session, stim, reference,
 
     lines1, labels1 = ax5.get_legend_handles_labels()
     lines2, labels2 = ax5_twin.get_legend_handles_labels()
-    ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=7, loc='upper left')
+    ax5.legend(lines1 + lines2, labels1 + labels2, fontsize=12, loc='upper left')
 
     ax5.set_xlabel("Time bin")
 
@@ -1203,12 +1214,12 @@ def plot_arbitration_boxwhisker(all_sessions, output_dir, window=None):
             winner = 'A' if med_a <= med_v else 'V'
             color  = 'steelblue' if winner == 'A' else 'darkorange'
             ax.text(x[i], y_top, f'→{winner}', ha='center', va='bottom',
-                    fontsize=9, fontweight='bold', color=color)
+                    fontsize=14, fontweight='bold', color=color)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=11)
-    ax.set_xlabel("Signal / Extremum", fontsize=12)
-    ax.set_ylabel("Lag relative to kinematic peak (bins)\n(−  leads  |  +  lags)", fontsize=11)
+    ax.set_xticklabels(labels, fontsize=15)
+    ax.set_xlabel("Signal / Extremum", fontsize=16)
+    ax.set_ylabel("Lag relative to kinematic peak (bins)\n(−  leads  |  +  lags)", fontsize=15)
 
     n_sess = len(all_sessions)
     win_str = f"window [{window[0]}–{window[1]}]" if window is not None else "window: n/a"
@@ -1216,9 +1227,9 @@ def plot_arbitration_boxwhisker(all_sessions, output_dir, window=None):
         f"Arbitration: Signal extrema timing relative to Acceleration vs Velocity\n"
         f"(Blue = vs Accel, Orange = vs Vel  |  →A / →V = median closer to Accel / Velocity)\n"
         f"n = {n_sess} sessions  |  search {win_str}",
-        fontsize=12, fontweight='bold'
+        fontsize=16, fontweight='bold'
     )
-    ax.legend(fontsize=10, loc='upper right')
+    ax.legend(fontsize=15, loc='upper right')
 
     plt.tight_layout()
     out_path = os.path.join(output_dir, 'arbitration_boxwhisker.png')
