@@ -16,20 +16,20 @@
 #   --peak_threshold F      J peak detection threshold   (default: 1.75)
 #   --sessions ID ...       Restrict to specific sessions (default: all)
 #   --run_name NAME         Label for the output folder  (default: auto-generated)
-#   --max_depth N           Cap decision tree depth      (default: uncapped)
+#   --max_depth N           Cap decision tree depth      (default: 3)
 #   --no_cv                 Skip cross-validation        (default: run CV)
-#   --exclude_cols COL ...  Feature columns to exclude   (default: none)
+#   --exclude_cols COL ...  Feature columns to exclude   (default: std_j_in_window mean_j_in_window)
+#   --balance               Auto-sweep peak:no-peak ratios via CV and pick    (default: ON)
+#                           the ratio with best balanced accuracy
+#   --max_peak_ratio R      Manually fix peak:no-peak ratio (overrides --balance)
 #   --help                  Show this message
 #
 # Examples:
-#   # All sessions, default window
+#   # Default run — auto-balances and excludes circular J features
 #   bash run_decision_tree_pipeline.sh
 #
-#   # Exclude circular J features, cap depth at 3
-#   bash run_decision_tree_pipeline.sh \
-#       --max_depth 3 --no_cv \
-#       --exclude_cols std_j_in_window mean_j_in_window \
-#       --run_name depth3_no_j_stats
+#   # Manual ratio instead of auto-sweep
+#   bash run_decision_tree_pipeline.sh --max_peak_ratio 1.5
 #
 #   # Selected sessions only
 #   bash run_decision_tree_pipeline.sh \
@@ -47,10 +47,14 @@ STIM_MIN=0
 STIM_MAX=3
 PEAK_THRESHOLD=1.75
 SESSIONS=""
-RUN_NAME=""
-MAX_DEPTH="3"
+RUN_NAME="J_matrix_features_included_baseline_FR_d5_randomForest"
+MAX_DEPTH="5"
 NO_CV=0
-EXCLUDE_COLS="std_j_in_window mean_j_in_window"
+EXCLUDE_COLS="std_j_in_window mean_j_in_window" 
+BALANCE=1
+MAX_PEAK_RATIO=""
+MODEL="forest"
+N_ESTIMATORS=100
 
 DATASET_BASE="./notes/decision_dataset"
 
@@ -65,6 +69,10 @@ while [[ $# -gt 0 ]]; do
         --run_name)       RUN_NAME="$2";     shift 2 ;;
         --max_depth)      MAX_DEPTH="$2";    shift 2 ;;
         --no_cv)          NO_CV=1;           shift   ;;
+        --balance)        BALANCE=1;         shift   ;;
+        --max_peak_ratio) MAX_PEAK_RATIO="$2"; shift 2 ;;
+        --model)          MODEL="$2";        shift 2 ;;
+        --n_estimators)   N_ESTIMATORS="$2"; shift 2 ;;
         --sessions)
             shift
             while [[ $# -gt 0 && "$1" != --* ]]; do
@@ -89,8 +97,11 @@ done
 if [[ -z "$RUN_NAME" ]]; then
     RUN_NAME="w${WIN_LO}_${WIN_HI}_stim${STIM_MIN}-${STIM_MAX}_thr${PEAK_THRESHOLD}"
     [[ -n "$SESSIONS" ]] && RUN_NAME="${RUN_NAME}_filtered"
-    [[ -n "$MAX_DEPTH" ]] && RUN_NAME="${RUN_NAME}_depth${MAX_DEPTH}"
-    [[ -n "$EXCLUDE_COLS" ]] && RUN_NAME="${RUN_NAME}_excl"
+    [[ -n "$MAX_DEPTH"       ]] && RUN_NAME="${RUN_NAME}_depth${MAX_DEPTH}"
+    [[ -n "$EXCLUDE_COLS"    ]] && RUN_NAME="${RUN_NAME}_excl"
+    [[ $BALANCE -eq 1        ]] && RUN_NAME="${RUN_NAME}_balanced"
+    [[ -n "$MAX_PEAK_RATIO"  ]] && RUN_NAME="${RUN_NAME}_ratio${MAX_PEAK_RATIO}"
+    [[ "$MODEL" == "forest"  ]] && RUN_NAME="${RUN_NAME}_rf${N_ESTIMATORS}"
 fi
 
 CSV_PATH="${DATASET_BASE}/decision_tree_dataset.csv"
@@ -107,6 +118,9 @@ echo "  Sessions        : ${SESSIONS:-all}"
 echo "  Max tree depth  : ${MAX_DEPTH:-uncapped}"
 echo "  Cross-validation: $([ $NO_CV -eq 1 ] && echo 'disabled' || echo 'enabled')"
 echo "  Excluded cols   : ${EXCLUDE_COLS:-none}"
+echo "  Balance classes : $([ $BALANCE -eq 1 ] && echo 'yes (auto-sweep)' || echo 'no')"
+echo "  Max peak ratio  : ${MAX_PEAK_RATIO:-none}"
+echo "  Model           : $MODEL$([ "$MODEL" = "forest" ] && echo " (n_estimators=$N_ESTIMATORS)" || echo "")"
 echo "  Run name        : $RUN_NAME"
 echo "  Output dir      : $OUTPUT_DIR"
 echo "========================================================"
@@ -135,9 +149,12 @@ TREE_CMD="python run_decision_tree.py \
     --csv \"$CSV_PATH\" \
     --output_dir \"$OUTPUT_DIR\""
 
-[[ -n "$MAX_DEPTH"    ]] && TREE_CMD="$TREE_CMD --max_depth $MAX_DEPTH"
-[[ $NO_CV -eq 1       ]] && TREE_CMD="$TREE_CMD --no_cv"
-[[ -n "$EXCLUDE_COLS" ]] && TREE_CMD="$TREE_CMD --exclude_cols $EXCLUDE_COLS"
+[[ -n "$MAX_DEPTH"       ]] && TREE_CMD="$TREE_CMD --max_depth $MAX_DEPTH"
+[[ $NO_CV -eq 1          ]] && TREE_CMD="$TREE_CMD --no_cv"
+[[ -n "$EXCLUDE_COLS"    ]] && TREE_CMD="$TREE_CMD --exclude_cols $EXCLUDE_COLS"
+[[ $BALANCE -eq 1        ]] && TREE_CMD="$TREE_CMD --balance"
+[[ -n "$MAX_PEAK_RATIO"  ]] && TREE_CMD="$TREE_CMD --max_peak_ratio $MAX_PEAK_RATIO"
+TREE_CMD="$TREE_CMD --model $MODEL --n_estimators $N_ESTIMATORS"
 
 eval $TREE_CMD
 echo ""

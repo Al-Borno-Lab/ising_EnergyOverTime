@@ -27,9 +27,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier, export_text, plot_tree
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
-    accuracy_score, confusion_matrix, classification_report,
-    ConfusionMatrixDisplay,
+    accuracy_score, balanced_accuracy_score, confusion_matrix,
+    classification_report, ConfusionMatrixDisplay,
 )
 from sklearn.model_selection import LeaveOneGroupOut
 
@@ -88,11 +89,47 @@ def _feature_display_names(cols):
         "var_accel_after_max": "var_accel_post",
         "r_ising":             "r_ising",
         "r_independent":       "r_indep",
+        "r_ising_vs_indep":    "r_ising_vs_indep",
         "ising_indep_dist":    "ising_indep_dist",
+        "baseline_fr":         "baseline_FR",
+        "baseline_energy":     "baseline_E",
+        "fr_delta":            "FR_delta",
+        "energy_delta":        "E_delta",
         "mean_j_in_window":    "mean_J_win",
         "std_j_in_window":     "std_J_win",
+        # J-matrix structure
+        "mean_abs_j_coupling": "mean_|J|",
+        "frac_pos_j":          "frac_pos_J",
+        "j_coupling_std":      "std_J_matrix",
+        "max_abs_j_coupling":  "max_|J|",
+        # Criticality
+        "critical_temperature": "T_c",
+        "critical_energy":      "E_c",
+        # External field
+        "mean_abs_h":          "mean_|h|",
+        "h_std":               "std_h",
     }
     return [rename.get(c, c) for c in cols]
+
+
+def _build_clf(args):
+    """Return a freshly constructed (unfitted) classifier matching --model."""
+    if args.model == "forest":
+        return RandomForestClassifier(
+            n_estimators=args.n_estimators,
+            max_depth=args.max_depth,
+            min_samples_leaf=args.min_samples_leaf,
+            max_features="sqrt",       # key RF trick — random feature subsets
+            class_weight="balanced",
+            random_state=42,
+            n_jobs=-1,
+        )
+    return DecisionTreeClassifier(
+        max_depth=args.max_depth,
+        min_samples_leaf=args.min_samples_leaf,
+        class_weight="balanced",
+        random_state=42,
+    )
 
 
 def plot_decision_tree(clf, feature_cols, output_dir, max_depth_plot=None):
@@ -131,20 +168,33 @@ def plot_decision_tree(clf, feature_cols, output_dir, max_depth_plot=None):
 
 
 def plot_feature_importance(clf, feature_cols, output_dir):
-    """Horizontal bar chart of feature importances."""
+    """Horizontal bar chart of feature importances.
+    For Random Forest, error bars show std across individual trees."""
     display_names = _feature_display_names(feature_cols)
     importances   = clf.feature_importances_
-    order         = np.argsort(importances)
 
+    # RF exposes per-tree importances via estimators_
+    if hasattr(clf, "estimators_"):
+        tree_imps = np.array([t.feature_importances_ for t in clf.estimators_])
+        std_imps  = tree_imps.std(axis=0)
+    else:
+        std_imps = None
+
+    order  = np.argsort(importances)
     fig, ax = plt.subplots(figsize=(8, max(4, len(feature_cols) * 0.45)))
     colors = ["#4C72B0" if importances[i] > 0 else "#CCCCCC" for i in order]
+    xerr   = std_imps[order] if std_imps is not None else None
     ax.barh(
         [display_names[i] for i in order],
         importances[order],
+        xerr=xerr,
         color=colors,
         edgecolor="white",
+        error_kw={"elinewidth": 1.2, "capsize": 3, "ecolor": "#333333"},
     )
-    ax.set_xlabel("Gini importance", fontsize=11)
+    label = "Mean Gini importance ± std (across trees)" if std_imps is not None \
+            else "Gini importance"
+    ax.set_xlabel(label, fontsize=11)
     ax.set_title("Feature importances", fontsize=12, fontweight="bold")
     ax.axvline(0, color="black", lw=0.5)
     plt.tight_layout()
@@ -200,14 +250,28 @@ def write_report(clf, feature_cols, X, y,
     display_names = _feature_display_names(feature_cols)
     name_map = dict(zip(feature_cols, display_names))
 
+    is_forest = isinstance(clf, RandomForestClassifier)
+    model_label = (f"Random Forest ({clf.n_estimators} trees)"
+                   if is_forest else "Decision Tree")
+
     lines = [
-        "Decision Tree Report — J peak prediction",
+        f"{model_label} Report — J peak prediction",
         "=" * 55,
         "",
         f"Samples        : {len(y)}",
         f"Features used  : {len(feature_cols)}",
-        f"Tree depth     : {clf.get_depth()}",
-        f"Leaves         : {clf.get_n_leaves()}",
+    ]
+    if not is_forest:
+        lines += [
+            f"Tree depth     : {clf.get_depth()}",
+            f"Leaves         : {clf.get_n_leaves()}",
+        ]
+    else:
+        lines += [
+            f"n_estimators   : {clf.n_estimators}",
+            f"max_depth      : {clf.max_depth}",
+        ]
+    lines += [
         "",
         f"Training accuracy (all data): {train_acc:.3f}",
     ]
@@ -238,12 +302,19 @@ def write_report(clf, feature_cols, X, y,
     for i in order:
         lines.append(f"  {display_names[i]:<22}  {clf.feature_importances_[i]:.4f}")
 
-    lines += [
-        "",
-        "Full tree rules",
-        "-" * 30,
-        export_text(clf, feature_names=list(name_map.values())),
-    ]
+    if not is_forest:
+        lines += [
+            "",
+            "Full tree rules",
+            "-" * 30,
+            export_text(clf, feature_names=list(name_map.values())),
+        ]
+    else:
+        lines += [
+            "",
+            "Note: Random Forest has no single rule set.",
+            "      See feature_importances.png for averaged feature contributions.",
+        ]
 
     lines += [
         "",
@@ -290,6 +361,23 @@ def parse_args():
                    metavar="COL",
                    help="Column names to exclude from the feature set. "
                         "E.g. --exclude_cols std_j_in_window mean_j_in_window")
+    p.add_argument("--model", choices=["tree", "forest"], default="tree",
+                   help="Model type: 'tree' (single decision tree, interpretable "
+                        "rule set) or 'forest' (random forest — better "
+                        "generalisation, reliable feature importances, no rule "
+                        "set). (default: tree)")
+    p.add_argument("--n_estimators", type=int, default=500,
+                   help="Number of trees in the random forest (ignored for "
+                        "--model tree). (default: 500)")
+    p.add_argument("--balance", action="store_true",
+                   help="Undersample the majority class so peaks and no-peaks "
+                        "are equal in size before training. Helps when the "
+                        "tree is over-predicting peaks due to class imbalance.")
+    p.add_argument("--max_peak_ratio", type=float, default=None,
+                   metavar="R",
+                   help="Cap the peak:no-peak ratio at R (e.g. 1.5 allows at "
+                        "most 1.5x more peaks than no-peaks). Ignored if "
+                        "--balance is set. E.g. --max_peak_ratio 1.5")
     return p.parse_args()
 
 
@@ -314,17 +402,109 @@ def main():
             X = X.drop(columns=drop)
             feature_cols = [c for c in feature_cols if c not in drop]
 
-    print(f"  {len(df)} rows, {len(feature_cols)} features, "
-          f"{int(y.sum())} peaks / {len(y)} total "
-          f"({100*y.mean():.1f}% positive)")
+    n_peaks    = int(y.sum())
+    n_no_peaks = int((y == 0).sum())
+    print(f"  {len(df)} rows, {len(feature_cols)} features  |  "
+          f"peaks: {n_peaks}  no-peaks: {n_no_peaks}  "
+          f"ratio: {n_peaks/max(n_no_peaks,1):.2f}:1")
 
-    # ── Train on full dataset ──────────────────────────────────────────────
-    clf = DecisionTreeClassifier(
-        max_depth=args.max_depth,
-        min_samples_leaf=args.min_samples_leaf,
-        class_weight="balanced",   # handles imbalanced peak/no-peak counts
-        random_state=42,
-    )
+    # ── Class balancing ────────────────────────────────────────────────────
+    rng = np.random.default_rng(42)
+
+    def _apply_ratio(X_, y_, ratio):
+        """Undersample peaks so peak:no-peak <= ratio. Returns (X_, y_) copies."""
+        n_no = int((y_ == 0).sum())
+        max_pk = max(1, int(np.floor(ratio * n_no)))
+        pk_idx = np.where(y_ == 1)[0]
+        if len(pk_idx) <= max_pk:
+            return X_, y_
+        keep = rng.choice(pk_idx, size=max_pk, replace=False)
+        sel  = np.sort(np.concatenate([keep, np.where(y_ == 0)[0]]))
+        return X_.iloc[sel].reset_index(drop=True), y_.iloc[sel].reset_index(drop=True)
+
+    chosen_ratio = None
+    if args.balance and "session_id" in df.columns:
+        # Auto-sweep: find the peak:no-peak ratio that maximises CV balanced
+        # accuracy, then apply it to the full dataset before final training.
+        natural_ratio = n_peaks / max(n_no_peaks, 1)
+        max_ratio     = min(natural_ratio, 4.0)
+        # Build candidate grid: 1.0 to max_ratio in 0.25 steps, always include
+        # 1.0 (strict equality) and the natural ratio (no undersampling).
+        sweep = sorted(set(
+            [round(r, 2) for r in np.arange(1.0, max_ratio + 0.01, 0.25)]
+            + [1.0, round(natural_ratio, 2)]
+        ))
+
+        print(f"  --balance: sweeping ratios {sweep} via leave-one-session-out CV …")
+        groups   = df["session_id"].values
+        logo     = LeaveOneGroupOut()
+        best_bac, best_ratio = -1.0, 1.0
+
+        for ratio in sweep:
+            y_true_all, y_pred_all = [], []
+            for tr_idx, te_idx in logo.split(X, y, groups):
+                X_tr_r, y_tr_r = _apply_ratio(X.iloc[tr_idx], y.iloc[tr_idx], ratio)
+                cv_clf = DecisionTreeClassifier(
+                    max_depth=args.max_depth,
+                    min_samples_leaf=args.min_samples_leaf,
+                    class_weight="balanced",
+                    random_state=42,
+                )
+                cv_clf.fit(X_tr_r, y_tr_r)
+                y_pred = cv_clf.predict(X.iloc[te_idx])
+                y_true_all.extend(y.iloc[te_idx].tolist())
+                y_pred_all.extend(y_pred.tolist())
+            bac = balanced_accuracy_score(y_true_all, y_pred_all)
+            print(f"    ratio {ratio:.2f}  →  CV balanced-acc = {bac:.3f}")
+            if bac > best_bac:
+                best_bac, best_ratio = bac, ratio
+
+        chosen_ratio = best_ratio
+        print(f"  → Best ratio: {best_ratio:.2f}  (CV balanced-acc = {best_bac:.3f})")
+        n_no  = int((y == 0).sum())
+        max_pk = max(1, int(np.floor(best_ratio * n_no)))
+        pk_idx = np.where(y == 1)[0]
+        npk_idx = np.where(y == 0)[0]
+        if len(pk_idx) > max_pk:
+            keep = rng.choice(pk_idx, size=max_pk, replace=False)
+            sel  = np.sort(np.concatenate([keep, npk_idx]))
+        else:
+            sel  = np.arange(len(y))
+        X  = X.iloc[sel].reset_index(drop=True)
+        y  = y.iloc[sel].reset_index(drop=True)
+        df = df.iloc[sel].reset_index(drop=True)
+        print(f"  Final dataset: {int(y.sum())} peaks / "
+              f"{int((y==0).sum())} no-peaks ({len(y)} total)")
+
+    elif args.balance:
+        # No session_id available — fall back to hard 1:1
+        X, y = _apply_ratio(X, y, 1.0)
+        chosen_ratio = 1.0
+        print(f"  --balance (no sessions): downsampled to {int(y.sum())} peaks / "
+              f"{int((y==0).sum())} no-peaks ({len(y)} total)")
+
+    elif args.max_peak_ratio is not None:
+        chosen_ratio = args.max_peak_ratio
+        X_new, y_new = _apply_ratio(X, y, args.max_peak_ratio)
+        if len(y_new) < len(y):
+            # rebuild df to match the reduced index
+            n_no = int((y == 0).sum())
+            max_pk = max(1, int(np.floor(args.max_peak_ratio * n_no)))
+            pk_idx  = np.where(y == 1)[0]
+            npk_idx = np.where(y == 0)[0]
+            keep = rng.choice(pk_idx, size=min(max_pk, len(pk_idx)), replace=False)
+            sel  = np.sort(np.concatenate([keep, npk_idx]))
+            X, y = X.iloc[sel].reset_index(drop=True), y.iloc[sel].reset_index(drop=True)
+            df   = df.iloc[sel].reset_index(drop=True)
+            print(f"  --max_peak_ratio {args.max_peak_ratio}: kept {int(y.sum())} peaks / "
+                  f"{int((y==0).sum())} no-peaks ({len(y)} total)")
+    else:
+        chosen_ratio = None
+
+    # ── Train on full (possibly balanced) dataset ──────────────────────────
+    print(f"  Model: {args.model}"
+          + (f"  (n_estimators={args.n_estimators})" if args.model == "forest" else ""))
+    clf = _build_clf(args)
     clf.fit(X, y)
     train_acc = accuracy_score(y, clf.predict(X))
     print(f"  Training accuracy: {train_acc:.3f}")
@@ -340,12 +520,18 @@ def main():
             X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
             y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
 
-            cv_clf = DecisionTreeClassifier(
-                max_depth=args.max_depth,
-                min_samples_leaf=args.min_samples_leaf,
-                class_weight="balanced",
-                random_state=42,
-            )
+            # Apply same balancing inside each CV fold (training split only).
+            # chosen_ratio is set by --balance auto-sweep; args.max_peak_ratio
+            # is the manual override; either way we use _apply_ratio.
+            fold_ratio = chosen_ratio if chosen_ratio is not None else args.max_peak_ratio
+            if fold_ratio is not None:
+                X_tr, y_tr = _apply_ratio(
+                    X_tr.reset_index(drop=True),
+                    y_tr.reset_index(drop=True),
+                    fold_ratio,
+                )
+
+            cv_clf = _build_clf(args)
             cv_clf.fit(X_tr, y_tr)
             y_pred = cv_clf.predict(X_te)
 
@@ -368,8 +554,11 @@ def main():
 
     # ── Plots ──────────────────────────────────────────────────────────────
     print("\nGenerating figures …")
-    plot_decision_tree(clf, feature_cols, output_dir,
-                       max_depth_plot=args.max_depth_plot)
+    if args.model == "tree":
+        plot_decision_tree(clf, feature_cols, output_dir,
+                           max_depth_plot=args.max_depth_plot)
+    else:
+        print("  Tree figure skipped (random forest — no single rule set)")
     plot_feature_importance(clf, feature_cols, output_dir)
     plot_confusion(y, clf.predict(X),
                    "Confusion matrix (training set)",

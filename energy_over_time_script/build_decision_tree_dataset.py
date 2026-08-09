@@ -38,9 +38,29 @@ ising_indep_dist      : sum |P_ising(k) - P_independent(k)| — total-variation
                         (large = Ising and independent predict very different
                         population activity; small = they are nearly equivalent)
 
+--- Pre-window baseline & delta (features) ---
+baseline_fr           : mean firing rate in bins [0, w_lo) — pre-reach state
+baseline_energy       : mean Ising energy in bins [0, w_lo)
+fr_delta              : mean FR in window − baseline FR (rising = positive)
+energy_delta          : mean energy in window − baseline energy
+
 --- J statistics in window (features) ---
 mean_j_in_window      : mean J coupling in the search window
 std_j_in_window       : std  J coupling in the search window
+
+--- J-matrix structure (static, from model fit) ---
+mean_abs_j_coupling   : mean |J_ij| across all neuron pairs
+frac_pos_j            : fraction of J_ij > 0 (excitatory-dominant vs inhibitory)
+j_coupling_std        : std of J_ij values (coupling heterogeneity)
+max_abs_j_coupling    : strongest individual coupling weight
+
+--- Criticality (from Ising model) ---
+critical_temperature  : T_c of the fitted Ising model (closer to 1.0 = near-critical)
+critical_energy       : energy of the system at T_c
+
+--- External field (h parameters) ---
+mean_abs_h            : mean |h_i| across neurons (average external drive)
+h_std                 : std of h_i values (heterogeneity of external drive)
 
 Usage
 -----
@@ -110,6 +130,85 @@ def _velocity_ts(df: pd.DataFrame) -> np.ndarray:
 def _acceleration_ts(df: pd.DataFrame) -> np.ndarray:
     v = _velocity_ts(df)
     return np.diff(v, prepend=v[0]) if len(v) else np.array([])
+
+
+# ---------------------------------------------------------------------------
+# J-matrix / criticality reader
+# ---------------------------------------------------------------------------
+
+def _read_j_matrix_features(stim_dir: str) -> dict:
+    """
+    Read static J-matrix and criticality features from a stim directory.
+
+    Files read
+    ----------
+    model_quality_summary_J_couplings.csv
+        columns: neuron_i_1based, neuron_j_1based, J
+        → mean_abs_j_coupling  : mean |J_ij| across all pairs
+        → frac_pos_j           : fraction of J_ij > 0
+        → j_coupling_std       : std of J_ij values
+        → max_abs_j_coupling   : max |J_ij|
+
+    critical_values.csv
+        columns: Phase, Critical_Temperature, Critical_Energy
+        → critical_temperature : T_c of the fitted Ising model
+        → critical_energy      : energy at T_c
+
+    h_parameters.csv
+        column: h_values (one per neuron)
+        → mean_abs_h           : mean |h_i|
+        → h_std                : std of h_i values
+    """
+    result = {
+        "mean_abs_j_coupling":  np.nan,
+        "frac_pos_j":           np.nan,
+        "j_coupling_std":       np.nan,
+        "max_abs_j_coupling":   np.nan,
+        "critical_temperature": np.nan,
+        "critical_energy":      np.nan,
+        "mean_abs_h":           np.nan,
+        "h_std":                np.nan,
+    }
+
+    # ── J couplings ──────────────────────────────────────────────────────────
+    jc_path = os.path.join(stim_dir, "model_quality_summary_J_couplings.csv")
+    if os.path.isfile(jc_path):
+        try:
+            jc = pd.read_csv(jc_path)
+            if "J" in jc.columns and len(jc) > 0:
+                jvals = jc["J"].values.astype(float)
+                result["mean_abs_j_coupling"] = float(np.mean(np.abs(jvals)))
+                result["frac_pos_j"]          = float(np.mean(jvals > 0))
+                result["j_coupling_std"]       = float(np.std(jvals))
+                result["max_abs_j_coupling"]   = float(np.max(np.abs(jvals)))
+        except Exception:
+            pass
+
+    # ── Critical temperature / energy ────────────────────────────────────────
+    cv_path = os.path.join(stim_dir, "critical_values.csv")
+    if os.path.isfile(cv_path):
+        try:
+            cv = pd.read_csv(cv_path)
+            if "Critical_Temperature" in cv.columns and len(cv) > 0:
+                result["critical_temperature"] = float(cv["Critical_Temperature"].iloc[0])
+            if "Critical_Energy" in cv.columns and len(cv) > 0:
+                result["critical_energy"]      = float(cv["Critical_Energy"].iloc[0])
+        except Exception:
+            pass
+
+    # ── h (external field) parameters ────────────────────────────────────────
+    h_path = os.path.join(stim_dir, "h_parameters.csv")
+    if os.path.isfile(h_path):
+        try:
+            h = pd.read_csv(h_path)
+            if "h_values" in h.columns and len(h) > 0:
+                hvals = h["h_values"].values.astype(float)
+                result["mean_abs_h"] = float(np.mean(np.abs(hvals)))
+                result["h_std"]      = float(np.std(hvals))
+        except Exception:
+            pass
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -185,9 +284,11 @@ def _extract_features(session_path: str, session_id: str, stim: int,
             return None
 
         # ── Time series ─────────────────────────────────────────────────
-        vel_ts   = _velocity_ts(stim_df)
-        accel_ts = _acceleration_ts(stim_df)
-        j_ts     = _mean_ts(stim_df, "j")
+        vel_ts    = _velocity_ts(stim_df)
+        accel_ts  = _acceleration_ts(stim_df)
+        j_ts      = _mean_ts(stim_df, "j")
+        fr_ts     = _mean_ts(stim_df, "firing_rate")
+        energy_ts = _mean_ts(stim_df, "energy")
 
         if len(vel_ts) == 0 or len(j_ts) == 0:
             return None
@@ -222,6 +323,19 @@ def _extract_features(session_path: str, session_id: str, stim: int,
         else:
             var_accel_after = np.nan
 
+        # ── Pre-window baseline & delta features ────────────────────────
+        # Use all bins before the search window as the baseline period.
+        # If w_lo == 0 there is no pre-window; features are set to NaN.
+        if lo > 0 and len(fr_ts) >= lo and len(energy_ts) >= lo:
+            baseline_fr     = float(np.mean(fr_ts[:lo]))
+            baseline_energy = float(np.mean(energy_ts[:lo]))
+            win_fr          = float(np.mean(fr_ts[lo:hi]))     if hi > lo else np.nan
+            win_energy      = float(np.mean(energy_ts[lo:hi])) if hi > lo else np.nan
+            fr_delta        = win_fr     - baseline_fr     if not np.isnan(win_fr)     else np.nan
+            energy_delta    = win_energy - baseline_energy if not np.isnan(win_energy) else np.nan
+        else:
+            baseline_fr = baseline_energy = fr_delta = energy_delta = np.nan
+
         # ── J peak detection ─────────────────────────────────────────────
         has_peak, peak_idx, _, peak_ratio = detect_j_peak(
             j_ts, lo, hi,
@@ -234,11 +348,13 @@ def _extract_features(session_path: str, session_id: str, stim: int,
         mean_j = float(np.mean(j_win)) if len(j_win) else np.nan
         std_j  = float(np.std(j_win))  if len(j_win) else np.nan
 
-        # ── Model quality (same directory as per_reach_state.csv) ────────
-        # All stims share one Ising fit; model_quality_summary_P_K.csv is
-        # at the session level, not in a per-stim subfolder.
+        # ── Model quality + J-matrix features ───────────────────────────
+        # In the new layout per_reach_state.csv is inside stim_N/, so
+        # os.path.dirname gives the stim directory which also contains
+        # J_couplings, critical_values, h_parameters etc.
         session_dir = os.path.dirname(session_path)
         mq = _read_model_quality(session_dir)
+        jm = _read_j_matrix_features(session_dir)
 
         return {
             "session_id":          session_id,
@@ -261,9 +377,25 @@ def _extract_features(session_path: str, session_id: str, stim: int,
             "r_independent":       mq["r_independent"],
             "r_ising_vs_indep":    mq["r_ising_vs_indep"],
             "ising_indep_dist":    mq["ising_indep_dist"],
+            # Pre-window baseline & delta
+            "baseline_fr":         baseline_fr,
+            "baseline_energy":     baseline_energy,
+            "fr_delta":            fr_delta,
+            "energy_delta":        energy_delta,
             # J statistics
             "mean_j_in_window":    mean_j,
             "std_j_in_window":     std_j,
+            # J-matrix structure
+            "mean_abs_j_coupling":  jm["mean_abs_j_coupling"],
+            "frac_pos_j":           jm["frac_pos_j"],
+            "j_coupling_std":       jm["j_coupling_std"],
+            "max_abs_j_coupling":   jm["max_abs_j_coupling"],
+            # Criticality
+            "critical_temperature": jm["critical_temperature"],
+            "critical_energy":      jm["critical_energy"],
+            # External field
+            "mean_abs_h":           jm["mean_abs_h"],
+            "h_std":                jm["h_std"],
         }
 
     except Exception as e:
@@ -470,7 +602,14 @@ def main():
         "idx_acceleration_max", "accel_peak_value",
         "var_vel_after_max", "var_accel_after_max",
         "r_ising", "r_independent", "r_ising_vs_indep", "ising_indep_dist",
+        "baseline_fr", "baseline_energy", "fr_delta", "energy_delta",
         "mean_j_in_window", "std_j_in_window",
+        # J-matrix structure
+        "mean_abs_j_coupling", "frac_pos_j", "j_coupling_std", "max_abs_j_coupling",
+        # Criticality
+        "critical_temperature", "critical_energy",
+        # External field
+        "mean_abs_h", "h_std",
     ])
     df_out.sort_values(["session_id", "stim_number"], inplace=True)
     df_out.reset_index(drop=True, inplace=True)
