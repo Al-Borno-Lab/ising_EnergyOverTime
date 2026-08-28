@@ -12,6 +12,7 @@ from itertools import combinations
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.ticker import FuncFormatter
 import pandas as pd
 from scipy.interpolate import CubicSpline
 from utils import calculate_time_dependent_firing_rate
@@ -29,13 +30,79 @@ plt.rcParams.update({
 
 
 def _savefig(fig, path: str, **kwargs):
-    """Save *fig* as PNG then as SVG (with svg.fonttype=none for Affinity compatibility)."""
+    """Save *fig* as PNG then as SVG.
+
+    svg.fonttype='path' converts every glyph to a vector outline (traced with
+    matplotlib's own bundled font) instead of writing a ``<text>`` element
+    that names a font family for the viewer to supply. The previous
+    ``'none'`` setting kept text selectable/editable, but relies on the
+    viewer actually having one of the listed fallback fonts installed with
+    the needed glyphs -- e.g. Unicode subscript characters (used for things
+    like "Cij") are missing from many common fonts and rendered as a tofu
+    box in Adobe Illustrator even though the fallback chain looks fine in
+    the SVG source. 'path' makes the SVG render identically to the PNG
+    everywhere, at the cost of glyphs no longer being editable/selectable
+    text (fine here: any panel-letter edits, e.g. adding a "1"/"2" suffix
+    per session, are done by adding a new text box next to it, not by
+    retyping the existing glyph).
+    """
     import os as _os
     fig.savefig(path, **kwargs)
     svg_path = _os.path.splitext(path)[0] + ".svg"
     svg_kwargs = {k: v for k, v in kwargs.items() if k != "dpi"}
-    with plt.rc_context({"svg.fonttype": "none"}):
+    with plt.rc_context({"svg.fonttype": "path"}):
         fig.savefig(svg_path, **svg_kwargs)
+
+
+def _panel_letter(ax, letter, fontsize=26):
+    """Bold panel-letter annotation in the top-left corner of *ax*."""
+    ax.text(0.02, 0.97, letter, transform=ax.transAxes,
+            fontsize=fontsize, fontweight="bold", va="top", ha="left", zorder=6)
+
+
+# Unicode subscript equivalents for characters that commonly show up after an
+# underscore in these labels (e.g. "C_ij", "J_12"). Deliberately not using
+# mathtext ($C_{ij}$) for this: with svg.fonttype='none', mathtext glyphs are
+# hard-coded to a bare 'DejaVu Sans' with no fallback chain, so viewers without
+# that exact font (e.g. Affinity Designer) render it in some unrelated default
+# font. These are plain Unicode characters, so they stay on the normal text
+# path and keep the same full font-family fallback chain as the rest of the
+# label -- see the svg.fonttype comment on plot_model_quality_summary_from_arrays.
+_SUBSCRIPT_MAP = {
+    "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084",
+    "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089",
+    "+": "\u208a", "-": "\u208b", "=": "\u208c", "(": "\u208d", ")": "\u208e",
+    "a": "\u2090", "e": "\u2091", "h": "\u2095", "i": "\u1d62", "j": "\u2c7c",
+    "k": "\u2096", "l": "\u2097", "m": "\u2098", "n": "\u2099", "o": "\u2092",
+    "p": "\u209a", "r": "\u1d63", "s": "\u209b", "t": "\u209c", "u": "\u1d64",
+    "v": "\u1d65", "x": "\u2093",
+}
+
+
+def _subscriptify(label):
+    """Rewrite ``name_sub`` runs in *label* as ``name`` followed by *sub* in
+    true Unicode subscript characters (e.g. ``"measured C_ij"`` ->
+    ``"measured Cᵢⱼ"``). Only characters with a subscript equivalent in
+    ``_SUBSCRIPT_MAP`` are converted; if the run right after ``"_"`` starts
+    with anything else (e.g. an uppercase letter), that underscore is left
+    untouched instead of being partially/incorrectly converted.
+    """
+    out = []
+    i = 0
+    n = len(label)
+    while i < n:
+        ch = label[i]
+        if ch == "_":
+            j = i + 1
+            while j < n and label[j] in _SUBSCRIPT_MAP:
+                j += 1
+            if j > i + 1:
+                out.append("".join(_SUBSCRIPT_MAP[c] for c in label[i + 1:j]))
+                i = j
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 
@@ -708,6 +775,235 @@ def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0
     
     print(f"Energy histogram and CSV saved to {output_dir}")
 
+def _draw_model_quality_panels(fig, outer_spec,
+                               corr2_orig, corr2_model, J_params,
+                               corr3_orig, corr3_model, corr3_indep,
+                               k_axis, P_data, P_ising, P_indep, N,
+                               max_k_plot=None, panel_suffix=""):
+    """
+    Draw the 4-panel (A-D) model-quality figure into a 4x1 sub-grid carved
+    out of *outer_spec* (a SubplotSpec/GridSpec cell) within *fig*. Panels
+    are identified only by their corner letter (A-D), not a descriptive
+    title -- what each one shows goes in the paper's figure caption instead.
+
+    Split out of ``plot_model_quality_summary_from_arrays`` so the same
+    panel-drawing code can be placed into one column of a larger figure (see
+    ``compare_sessions.py``, which puts two sessions side by side); each
+    panel letter gets *panel_suffix* appended (e.g. "A1"/"A2") so the two
+    copies stay distinguishable once combined.
+
+    Returns the list of the four created axes, so callers can e.g.
+    ``fig.align_ylabels()`` across one or more such panel groups.
+    """
+    corr2_orig  = np.asarray(corr2_orig,  dtype=float)
+    corr2_model = np.asarray(corr2_model, dtype=float)
+    corr3_orig  = np.asarray(corr3_orig,  dtype=float)
+    corr3_model = np.asarray(corr3_model, dtype=float)
+    corr3_indep = np.asarray(corr3_indep, dtype=float)
+    J_params    = np.asarray(J_params,    dtype=float)
+    k_axis      = np.asarray(k_axis)
+    P_data      = np.asarray(P_data,  dtype=float)
+    P_ising     = np.asarray(P_ising, dtype=float)
+    P_indep     = np.asarray(P_indep, dtype=float)
+
+    gs = outer_spec.subgridspec(4, 1)
+
+    def _sym_limits(*arrays, pad_frac=0.06):
+        """Shared axis limits spanning all *arrays* with a small margin."""
+        allv = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
+        lo, hi = float(allv.min()), float(allv.max())
+        pad = pad_frac * (hi - lo) if hi > lo else max(abs(hi), 0.1) * 0.1
+        return lo - pad, hi + pad
+
+    # --- (A) Pairwise k-corr ---
+    ax_pair = fig.add_subplot(gs[0])
+    ax_pair.scatter(corr2_orig, corr2_model, s=14, alpha=0.5, c="k", edgecolors="none")
+    # Scale to the data rather than forcing the full [0, 1] range, which left
+    # most of the panel empty.
+    lo, hi = _sym_limits(corr2_orig, corr2_model)
+    ax_pair.plot([lo, hi], [lo, hi], "k--", lw=1.2)
+    # Matched x/y limits put the identity line corner to corner, so no explicit
+    # aspect is needed -- forcing one would only shrink the axes inside its cell.
+    ax_pair.set_xlim(lo, hi)
+    ax_pair.set_ylim(lo, hi)
+    ax_pair.locator_params(nbins=5)
+    ax_pair.set_xlabel(_subscriptify("measured C_ij"))
+    ax_pair.set_ylabel(_subscriptify("reconstructed C_ij"))
+    _panel_letter(ax_pair, "A" + panel_suffix)
+
+    # Inset: zoom on the densest cluster of small correlations.  Only drawn
+    # when a meaningful share of points actually falls inside the zoom window,
+    # otherwise it renders as an empty box.
+    try:
+        lim = max(0.002, min(0.01, np.percentile(np.abs(corr2_orig), 95) * 2))
+        inside = np.mean((np.abs(corr2_orig) <= lim) & (np.abs(corr2_model) <= lim))
+        # Redundant if the main panel is already at the zoom scale.
+        if inside > 0.05 and (hi - lo) > 4 * (2 * lim):
+            ax_in = ax_pair.inset_axes([0.60, 0.07, 0.37, 0.33])
+            ax_in.scatter(corr2_orig, corr2_model, s=7, alpha=0.45, c="gray")
+            ax_in.plot([-lim, lim], [-lim, lim], "k--", lw=0.8)
+            ax_in.set_xlim(-lim, lim)
+            ax_in.set_ylim(-lim, lim)
+            ax_in.set_title("zoom", fontsize=14, pad=3)
+            ax_in.tick_params(labelsize=11, pad=1)
+            ax_in.set_facecolor("white")
+    except Exception:
+        pass
+
+    # --- (B) J distribution ---
+    ax_j = fig.add_subplot(gs[1])
+    ax_j.hist(J_params, bins=min(50, max(10, len(J_params) // 5)), density=True,
+              color="steelblue", edgecolor="white", alpha=0.85)
+    ax_j.set_xlabel("coupling J")
+    ax_j.set_ylabel("P(J)")
+    _panel_letter(ax_j, "B" + panel_suffix)
+
+    # --- (C) Triplet correlations: Ising vs data, and independent vs data ---
+    ax_trip = fig.add_subplot(gs[2])
+
+    # Ising model (red)
+    ax_trip.scatter(corr3_orig, corr3_model, s=11, alpha=0.5, c="red",
+                    edgecolors="none", zorder=3)
+    # Independent model prediction <s_i><s_j><s_k> (black circles)
+    ax_trip.scatter(corr3_orig, corr3_indep, s=11, alpha=0.4, c="black",
+                    edgecolors="none", zorder=2)
+
+    lo3, hi3 = _sym_limits(corr3_orig, corr3_model, corr3_indep)
+    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1.2)
+    ax_trip.set_xlim(lo3, hi3)
+    ax_trip.set_ylim(lo3, hi3)
+    ax_trip.locator_params(nbins=5)
+
+    ax_trip.set_xlabel("measured triplet correlation")
+    ax_trip.set_ylabel("predicted triplet correlation")
+    _panel_letter(ax_trip, "C" + panel_suffix)
+
+    # --- (D) P(K): data vs Ising vs independent (Poisson-binomial from empirical p_i) ---
+    ax_pk = fig.add_subplot(gs[3])
+
+    # Floor is anchored to the smallest nonzero probability across all
+    # three curves (data, Ising, AND independent) -- matching the original
+    # plot's behavior -- so the independent model's true divergence in the
+    # tails (often the smallest values on the panel) is fully visible
+    # rather than being pulled up to whatever data/Ising happen to resolve.
+    core_pk = np.concatenate([P_data, P_ising, P_indep])
+    positive_core = core_pk[core_pk > 0]
+    pk_floor = float(positive_core.min()) if positive_core.size else 1e-6
+    y_floor = pk_floor / 10.0
+
+    # Spike counts that never occurred have P(K) = 0 exactly -- typically
+    # K=0, but also the high-K tail in some sessions -- and a log axis has
+    # no position for exact zero. Clipping them to the y-axis floor made
+    # the curve dive sharply at those points, which dominated the panel
+    # visually and made it hard to judge how close data/Ising actually are
+    # over the K range where both are nonzero. Masking them out (gap in
+    # the line) instead keeps the panel's shape driven by the real,
+    # comparable values.
+    def _mask_zero(arr):
+        arr = np.asarray(arr, dtype=float).copy()
+        arr[arr <= 0] = np.nan
+        return arr
+
+    P_data_plot  = _mask_zero(P_data)
+    P_ising_plot = _mask_zero(P_ising)
+    P_indep_plot = _mask_zero(P_indep)
+
+    ax_pk.plot(k_axis, P_data_plot,  "o-", color="blue",  ms=5, lw=1.4)
+    ax_pk.plot(k_axis, P_ising_plot, "o-", color="red",   ms=5, lw=1.4)
+    ax_pk.plot(k_axis, P_indep_plot, "-",  color="black", lw=1.8)
+    ax_pk.set_xlabel("K (simultaneous spikes per bin)")
+    ax_pk.set_ylabel("P(K)")
+    _panel_letter(ax_pk, "D" + panel_suffix)
+    k_hi = float(N if max_k_plot is None else min(N, max_k_plot))
+    ax_pk.set_xlim(-0.5, k_hi + 0.5)
+
+    ax_pk.set_yscale("log")
+    ax_pk.set_ylim(bottom=y_floor)
+    # A plain log axis's default locator can crowd many decades onto a
+    # tail that reaches down tens of orders of magnitude; numticks picks
+    # a readable subset.
+    ax_pk.locator_params(axis="y", numticks=6)
+    # Must come after set_yscale/locator_params, which install their own
+    # formatter. The default emits mathtext ($\mathdefault{10^{-6}}$),
+    # which the SVG backend writes without a font fallback; a plain
+    # "1e-6" label keeps every string on matplotlib's normal text path.
+    def _pk_fmt(y, _):
+        if y <= 0:
+            return ""
+        exp = np.log10(y)
+        if abs(exp - round(exp)) > 1e-6:
+            return ""
+        return f"1e{int(round(exp))}"
+    ax_pk.yaxis.set_major_formatter(FuncFormatter(_pk_fmt))
+
+    return [ax_pair, ax_j, ax_trip, ax_pk]
+
+
+def plot_model_quality_summary_from_arrays(
+        corr2_orig, corr2_model, J_params,
+        corr3_orig, corr3_model, corr3_indep,
+        k_axis, P_data, P_ising, P_indep, N,
+        output_dir, filename="model_quality_summary.png", max_k_plot=None):
+    """
+    Render the 4-panel model-quality figure from precomputed statistics
+    (pairwise/triplet correlations, J couplings, P(K) curves).
+
+    This is the plotting half of ``plot_model_quality_summary``, split out so
+    the figure can be regenerated purely from the CSVs it writes
+    (``model_quality_summary_pairwise/triplet/J_values/P_K.csv``) without
+    needing the raw spike data or Monte Carlo samples again — see
+    ``regen_model_quality_summary.py``.
+
+    Panels are labelled A-D in the top-left corner (no legend; colors are
+    fixed: Ising=red, independent=black/gray, data=blue, identity=dashed
+    black).
+    """
+    # Scoped to this figure only -- doesn't affect the module-wide rcParams
+    # used by the other plotting functions in this file.
+    #
+    # Every label here is plain ASCII with no mathtext. Kept off mathtext even
+    # though svg.fonttype='path' now sidesteps the font-fallback problems
+    # mathtext used to cause in SVG -- there's no benefit to reintroducing it
+    # for these plain axis labels. unicode_minus=False keeps tick labels
+    # ASCII too, using '-' instead of U+2212.
+    with plt.rc_context({
+        "font.size":        21,
+        "axes.titlesize":   24,
+        "axes.labelsize":   21,
+        "xtick.labelsize":  19,
+        "ytick.labelsize":  19,
+        "axes.unicode_minus": False,
+    }):
+        # Constrained layout with small pads keeps the four panels close
+        # together; sized up from the original to leave room for the larger
+        # fonts and panel letters. Stacked 4x1 (rather than 2x2) so multiple
+        # of these figures can be placed side by side; panel dimensions are
+        # kept roughly the same as the 2x2 layout (~7.5 x 6.25 each).
+        fig = plt.figure(figsize=(7.5, 25.0), layout="constrained")
+        fig.get_layout_engine().set(w_pad=0.02, h_pad=0.02, wspace=0.05, hspace=0.08)
+        outer_spec = fig.add_gridspec(1, 1)[0, 0]
+
+        axes = _draw_model_quality_panels(
+            fig, outer_spec,
+            corr2_orig, corr2_model, J_params,
+            corr3_orig, corr3_model, corr3_indep,
+            k_axis, P_data, P_ising, P_indep, N,
+            max_k_plot=max_k_plot, panel_suffix="",
+        )
+
+        # Stacked in a single column, each panel's y-label otherwise sits right
+        # next to its own tick labels -- so panels with narrower tick labels
+        # (e.g. "P(J)" next to single/double-digit counts) end up offset from
+        # panels with wider ones (e.g. "reconstructed C_ij" next to "-0.2").
+        # align_ylabels shifts them all to a common x position (done at draw
+        # time, so it composes fine with the constrained-layout engine above).
+        fig.align_ylabels(axes)
+
+        out_path = os.path.join(output_dir, filename)
+        _savefig(fig, out_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+
 def plot_model_quality_summary(original_data, model_samples, multipliers, N, output_dir,
                                filename="model_quality_summary.png",
                                max_k_plot=None):
@@ -715,7 +1011,7 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     Single figure: pairwise correlations (k=2), J distribution, triplet correlations (k=3),
     and P(K) simultaneous spikes (data vs Ising vs independent Poisson-binomial).
 
-    **P(K) procedure (panel d)**
+    **P(K) procedure (panel D)**
 
     1. **Binary spikes** per bin: ``σ ∈ {0,1}^N`` (from ``{-1,+1}`` via ``(s+1)/2`` if needed).
     2. **Data:** ``K(t) = Σᵢ σᵢ``; ``P_data(K) = (# bins with K spikes) / (total bins)``.
@@ -723,6 +1019,10 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
        ``P_ind(K)`` = coefficient of ``z^K`` in ``∏ᵢ [(1-p_i) + p_i z]``, computed by
        convolving Bernoulli masses (same as sum of independent Bernoullis).
     4. **Ising:** same histogram of ``K`` from Monte Carlo samples ``model_samples``.
+
+    See ``plot_model_quality_summary_from_arrays`` for the plotting code —
+    this function only computes the underlying statistics from raw data/
+    samples and writes them to CSV, then delegates rendering.
 
     Parameters
     ----------
@@ -769,86 +1069,6 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     corr3_indep = np.array([si[i] * si[j] * si[k]
                              for i, j, k in combinations(range(N), 3)])
 
-    # Constrained layout with small pads keeps the four panels close together;
-    # sized so a pair of these sits side by side on a page.
-    fig = plt.figure(figsize=(12.5, 10.0), layout="constrained")
-    fig.get_layout_engine().set(w_pad=0.01, h_pad=0.01, wspace=0.03, hspace=0.04)
-    gs = fig.add_gridspec(2, 2)
-
-    def _sym_limits(*arrays, pad_frac=0.06):
-        """Shared axis limits spanning all *arrays* with a small margin."""
-        allv = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
-        lo, hi = float(allv.min()), float(allv.max())
-        pad = pad_frac * (hi - lo) if hi > lo else max(abs(hi), 0.1) * 0.1
-        return lo - pad, hi + pad
-
-    # --- (a) Pairwise k-corr ---
-    ax_pair = fig.add_subplot(gs[0, 0])
-    ax_pair.scatter(corr2_orig, corr2_model, s=14, alpha=0.5, c="k", edgecolors="none")
-    # Scale to the data rather than forcing the full [0, 1] range, which left
-    # most of the panel empty.
-    lo, hi = _sym_limits(corr2_orig, corr2_model)
-    ax_pair.plot([lo, hi], [lo, hi], "k--", lw=1.2, label="identity")
-    # Matched x/y limits put the identity line corner to corner, so no explicit
-    # aspect is needed -- forcing one would only shrink the axes inside its cell.
-    ax_pair.set_xlim(lo, hi)
-    ax_pair.set_ylim(lo, hi)
-    ax_pair.locator_params(nbins=5)
-    ax_pair.set_xlabel(r"measured $C_{ij}$")
-    ax_pair.set_ylabel(r"reconstructed $C_{ij}$")
-    ax_pair.set_title("(a)  Pairwise correlation ($k=2$)", loc="left", fontweight="bold")
-
-    # Inset: zoom on the densest cluster of small correlations.  Only drawn
-    # when a meaningful share of points actually falls inside the zoom window,
-    # otherwise it renders as an empty box.
-    try:
-        lim = max(0.002, min(0.01, np.percentile(np.abs(corr2_orig), 95) * 2))
-        inside = np.mean((np.abs(corr2_orig) <= lim) & (np.abs(corr2_model) <= lim))
-        # Redundant if the main panel is already at the zoom scale.
-        if inside > 0.05 and (hi - lo) > 4 * (2 * lim):
-            ax_in = ax_pair.inset_axes([0.60, 0.07, 0.37, 0.33])
-            ax_in.scatter(corr2_orig, corr2_model, s=7, alpha=0.45, c="gray")
-            ax_in.plot([-lim, lim], [-lim, lim], "k--", lw=0.8)
-            ax_in.set_xlim(-lim, lim)
-            ax_in.set_ylim(-lim, lim)
-            ax_in.set_title("zoom", fontsize=12, pad=3)
-            ax_in.tick_params(labelsize=9, pad=1)
-            ax_in.set_facecolor("white")
-    except Exception:
-        pass
-
-    # --- (b) J distribution ---
-    ax_j = fig.add_subplot(gs[0, 1])
-    ax_j.hist(J_params, bins=min(50, max(10, len(J_params) // 5)), density=True,
-              color="steelblue", edgecolor="white", alpha=0.85)
-    ax_j.set_xlabel(r"coupling $J$")
-    ax_j.set_ylabel(r"$P(J)$")
-    ax_j.set_title("(b)  Distribution of pairwise couplings", loc="left", fontweight="bold")
-
-    # --- (c) Triplet correlations: Ising vs data, and independent vs data ---
-    ax_trip = fig.add_subplot(gs[1, 0])
-
-    # Ising model (red)
-    ax_trip.scatter(corr3_orig, corr3_model, s=11, alpha=0.5, c="red",
-                    edgecolors="none", label="Ising", zorder=3)
-    # Independent model ⟨σᵢ⟩⟨σⱼ⟩⟨σₖ⟩ (black circles)
-    ax_trip.scatter(corr3_orig, corr3_indep, s=11, alpha=0.4, c="black",
-                    edgecolors="none", label="independent", zorder=2)
-
-    lo3, hi3 = _sym_limits(corr3_orig, corr3_model, corr3_indep)
-    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1.2, label="identity")
-    ax_trip.set_xlim(lo3, hi3)
-    ax_trip.set_ylim(lo3, hi3)
-    ax_trip.locator_params(nbins=5)
-
-    ax_trip.set_xlabel(r"measured $\langle \sigma_i \sigma_j \sigma_k \rangle$")
-    ax_trip.set_ylabel(r"predicted $\langle \sigma_i \sigma_j \sigma_k \rangle$")
-    ax_trip.set_title("(c)  Triplet correlation ($k=3$)", loc="left", fontweight="bold")
-    ax_trip.legend(loc="upper left", fontsize=13, frameon=True, framealpha=0.9)
-
-    # --- (d) P(K): data vs Ising vs independent (Poisson-binomial from empirical p_i) ---
-    ax_pk = fig.add_subplot(gs[1, 1])
-
     def _binary_spike_matrix(X):
         X = np.asarray(X, dtype=float)
         if X.min() < 0:  # {-1, +1}
@@ -873,28 +1093,12 @@ def plot_model_quality_summary(original_data, model_samples, multipliers, N, out
     P_data = np.bincount(K_data, minlength=N + 1).astype(float) / max(len(K_data), 1)
     P_ising = np.bincount(K_model, minlength=N + 1).astype(float) / max(len(K_model), 1)
 
-    eps = 1e-12
-    ax_pk.semilogy(k_axis, np.maximum(P_data, eps), "o-", color="blue", ms=5, lw=1.4, label="data")
-    ax_pk.semilogy(k_axis, np.maximum(P_ising, eps), "o-", color="red", ms=5, lw=1.4, label="Ising")
-    ax_pk.semilogy(k_axis, np.maximum(P_indep, eps), "-", color="black", lw=1.8,
-                   label="independent")
-    ax_pk.set_xlabel(r"$K$ (simultaneous spikes per bin)")
-    ax_pk.set_ylabel(r"$P(K)$")
-    # Short title; the independent-model definition lives in the docstring
-    # rather than overflowing the panel.
-    ax_pk.set_title("(d)  $P(K)$: data vs Ising vs independent",
-                    loc="left", fontweight="bold")
-    ax_pk.legend(loc="upper right", fontsize=13, frameon=True, framealpha=0.9)
-    k_hi = float(N if max_k_plot is None else min(N, max_k_plot))
-    ax_pk.set_xlim(-0.5, k_hi + 0.5)
-    # Clip the log axis just below the smallest real probability so empty
-    # decades don't stretch the panel.
-    pk_floor = min(v for v in np.concatenate([P_data, P_ising, P_indep]) if v > eps)
-    ax_pk.set_ylim(pk_floor * 0.4, 1.6)
-
-    out_path = os.path.join(output_dir, filename)
-    _savefig(plt.gcf(), out_path, dpi=300, bbox_inches="tight")
-    plt.close()
+    plot_model_quality_summary_from_arrays(
+        corr2_orig, corr2_model, J_params,
+        corr3_orig, corr3_model, corr3_indep,
+        k_axis, P_data, P_ising, P_indep, N,
+        output_dir, filename=filename, max_k_plot=max_k_plot,
+    )
 
     n_data = len(original_data)
     n_ising = len(model_samples)
