@@ -8,3 +8,8 @@
 `bash ../energy_over_time_organized/08_exclusion_applied/code/run_mch_fits_no_arbitration.sh /data001/projects/enserrog/AbigailData/energy_over_time_exclude_applied 1 ../energy_over_time_organized/08_exclusion_applied/results`
 
 **Verification of the original pipeline** (`code/PIPELINE_VERIFICATION.md`, `code/reextract.py`, `code/verify_fit.py`): extraction, binarization, energy terms and MCH moments all check out. The excluded reaches were the only data issue found.
+
+**Run log.**
+- 2026-10-07, first submission: all 21 tasks failed within seconds. The singularity container cannot see `/data001/projects/...` from these tasks. Output was moved to `results_failed_data001_path_*`.
+- 2026-10-07, resubmitted with the filtered inputs copied to `/home/enserrog/ising_EnergyOverTime/data_exclude_applied/` (byte-identical copies). Job ids are in `results/submitted_job_ids.txt`.
+- Session dates in `results/` follow the original layout: `<date>_results/<date>_rep1/full_reach/stim_K`.
