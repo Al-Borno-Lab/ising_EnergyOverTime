@@ -1,0 +1,216 @@
+/opt/conda/envs/InverseIsing/lib/python3.10/site-packages/coniii/solvers.py:96: UserWarning: Assuming that calc_observables should be for Ising model.
+  if iprint: warn("Assuming that calc_observables should be for Ising model.")
+/opt/conda/envs/InverseIsing/lib/python3.10/site-packages/coniii/samplers.py:1180: UserWarning: Assuming that the model is Ising.
+  if iprint: warn("Assuming that the model is Ising.")
+Loading data from /home/enserrog/ising_EnergyOverTime/data_exclude_applied/210425_fChR2_bin10_spike.mat...
+Processing stim_0
+	 Organizing l_1
+	 Organizing n_1
+	 Organizing label_1
+	 Organizing l_2
+	 Organizing n_2
+	 Organizing label_2
+	 Organizing l_3
+	 Organizing n_3
+	 Organizing label_3
+	 Organizing l_4
+	 Organizing n_4
+	 Organizing label_4
+	 Organizing l_5
+	 Organizing n_5
+	 Organizing label_5
+	 Organizing l_6
+	 Organizing n_6
+	 Organizing label_6
+	 Organizing l_7
+	 Organizing n_7
+	 Organizing label_7
+	 Organizing l_8
+	 Organizing n_8
+	 Organizing label_8
+	 Organizing l_9
+	 Organizing n_9
+	 Organizing label_9
+	 Organizing l_10
+	 Organizing n_10
+	 Organizing label_10
+	 Organizing l_11
+	 Organizing n_11
+	 Organizing label_11
+	 Organizing l_12
+	 Organizing n_12
+	 Organizing label_12
+	 Organizing l_13
+	 Organizing n_13
+	 Organizing label_13
+	 Organizing l_14
+	 Organizing n_14
+	 Organizing label_14
+	 Organizing l_15
+	 Organizing n_15
+	 Organizing label_15
+	 Organizing l_16
+	 Organizing n_16
+	 Organizing label_16
+	 Organizing l_17
+	 Organizing n_17
+	 Organizing label_17
+	 Organizing l_18
+	 Organizing n_18
+	 Organizing label_18
+	 Organizing l_19
+	 Organizing n_19
+	 Organizing label_19
+	 Organizing l_20
+	 Organizing n_20
+	 Organizing label_20
+	 Organizing l_21
+	 Organizing n_21
+	 Organizing label_21
+	 Organizing l_22
+	 Organizing n_22
+	 Organizing label_22
+	 Organizing l_23
+	 Organizing n_23
+	 Organizing label_23
+Processing stim_1
+	 Organizing l_24
+	 Organizing n_24
+	 Organizing label_24
+	 Organizing l_25
+	 Organizing n_25
+	 Organizing label_25
+	 Organizing l_26
+	 Organizing n_26
+	 Organizing label_26
+	 Organizing l_27
+	 Organizing n_27
+	 Organizing label_27
+	 Organizing l_28
+	 Organizing n_28
+	 Organizing label_28
+	 Organizing l_29
+	 Organizing n_29
+	 Organizing label_29
+	 Organizing l_30
+	 Organizing n_30
+	 Organizing label_30
+	 Organizing l_31
+	 Organizing n_31
+	 Organizing label_31
+	 Organizing l_32
+	 Organizing n_32
+	 Organizing label_32
+	 Organizing l_33
+	 Organizing n_33
+	 Organizing label_33
+	 Organizing l_34
+	 Organizing n_34
+	 Organizing label_34
+	 Organizing l_35
+	 Organizing n_35
+	 Organizing label_35
+	 Organizing l_36
+	 Organizing n_36
+	 Organizing label_36
+	 Organizing l_37
+	 Organizing n_37
+	 Organizing label_37
+	 Organizing l_38
+	 Organizing n_38
+	 Organizing label_38
+	 Organizing l_39
+	 Organizing n_39
+	 Organizing label_39
+	 Organizing l_40
+	 Organizing n_40
+	 Organizing label_40
+	 Organizing l_41
+	 Organizing n_41
+	 Organizing label_41
+	 Organizing l_42
+	 Organizing n_42
+	 Organizing label_42
+	 Organizing l_43
+	 Organizing n_43
+	 Organizing label_43
+	 Organizing l_44
+	 Organizing n_44
+	 Organizing label_44
+Processing stim_2
+	 Organizing l_45
+	 Organizing n_45
+	 Organizing label_45
+	 Organizing l_46
+	 Organizing n_46
+	 Organizing label_46
+	 Organizing l_47
+	 Organizing n_47
+	 Organizing label_47
+	 Organizing l_48
+	 Organizing n_48
+	 Organizing label_48
+	 Organizing l_49
+	 Organizing n_49
+	 Organizing label_49
+	 Organizing l_50
+	 Organizing n_50
+	 Organizing label_50
+	 Organizing l_51
+	 Organizing n_51
+	 Organizing label_51
+	 Organizing l_52
+	 Organizing n_52
+	 Organizing label_52
+Found 3 stimulus condition(s). Fitting independent models for each.
+
+============================================================
+  STIMULUS 0  (1/3)
+============================================================
+Created output directory: /home/enserrog/ising_EnergyOverTime/energy_over_time_organized/08_exclusion_applied/results/210425_results/210425_rep1/full_reach/stim_0
+  [stim_0] Preprocessing spike data...
+  [stim_0] Neurons: 5
+  Fitting Ising model (16100 samples, 5 neurons)...
+Iteration 0
+Iteration 0
+Iteration 0
+[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+Iteration 0
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.31641615  0.61152211 -0.26032795 -0.15448795 -0.41331528  0.46457404
+  0.22860522  0.15735528 -0.02111776 -0.01596286  0.0723713  -0.11170373
+  0.21469143  0.12199006  0.15809242]
+Sampling...
+Error is 0.4048.
+Iteration 1
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.27434062  0.7135771  -0.37221803 -0.20980725 -0.47824428  0.42566387
+  0.34151801  0.14483079  0.07568614  0.02390827  0.14797095  0.08796069
+  0.14282851  0.01399855  0.10291528]
+Sampling...
+Error is 0.0725.
+Iteration 2
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.28581533  0.75625898 -0.39873433 -0.22967701 -0.51671115  0.42274044
+  0.35852105  0.13908213  0.07608345  0.02966745  0.16021649  0.12169635
+  0.13202934 -0.00435599  0.09669225]
+Sampling...
+Error is 0.0559.
+Iteration 3
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.29108105  0.77537127 -0.40824158 -0.23811599 -0.53291038  0.41966225
+  0.36722836  0.13851317  0.07830066  0.03958462  0.17068074  0.14378584
+  0.13388526 -0.01074832  0.09100801]
+Sampling...
+Error is 0.0460.
+Iteration 4
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.29478094  0.79049689 -0.4189149  -0.24448788 -0.54261623  0.4181204
+  0.36955376  0.13851344  0.07848576  0.04212592  0.17486156  0.15688751
+  0.13205614 -0.01529399  0.08839574]
+Sampling...

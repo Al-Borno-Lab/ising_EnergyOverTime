@@ -13,3 +13,9 @@
 - 2026-10-07, first submission: all 21 tasks failed within seconds. The singularity container cannot see `/data001/projects/...` from these tasks. Output was moved to `results_failed_data001_path_*`.
 - 2026-10-07, resubmitted with the filtered inputs copied to `/home/enserrog/ising_EnergyOverTime/data_exclude_applied/` (byte-identical copies). Job ids are in `results/submitted_job_ids.txt`.
 - Session dates in `results/` follow the original layout: `<date>_results/<date>_rep1/full_reach/stim_K`.
+- 2026-10-07, second submission cancelled. The current committed code (HEAD 5c491cb) has two plotting bugs in `visualization.py` that crash `main.py` after the first stimulus block is fitted, so stim_1/stim_2 are never produced:
+  1. `plot_model_quality_summary` prints an undefined `out_path` (NameError).
+  2. `plot_energy_across_time` indexes the single-block lists `j_values`, `h_values` and `neural_data` with the stim offset `i` instead of the loop index (IndexError at stim_1).
+  The fitting code (`main.py`, `model.py`, `utils.py`) is unchanged since before the July results; the bugs only affect plotting. The July results were evidently produced with a working tree that had these fixed.
+- Fix: `code/energy_over_time_script_fixed/` = `git archive HEAD energy_over_time_script` plus those two fixes only (`code/fix_visualization.diff`). Smoke-tested end to end on 210622 (all 3 blocks, per_reach_state written). **The project's own `energy_over_time_script/` is NOT modified.**
+- 2026-10-07, third submission from `code/energy_over_time_script_fixed/` (task logs in its `logs/`). Job ids are in `results/submitted_job_ids.txt`.

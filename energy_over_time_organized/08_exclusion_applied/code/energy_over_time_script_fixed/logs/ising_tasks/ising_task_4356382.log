@@ -1,0 +1,226 @@
+/opt/conda/envs/InverseIsing/lib/python3.10/site-packages/coniii/solvers.py:96: UserWarning: Assuming that calc_observables should be for Ising model.
+  if iprint: warn("Assuming that calc_observables should be for Ising model.")
+/opt/conda/envs/InverseIsing/lib/python3.10/site-packages/coniii/samplers.py:1180: UserWarning: Assuming that the model is Ising.
+  if iprint: warn("Assuming that the model is Ising.")
+Loading data from /home/enserrog/ising_EnergyOverTime/data_exclude_applied/210514_fChR2_bin10_spike.mat...
+Processing stim_0
+	 Organizing l_1
+	 Organizing n_1
+	 Organizing label_1
+	 Organizing l_2
+	 Organizing n_2
+	 Organizing label_2
+	 Organizing l_3
+	 Organizing n_3
+	 Organizing label_3
+	 Organizing l_4
+	 Organizing n_4
+	 Organizing label_4
+	 Organizing l_6
+	 Organizing n_6
+	 Organizing label_6
+	 Organizing l_7
+	 Organizing n_7
+	 Organizing label_7
+	 Organizing l_8
+	 Organizing n_8
+	 Organizing label_8
+	 Organizing l_9
+	 Organizing n_9
+	 Organizing label_9
+	 Organizing l_10
+	 Organizing n_10
+	 Organizing label_10
+	 Organizing l_11
+	 Organizing n_11
+	 Organizing label_11
+	 Organizing l_12
+	 Organizing n_12
+	 Organizing label_12
+	 Organizing l_13
+	 Organizing n_13
+	 Organizing label_13
+	 Organizing l_15
+	 Organizing n_15
+	 Organizing label_15
+	 Organizing l_16
+	 Organizing n_16
+	 Organizing label_16
+	 Organizing l_17
+	 Organizing n_17
+	 Organizing label_17
+	 Organizing l_18
+	 Organizing n_18
+	 Organizing label_18
+	 Organizing l_19
+	 Organizing n_19
+	 Organizing label_19
+Processing stim_1
+	 Organizing l_20
+	 Organizing n_20
+	 Organizing label_20
+	 Organizing l_21
+	 Organizing n_21
+	 Organizing label_21
+	 Organizing l_23
+	 Organizing n_23
+	 Organizing label_23
+	 Organizing l_25
+	 Organizing n_25
+	 Organizing label_25
+	 Organizing l_27
+	 Organizing n_27
+	 Organizing label_27
+	 Organizing l_31
+	 Organizing n_31
+	 Organizing label_31
+	 Organizing l_32
+	 Organizing n_32
+	 Organizing label_32
+	 Organizing l_33
+	 Organizing n_33
+	 Organizing label_33
+	 Organizing l_34
+	 Organizing n_34
+	 Organizing label_34
+	 Organizing l_36
+	 Organizing n_36
+	 Organizing label_36
+	 Organizing l_37
+	 Organizing n_37
+	 Organizing label_37
+	 Organizing l_38
+	 Organizing n_38
+	 Organizing label_38
+	 Organizing l_39
+	 Organizing n_39
+	 Organizing label_39
+	 Organizing l_40
+	 Organizing n_40
+	 Organizing label_40
+	 Organizing l_41
+	 Organizing n_41
+	 Organizing label_41
+Processing stim_2
+	 Organizing l_42
+	 Organizing n_42
+	 Organizing label_42
+	 Organizing l_43
+	 Organizing n_43
+	 Organizing label_43
+	 Organizing l_44
+	 Organizing n_44
+	 Organizing label_44
+	 Organizing l_45
+	 Organizing n_45
+	 Organizing label_45
+	 Organizing l_46
+	 Organizing n_46
+	 Organizing label_46
+	 Organizing l_47
+	 Organizing n_47
+	 Organizing label_47
+	 Organizing l_48
+	 Organizing n_48
+	 Organizing label_48
+	 Organizing l_49
+	 Organizing n_49
+	 Organizing label_49
+	 Organizing l_50
+	 Organizing n_50
+	 Organizing label_50
+	 Organizing l_51
+	 Organizing n_51
+	 Organizing label_51
+	 Organizing l_53
+	 Organizing n_53
+	 Organizing label_53
+	 Organizing l_54
+	 Organizing n_54
+	 Organizing label_54
+	 Organizing l_55
+	 Organizing n_55
+	 Organizing label_55
+	 Organizing l_56
+	 Organizing n_56
+	 Organizing label_56
+	 Organizing l_57
+	 Organizing n_57
+	 Organizing label_57
+	 Organizing l_58
+	 Organizing n_58
+	 Organizing label_58
+	 Organizing l_59
+	 Organizing n_59
+	 Organizing label_59
+	 Organizing l_60
+	 Organizing n_60
+	 Organizing label_60
+Found 3 stimulus condition(s). Fitting independent models for each.
+
+============================================================
+  STIMULUS 0  (1/3)
+============================================================
+Created output directory: /home/enserrog/ising_EnergyOverTime/energy_over_time_organized/08_exclusion_applied/results/210514_results/210514_rep1/full_reach/stim_0
+  [stim_0] Preprocessing spike data...
+  [stim_0] Neurons: 11
+  Fitting Ising model (11900 samples, 11 neurons)...
+Iteration 0
+Iteration 0
+Iteration 0
+[0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+Iteration 0
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.37619731  0.42144319  0.02492101  0.09430891  0.1176558  -0.07563798
+ -0.1782758  -0.09669059  0.03237311 -0.2427884  -0.49633445  0.2610042
+  0.07618286  0.10925277  0.11862319  0.00278555 -0.01071916  0.02676723
+  0.07886958 -0.02340588 -0.17793277  0.09818     0.11948387  0.10982437
+  0.05067277 -0.01408437  0.03377445  0.07480387 -0.01662185 -0.18326773
+  0.09954252  0.05394252  0.08725042  0.05624992  0.05553126  0.03819832
+  0.06440555  0.0338205   0.08095361  0.05806185  0.02079613  0.07000151
+  0.01300538  0.03436084 -0.00166487  0.05160437  0.05251412  0.04488487
+  0.05894353  0.03806672 -0.04995529  0.05696992  0.10327008  0.05871798
+  0.05919445  0.05334151  0.04317882  0.01551277  0.09799395  0.10331714
+  0.02753563  0.07987092  0.07844387  0.0128637   0.01478185  0.09557765]
+Sampling...
+Error is 0.8461.
+Iteration 1
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 0.3314956   0.40352688  0.0173177   0.07773438  0.09262642 -0.08775123
+ -0.19351096 -0.10340993  0.01114833 -0.274995   -0.49685529  0.13189597
+  0.05073672  0.06670298  0.06233681 -0.00115574  0.04748916  0.04631133
+  0.05456336  0.02953538 -0.02495896  0.07419206  0.07257946  0.05142897
+  0.06712425  0.04323839  0.05604571  0.05807976  0.06284907 -0.02398663
+  0.07000172  0.02417492  0.07406347  0.04183645  0.03310307  0.01366494
+  0.05020227  0.04521742  0.04732963  0.03769187  0.01777582  0.06391848
+ -0.00763514  0.03524582  0.04740891  0.03960258  0.06326404  0.0366128
+  0.0416404   0.05232621  0.00187442  0.02873568  0.0799672   0.04746327
+  0.02081552  0.02032429  0.01690189  0.00374463  0.06205275  0.03916051
+  0.01452957  0.04168914  0.04597782  0.00564347  0.03562307 -0.01237108]
+Sampling...
+Error is 0.0592.
+Iteration 2
+Iterating parameters with MCH...
+After MCH step, the parameters are...
+[ 3.41894529e-01  4.20712501e-01  1.57899510e-02  7.87009168e-02
+  1.00367678e-01 -8.99408247e-02 -1.94339139e-01 -1.11312591e-01
+  9.36572810e-03 -2.88265043e-01 -5.17237107e-01  1.27007249e-01
+  5.26668141e-02  6.54129586e-02  6.33866558e-02  2.97918072e-03
+  4.56821158e-02  4.37771350e-02  5.45177642e-02  3.68553557e-02
+ -1.66156895e-02  7.38641997e-02  7.11098744e-02  4.81268978e-02
+  7.28598820e-02  4.37912704e-02  5.79160991e-02  5.87875813e-02
+  6.58800840e-02 -1.05108750e-02  7.23709312e-02  2.48738135e-02
+  6.96398351e-02  4.07580106e-02  3.14937152e-02  2.06718544e-02
+  4.98077588e-02  4.93775819e-02  4.87503452e-02  3.56073333e-02
+  1.50112291e-02  5.77869324e-02 -7.65225636e-03  3.42737856e-02
+  4.62895020e-02  4.09036913e-02  6.36507770e-02  2.97994962e-02
+  4.23591098e-02  4.99379218e-02 -3.22160553e-03  2.54945644e-02
+  8.41098088e-02  4.34179978e-02  1.99861460e-02  1.61275544e-02
+  1.44561848e-02 -4.73081815e-04  5.94474037e-02  3.20158473e-02
+  1.80876919e-02  4.20701288e-02  4.73401990e-02  4.34026382e-03
+  3.74036237e-02 -2.10824953e-02]
+Sampling...
