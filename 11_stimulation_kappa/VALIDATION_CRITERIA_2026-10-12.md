@@ -56,3 +56,21 @@ any criterion, the failure is reported as is.
 mean κ̂_control within ±0.03 everywhere; 8/8 replicates under |Δκ| < 0.3 in B, C, D; 40/40 fits converged; median corr(Ĵ, J) = 0.9996.
 Caveats to carry forward: recovered κ is about 10% below truth (0.45 vs 0.5), and rate-only scenario B shows a small positive bias (+0.08).
 Both are inside the criteria and well inside the planned 0.3 equivalence bound, but they are a reason not to claim precision below about 0.1.
+
+## Amendment 3 (2026-10-12, after run 2, BEFORE run 3; Orchestrator-approved design changes + a finding about real reach counts)
+What changed in the design, and why the validation is rerun once (run 3) with the same seeds:
+1. **Control window.** Not fixed at bins 401–406: each control-block (stim_0) reach gets a pseudo-onset drawn from the session's
+   own stim_1 onset distribution, window = pseudo_onset … +5 (real data: floor of onset_float, seed recorded; validation:
+   drawn from the replicate's two onset values, 400/401, with an independent generator so the simulated data are identical to run 2).
+2. **Fitted bin range 300–559** (instead of 0–699). Reason: cost. An N = 16 evaluation is 1.3 s with 780 units vs 3.4 s with 2100; the pulse window
+   (about bins 375–424) sits well inside, and block-specific B-spline fields are unchanged inside the range.
+3. **Real reach counts are much lower than the 60 used so far.** Non-excluded reaches per block in the 21 sessions are about 9–29
+   (stim_1: 9–25). Run 3 therefore adds a **session-sized set: R = 18 reaches per block, 16 replicates per scenario**, next to the original R = 60 set (8 replicates).
+4. Likelihood code now does one `exp` per entry (same values; unit tests re-run: 2.3e-13 vs brute force, gradient error 3e-8).
+
+Pass criteria for run 3:
+- **R = 60:** criteria 1–5 exactly as above (the design changes 1–2 must not break them).
+- **R = 18** (power set; looser because the estimator is noisier): the same statistic Δκ per replicate; (1) A, E: mean Δκ in [0.35, 0.65];
+  (2) B, C, D: |mean Δκ| ≤ 0.12; (3) |mean κ̂_control| ≤ 0.12; (4) convergence ≥ 95%; the per-replicate rule is dropped. The sd of Δκ is **reported, not tested**:
+  it is the single-session precision and drives the power statement for n = 21 sessions.
+Failing any criterion is reported as a failure.

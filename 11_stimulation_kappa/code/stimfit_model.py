@@ -87,7 +87,7 @@ class StimFit:
         for a0 in range(0, U, step):
             sl = slice(a0, min(a0 + step, U))
             L = S @ H[sl].T + q[:, None] * a[sl][None]
-            lz = logsumexp(L, axis=0); P = np.exp(L - lz)
+            Lmax = L.max(0); P = np.exp(L - Lmax); Z = P.sum(0); P /= Z; lz = np.log(Z) + Lmax     # one exp per entry
             logZ[sl] = lz; m[sl] = (S.T @ P).T; wcls += P @ self.onehot[sl]
         pair = np.stack([(S * wcls[:, c:c + 1]).T @ S for c in range(1 + self.G)])
         return logZ, m, pair

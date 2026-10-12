@@ -1,7 +1,7 @@
 """Step 1b: match ReachS.stimtime to spikes_v2 reaches and convert to bins.
 usage: python merge_laser_onsets.py <reachs_raw.csv> <spikes_v2.npz> <out_csv> [dt=0.01]
 Keys in spikes_v2 are '<date>_<stimcode>'; reachnum_k is 1-based into ReachS (reach0 = reachnum-1); t_k is absolute time (s).
-onset_float = (stimtime - t_k[r,0]) / dt  (bin index in the 700-bin window, fractional). Only exclude_k == 0 reaches are kept."""
+onset_float = (stimtime - t_k[r,0]) / dt  (bin index in the 700-bin window, fractional). All reaches are kept with their exclude flag (primary analysis filters exclude == 0)."""
 import sys, csv, numpy as np
 
 def main(raw_csv, npz, out_csv, dt=0.01):
@@ -14,16 +14,15 @@ def main(raw_csv, npz, out_csv, dt=0.01):
         date, stim = key.split("_"); stim = int(stim)
         t, rn, ex = z["t_" + key], z["reachnum_" + key], z["exclude_" + key]
         for r in range(len(rn)):
-            if ex[r] != 0: continue
             row = raw[(date, int(rn[r]) - 1)]
             assert int(float(row["stim"])) == stim, (key, r, row["stim"])
             st = [float(x) for x in row["stimtime"].split(";") if x and float(x) != 0.0]   # [0 0] is the MATLAB empty placeholder
-            out.append(dict(session=date, mouse=row["mouse"], block=stim, reach_row=r, reachnum=int(rn[r]), exclude=0,
+            out.append(dict(session=date, mouse=row["mouse"], block=stim, reach_row=r, reachnum=int(rn[r]), exclude=int(ex[r]),
                             stimtime=st[0] if len(st) == 1 else np.nan, n_stimtime=len(st), t0=float(t[r, 0]),
                             onset_float=(st[0] - float(t[r, 0])) / dt if len(st) == 1 else np.nan))
     with open(out_csv, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(out[0].keys())); w.writeheader(); w.writerows(out)
-    on = np.array([o["onset_float"] for o in out if o["block"] == 1])
+    on = np.array([o["onset_float"] for o in out if o["block"] == 1 and o["exclude"] == 0])
     print("stim_1 reaches kept:", len(on), "with a laser time:", int(np.isfinite(on).sum()))
     print("onset_float quantiles 0/5/25/50/75/95/100:", np.nanpercentile(on, [0, 5, 25, 50, 75, 95, 100]).round(2))
     nz = [o for o in out if o["block"] != 1 and o["n_stimtime"] > 0]

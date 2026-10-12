@@ -1,15 +1,18 @@
 """Score validation_rows.json against VALIDATION_CRITERIA_2026-10-12.md. usage: python score_validation.py <rows.json> <out_csv>"""
 import sys, json, numpy as np, csv
-rows = json.load(open(sys.argv[1])); out = []
+allrows = json.load(open(sys.argv[1])); out = []
+RSEL = int(sys.argv[3]) if len(sys.argv) > 3 else 60
+rows = [x for x in allrows if x.get("R", 60) == RSEL]
+LOOSE = RSEL != 60      # session-sized R: wider mean bounds, no per-replicate rule (see amendment 3)
 ok_all = True
 for sc in "ABCDE":
     r = [x for x in rows if x["scen"] == sc]
     d = np.array([x["dkappa"] for x in r]); kc = np.array([x["kappa_control"] for x in r])
     row = dict(scenario=sc, n=len(r), true_dkappa=0.5 if sc in "AE" else 0.0, mean_dkappa=d.mean(), sd_dkappa=d.std(ddof=1),
                mean_kappa_control=kc.mean(), n_abs_dkappa_lt_0p3=int((np.abs(d) < 0.3).sum()))
-    c1 = 0.40 <= d.mean() <= 0.60 if sc in "AE" else None
-    c2 = (abs(d.mean()) <= 0.10 and row["n_abs_dkappa_lt_0p3"] >= 7) if sc in "BCD" else None
-    c3 = abs(kc.mean()) <= 0.10
+    c1 = (0.35 if LOOSE else 0.40) <= d.mean() <= (0.65 if LOOSE else 0.60) if sc in "AE" else None
+    c2 = (abs(d.mean()) <= (0.12 if LOOSE else 0.10) and (LOOSE or row["n_abs_dkappa_lt_0p3"] >= 7)) if sc in "BCD" else None
+    c3 = abs(kc.mean()) <= (0.12 if LOOSE else 0.10)
     row.update(crit1_recover=c1, crit2_no_false_positive=c2, crit3_control=bool(c3)); out.append(row)
 conv = np.mean([x["converged"] for x in rows]); jc = np.median([x["Jcorr"] for x in rows])
 for o in out: print({k: (round(v, 3) if isinstance(v, float) else v) for k, v in o.items()})
