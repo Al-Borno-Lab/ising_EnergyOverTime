@@ -1,0 +1,53 @@
+{
+  "version": 3,
+  "created_at": "2026-09-14T05:33:35.286Z",
+  "task_summary": "Reorganize energy_over_time_script into a question-structured project copy",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Finalize and save the copy manifest",
+              "description": "Write out the exact source->destination mapping (below) as manifest.tsv and save as an artifact for review before any copying happens:\n\n01_ising_model_fitting/ <- main.py, main-wells.py, main-wells-old.py, model.py, analysis.py, visualization.py, utils.py (code/); outputs/energy_decomp_Jul_10_svg/{21 session_results dirs}, outputs/energy_decomp_Jul_10_svg/model_quality_summary, outputs/energy_decomp_Jul_10_svg/collected (results/)\n02_arbitration_energy_vs_firing/ <- arbitration_many.py (code/); Arbitration/ (results/); notes/Arbitration/ (notes/)\n03_j_coupling_vs_kinematics_timing/ <- arbitration_j_many.py, peak_near_max_velocity.py, peak_timing_analysis.py, test_j_timing_vs_kinematics.py, test_collective_j_timing.py (code/); arbitration_J/ (results/); notes/J_analysis/, notes/J_analysis_peak_finder/, notes/arbitration_j/, notes/j_analysis/, notes/transition_analysis/, notes/energy_spike_kinematics_analysis.md, notes/session_report/energy_decomp_Apr_16_report/ (notes/)\n04_collective_activity_pk/ <- pk_j_analysis.py (code/); notes/pk_analysis/, outputs/energy_decomp_Jul_10_svg/notes/pk_analysis/ (notes/)\n05_decision_tree_prediction/ <- build_decision_tree_dataset.py, run_decision_tree.py, run_decision_tree_pipeline.sh (code/); notes/decision_dataset/ (notes/)\n06_synthetic_validation_simulation/ <- simulate_neural_regimes.py, run_neural_simulation_sbatch.sh (code/); notes/neural_sim/ (notes/); logs/neural_sim (logs/)\nshared/ <- src/ (arbitration.py, peak_detection.py, processing.py, util.py), aggregate_model_quality_plots.py, aggregate_transition_analysis.py, generate_session_report.py, compare_sessions.py, regen_model_quality_summary.py, collect_files.py, md_to_pdf.py, process_matlab_files*.sh, generate_paper_figures.sh, single_test.sh, test_plot_model_quality_summary.sh, j_lag_manual_entry.sh, run_decision_tree_pipeline.sh-adjacent utilities, .vscode/, critical_values.csv, energy_kinematics.zip, outputs/collected/, outputs/energy_decomp_Jul_10_svg/comparisons/\ndocs/ <- top-level report.md, notes/session_report/{APR_7_report,Apr_20,Apr_20_session_first,april_transitions,energy_decomp_Apr_16_report} (as session_reports/), a new PROJECT_OVERVIEW.md\nlogs/ <- logs/ising_master, logs/ising_tasks, logs/single_test kept at top level (logs/neural_sim moves to 06 as noted)\n\n.git, .pip_packages, __pycache__, .ipynb_checkpoints are excluded everywhere. This step writes the manifest only — no files are copied yet."
+            },
+            {
+              "title": "Execute the copy on the remote host",
+              "description": "Write a bash script implementing the manifest as a series of `mkdir -p` + `cp -a` operations rooted at /home/enserrog/ising_EnergyOverTime/energy_over_time_script, writing into the new sibling folder /home/enserrog/ising_EnergyOverTime/energy_over_time_organized/. Run it via a remote compute job (not interactively over SSH, since it moves ~7.5GB and thousands of files). Capture stdout/stderr as a log. Excludes .git/.pip_packages/__pycache__/.ipynb_checkpoints everywhere."
+            },
+            {
+              "title": "Verify copy integrity",
+              "description": "For every mapped source directory, compare `find ... | wc -l` (file count) and `du -sb` (byte size) between source and destination on the remote host; report any mismatches. Confirm total destination size is close to the ~7.5GB source total (minus excluded noise dirs)."
+            },
+            {
+              "title": "Write per-folder README.md files",
+              "description": "Write one short README.md into each of 01_ising_model_fitting/ through 06_synthetic_validation_simulation/, plus shared/, stating: which scientific question this folder answers, which script(s) to run and how, which notes/results live here, and the 2-4 key quantitative findings for that question (drawn from the earlier project review). Push these via the same remote job or a follow-up small one."
+            },
+            {
+              "title": "Write top-level docs/PROJECT_OVERVIEW.md",
+              "description": "Adapt the already-produced project review into a navigation-first overview: what the project does, the 6-question breakdown with one-paragraph summaries and pointers to each numbered folder, the shared/ and logs/ folders' role, and the caveats noted in the original research notes (multiple-comparisons burden, dataset-snapshot version differences, the 220515 outlier). Save this file into docs/ on the remote host and also save a local copy as an artifact."
+            },
+            {
+              "title": "Deliver final manifest and tree listing locally",
+              "description": "Save the final manifest.tsv and a `find energy_over_time_organized -maxdepth 3` tree listing as local artifacts (manifest.tsv, final_tree.txt) so the user has a reviewable record of exactly what was copied where, without needing to SSH in themselves."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "desired_outputs": [
+    "New organized folder /home/enserrog/ising_EnergyOverTime/energy_over_time_organized/ on math-alderaan",
+    "Per-folder README.md files explaining what's inside each question folder",
+    "A top-level docs/PROJECT_OVERVIEW.md tying the 6 questions + shared/ + logs/ together",
+    "A local manifest artifact recording the exact source->destination mapping used",
+    "Integrity check confirming copied byte counts match source"
+  ],
+  "feasibility": {
+    "confidence": "high",
+    "rationale": "Full source tree (7.5GB, same filesystem) has already been enumerated; the mapping below is grounded in the actual directory listing and the earlier code/notes review, so this is a straightforward copy+reshuffle job on the same host, not a research question."
+  }
+}

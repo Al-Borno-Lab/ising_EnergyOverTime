@@ -1,0 +1,225 @@
+
+
+# Data files
+*.zip
+*.csv
+*.xlsx
+*.xls
+*.json
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.npy
+*.npz
+*.mat
+*.dat
+*.txt
+
+# Image and plot files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.svg
+*.pdf
+*.eps
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Log files
+*.log
+logs/
+
+# Output directories
+output/
+outputs/
+results/
+figures/
+plots/
+
+# Local pip installs (pip install --target)
+.pip_packages/
+
+# Generated session reports (large assets + PDFs)
+notes/session_report/
+energy_over_time_script/notes/session_report/
+
+# Keep neural simulation notes (writeup, plots, summaries)
+!energy_over_time_script/notes/neural_simulation/
+!energy_over_time_script/notes/neural_simulation/**
+!energy_over_time_script/notes/pk_analysis/
+!energy_over_time_script/notes/pk_analysis/**
+
+# Temporary scratch files
+temp/
+energy_over_time_script/temp/
+energy_over_time_script/report.md
+
+# Model files
+*.model
+*.weights
+*.checkpoint
+*.ckpt
+
+# Large data directories
+data/
+datasets/
+raw_data/
+
+# Documentation builds
+docs/build/
+docs/_build/
+
+# R files (if using R alongside Python)
+.Rhistory
+.RData
+.Ruserdata
+
+# Experiment tracking: commit small figures/tables in each experiment's assets/ (see energy_over_time_organized/PROTOCOL.md)
+!energy_over_time_organized/**/assets/
+!energy_over_time_organized/**/assets/**
+!energy_over_time_organized/**/experiment.json
+!energy_over_time_organized/_template/**

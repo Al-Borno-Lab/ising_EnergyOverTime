@@ -1,0 +1,9 @@
+source,variant,n_samples,train_acc,cv_mean,cv_std,majority_baseline,cv_below_majority
+researcher (n=63),No J-window stats,63,0.873,0.444,0.376,0.7301587301587301,True
+researcher (n=63),With J-window stats,63,0.921,0.54,0.333,0.7301587301587301,True
+researcher (n=42),"Leak-excluded, depth3",42,0.881,0.5,0.309,0.6666666666666666,True
+"researcher (n=35, balanced)","Leak-excl., balanced 1:1",35,0.914,0.575,0.396,0.5,False
+"researcher (n=35, balanced)","Random forest, balanced",35,1.0,0.575,0.455,0.5,False
+independent rerun (n=42),Tree w/ J-window stats,42,1.0,0.595,0.426,0.6666666666666666,True
+independent rerun (n=42),Tree w/o J-window stats,42,0.929,0.524,0.422,0.6666666666666666,True
+independent rerun (n=42),"Random forest, all feats",42,1.0,0.595,0.426,0.6666666666666666,True

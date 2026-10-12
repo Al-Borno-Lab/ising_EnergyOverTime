@@ -1,0 +1,4 @@
+label,n,n_leads_accel_phase,n_lags_decel_phase,n_simultaneous,mean_lag,median_lag,pct_decel_phase,sign_test_p,wilcoxon_p
+"jun22 (325-450 window, all stim)",29,12,16,1,10.55,2.0,55.2,0.5716,0.0403
+"jun30 (325-450 window, all stim, re-run)",29,12,16,1,10.55,2.0,55.2,0.5716,0.0403
+"arbitration_j_many (325-450 window, all stim)",24,11,13,0,12.46,8.0,54.2,0.8388,0.0536

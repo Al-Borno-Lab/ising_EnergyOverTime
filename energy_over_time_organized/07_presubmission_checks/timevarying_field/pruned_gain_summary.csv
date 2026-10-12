@@ -1,0 +1,7 @@
+test,median,n_pos,p
+"coupling gain − null, all bins (pruned r>0.5)",0.2587520025497255,21,9.5367431640625e-07
+"coupling gain − null, baseline (pruned r>0.5)",0.21911980666344805,20,2.86102294921875e-06
+"coupling gain − null, late (pruned r>0.5)",0.3254146573694472,20,2.86102294921875e-06
+late − baseline (pruned),0.10304997553486499,13,0.017546653747558594
+"late − baseline, 2022 only (pruned)",1.3192525573866205,6,0.03125
+"late − baseline, 2021 only (pruned)",-0.0026536009625557112,7,0.52447509765625

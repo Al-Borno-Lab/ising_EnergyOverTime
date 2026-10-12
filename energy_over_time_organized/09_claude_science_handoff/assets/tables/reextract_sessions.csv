@@ -1,0 +1,25 @@
+source,error,ident,in_b10,n_units,n_labelled,b10_N,n_reaches,n_stim_empty,n_excluded,n_counts_ge2_total,max_count,PClayerdepth
+Dylan_210414_WT2_NPresults.mat,Unable to synchronously open file (file signature not found),,,,,,,,,,,
+Dylan_210421_fChR2_NPresults_short.mat,,210421_fChR2,True,54.0,15.0,15.0,65.0,0.0,4.0,275153.0,10.0,0.0
+Dylan_210422_fChR2_NPresults_short.mat,,210422_fChR2,True,46.0,11.0,11.0,63.0,1.0,2.0,172354.0,8.0,0.0
+Dylan_210423_fChR2_NPresults_short.mat,,210423_fChR2,True,14.0,5.0,5.0,62.0,0.0,0.0,55941.0,7.0,0.0
+Dylan_210425_fChR2_NPresults_short.mat,,210425_fChR2,True,21.0,5.0,5.0,52.0,0.0,0.0,77076.0,6.0,0.0
+Dylan_210511_fChR5_NPresults_short.mat,,210511_fChR5,True,31.0,12.0,12.0,66.0,1.0,2.0,705837.0,11.0,0.0
+Dylan_210512_fChR5_NPresults_short.mat,,210512_fChR5,True,34.0,8.0,8.0,54.0,1.0,8.0,556598.0,7.0,0.0
+Dylan_210514_fChR2_NPresults_short.mat,,210514_fChR2,True,44.0,11.0,11.0,60.0,4.0,9.0,146544.0,15.0,0.0
+Dylan_210515_fChR5_NPresults_short.mat,,210515_fChR5,True,52.0,18.0,18.0,68.0,4.0,23.0,657643.0,10.0,1000.0
+Dylan_210606_fChR4_NPresults_short.mat,,210606_fChR4,True,84.0,30.0,30.0,52.0,2.0,11.0,1826250.0,17.0,0.0
+Dylan_210608_fChR4_NPresults_short.mat,,210608_fChR4,True,57.0,21.0,21.0,73.0,1.0,28.0,517874.0,7.0,0.0
+Dylan_210614_fChR4_NPresults_short.mat,,210614_fChR4,True,83.0,25.0,25.0,59.0,2.0,9.0,996286.0,9.0,820.0
+Dylan_210619_cChR1_NPresults_short_zeroCS.mat,,210619_cChR1,True,94.0,31.0,31.0,80.0,17.0,14.0,1337360.0,8.0,750.0
+Dylan_210620_cChR1_NPresults_short.mat,,210620_cChR1,True,87.0,32.0,32.0,68.0,8.0,25.0,1061166.0,6.0,1000.0
+Dylan_210622_cChR1_NPresults_short.mat,,210622_cChR1,True,10.0,3.0,3.0,71.0,9.0,11.0,206584.0,5.0,0.0
+Dylan_210623_cChR1_NPresults_short.mat,,210623_cChR1,True,22.0,4.0,4.0,68.0,2.0,3.0,260465.0,6.0,0.0
+Dylan_220515_DJC002_NPresults_short.mat,,220515_DJC002,True,27.0,19.0,19.0,60.0,0.0,0.0,242718.0,8.0,0.0
+Dylan_220516_DJC000_NPresults_short.mat,,220516_DJC000,True,39.0,19.0,19.0,53.0,2.0,5.0,976703.0,7.0,1000.0
+Dylan_220517_DJC002_NPresults_short.mat,,220517_DJC002,True,36.0,24.0,24.0,58.0,4.0,4.0,643993.0,8.0,1000.0
+Dylan_220518_DJC000_NPresults_short.mat,,220518_DJC000,True,32.0,27.0,27.0,58.0,6.0,13.0,840023.0,10.0,0.0
+Dylan_220519_DJC000_NPresults_short.mat,"ReachS has no 'stim' field; fields=exclude,filt_kin,kin_10ms,out,qm,real_kin",220519_DJC000,False,34.0,24.0,,,,,,,
+Dylan_220519_DJC002_NPresults_short.mat,,220519_DJC002,True,20.0,17.0,17.0,70.0,1.0,2.0,564961.0,7.0,0.0
+Dylan_220520_DJC000_NPresults_short.mat,,220520_DJC000,True,30.0,27.0,27.0,57.0,3.0,17.0,1121991.0,7.0,0.0
+Dylan_220520_DJC002_NPresults_short.mat,"ReachS has no 'stim' field; fields=exclude,filt_kin,out,qm,real_kin",220520_DJC002,False,41.0,28.0,,,,,,,

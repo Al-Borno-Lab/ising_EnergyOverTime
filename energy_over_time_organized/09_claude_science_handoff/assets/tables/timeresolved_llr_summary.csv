@@ -1,0 +1,18 @@
+comparison,quantity,median,n_pos,p,p_fdr
+Ising vs time-varying independent,LLR in baseline,0.05184705220990148,16,0.0024824142456054688,0.003836458379572088
+Ising vs time-varying independent,LLR in acceleration,-0.6336115612457275,2,0.0024824142456054688,0.003836458379572088
+Ising vs time-varying independent,LLR in deceleration,-0.3916229840309183,5,0.1906871795654297,0.23154871804373606
+Ising vs time-varying independent,LLR in post,-0.06942343684626336,8,0.8116779327392578,0.8116779327392578
+Ising vs time-varying independent,LLR in movement_window,-0.09412265815642658,7,0.8116779327392578,0.8116779327392578
+Ising vs time-varying independent,"change vs baseline, acceleration",-0.6614923492398074,2,0.000720977783203125,0.0015320777893066406
+Ising vs stationary independent,"change vs baseline, acceleration",0.40768210793837484,18,5.245208740234375e-05,0.00014861424763997394
+time-varying vs stationary independent,"change vs baseline, acceleration",0.8654842946069783,21,9.5367431640625e-07,4.0531158447265625e-06
+Ising vs time-varying independent,"change vs baseline, deceleration",-0.5449846374851947,4,0.08879852294921875,0.12579790751139322
+Ising vs stationary independent,"change vs baseline, deceleration",0.3743567937105345,16,0.0005102157592773438,0.001239095415387835
+time-varying vs stationary independent,"change vs baseline, deceleration",1.1047920849980668,21,9.5367431640625e-07,4.0531158447265625e-06
+Ising vs time-varying independent,"change vs baseline, post",-0.15820276882242912,6,0.37372493743896484,0.4235549290974935
+Ising vs stationary independent,"change vs baseline, post",0.071321890171954,17,0.0021514892578125,0.003836458379572088
+time-varying vs stationary independent,"change vs baseline, post",0.5463256350314762,21,9.5367431640625e-07,4.0531158447265625e-06
+Ising vs time-varying independent,"change vs baseline, movement_window",-0.20333100489075606,4,0.14696407318115234,0.19218378800612232
+Ising vs stationary independent,"change vs baseline, movement_window",0.2306239033765343,20,4.76837158203125e-06,1.621246337890625e-05
+time-varying vs stationary independent,"change vs baseline, movement_window",0.7424047408639368,21,9.5367431640625e-07,4.0531158447265625e-06

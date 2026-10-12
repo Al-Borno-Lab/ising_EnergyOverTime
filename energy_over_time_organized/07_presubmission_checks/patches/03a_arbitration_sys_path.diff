@@ -1,0 +1,17 @@
+--- a/03_j_coupling_vs_kinematics_timing/code/arbitration_j_many.py
++++ b/03_j_coupling_vs_kinematics_timing/code/arbitration_j_many.py
+@@ -44,6 +44,14 @@
+     "figure.titlesize": 17,
+ })
+ 
++
++# Make shared/src and the P(K) analysis module importable without PYTHONPATH.
++_HERE = os.path.dirname(os.path.abspath(__file__))
++_PROJ = os.path.abspath(os.path.join(_HERE, "..", ".."))
++for _p in (os.path.join(_PROJ, "shared"), os.path.join(_PROJ, "04_collective_activity_pk", "code")):
++    if _p not in sys.path:
++        sys.path.insert(0, _p)
++
+ from src.processing import calculate_session_averages, find_extrema_in_range
+ from src.util import find_file_recursive
+ from src.peak_detection import (

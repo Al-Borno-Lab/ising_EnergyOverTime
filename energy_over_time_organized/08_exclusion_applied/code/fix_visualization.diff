@@ -1,0 +1,38 @@
+--- a/energy_over_time_script/visualization.py
++++ b/energy_over_time_script/visualization.py
+@@ -411,14 +411,14 @@
+         plt.subplot(n_subplots, 1, 5)
+         plt.title(f"{title_prefix} Local Fields and Interactions, Stim_{i}")
+         
+-        if show_mid_point and len(j_values[i]['mean']) > 100:
++        if show_mid_point and len(j_values[_loop_i]['mean']) > 100:
+             mid_point = 400
+             plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+             plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+ 
+         
+-        plt.plot(j_values[i]['mean'], '-', label=f"[j] - mean Energy stim_{i}")
+-        plt.plot(h_values[i]['mean'], '-', label=f"[h] - mean Energy stim_{i}")
++        plt.plot(j_values[_loop_i]['mean'], '-', label=f"[j] - mean Energy stim_{i}")
++        plt.plot(h_values[_loop_i]['mean'], '-', label=f"[h] - mean Energy stim_{i}")
+ 
+         plt.ylabel("Energy")
+         plt.legend()
+@@ -430,7 +430,7 @@
+             
+             # Calculate firing rates for each trial in the current stimulus
+             firing_rates = []
+-            for trial in neural_data[i]:
++            for trial in neural_data[_loop_i]:
+                 # Calculate time-dependent firing rate for this trial
+                 # trial shape is (time_bins, num_neurons)
+                 # We want the mean firing rate across all neurons
+@@ -1153,7 +1153,7 @@
+ 
+     pd.DataFrame({"J": J_params}).to_csv(os.path.join(output_dir, "model_quality_summary_J_values.csv"), index=False)
+ 
+-    print(f"Model quality summary figure saved to {out_path}")
++    print(f"Model quality summary outputs saved to {output_dir}")
+ 
+ 
+ def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=6):

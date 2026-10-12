@@ -1,0 +1,4 @@
+detector_variant,n,n_accel_phase,n_decel_phase,pct_decel,median_lag,sign_test_p,wilcoxon_p
+pk_j_summary_jul10,37,15,21,56.8,1.0,0.405,0.0346
+pk_j_summary_jul10_2,37,15,21,56.8,1.0,0.405,0.0346
+pk_j_summary_jul10_prom,37,15,21,56.8,1.0,0.405,0.0346

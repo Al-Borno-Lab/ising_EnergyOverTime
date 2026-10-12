@@ -1,0 +1,17 @@
+--- a/03_j_coupling_vs_kinematics_timing/code/test_collective_j_timing.py
++++ b/03_j_coupling_vs_kinematics_timing/code/test_collective_j_timing.py
+@@ -47,6 +47,14 @@
+ import matplotlib.pyplot as plt
+ from scipy.stats import wilcoxon
+ 
++
++# Make shared/src and the P(K) analysis module importable without PYTHONPATH.
++_HERE = os.path.dirname(os.path.abspath(__file__))
++_PROJ = os.path.abspath(os.path.join(_HERE, "..", ".."))
++for _p in (os.path.join(_PROJ, "shared"), os.path.join(_PROJ, "04_collective_activity_pk", "code")):
++    if _p not in sys.path:
++        sys.path.insert(0, _p)
++
+ from src.util import find_file_recursive
+ from pk_j_analysis import load_session_pk_series, _stim_from_path, _session_id_from_path
+ 

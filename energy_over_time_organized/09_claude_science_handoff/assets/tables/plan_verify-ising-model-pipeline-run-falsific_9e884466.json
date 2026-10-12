@@ -1,0 +1,58 @@
+{
+  "version": 3,
+  "created_at": "2026-09-14T20:18:30.855Z",
+  "task_summary": "Verify Ising-model pipeline, run falsification experiment, review sessions for paper",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Line-by-line code audit of the full pipeline",
+              "description": "On math-alderaan, read every script that produces a reported number end to end: model.py (coniii MCH Ising fit), main.py/main-wells.py, arbitration_many.py, arbitration_j_many.py, pk_j_analysis.py, peak_timing_analysis.py, peak_near_max_velocity.py, test_j_timing_vs_kinematics.py, test_collective_j_timing.py, build_decision_tree_dataset.py, run_decision_tree.py, simulate_neural_regimes.py, compare_sessions.py. For each, check: correct spin encoding (0/1 vs -1/+1), correct handling of NaN/missing kinematics bins, correct null-model definition used for the 'collective behavior' flag (Ising closer AND dist>0.1), correct alignment of J/H time series to kinematic time series (off-by-one bin risk), and whether thresholds (e.g. tol=0.02, dist>0.1) are justified or arbitrary. Cross-check each script's logic against the specific numeric claims already written in the per-folder READMEs and RESULTS_SUMMARY.md. Save findings, with exact file:line citations, as code_audit_findings.md."
+            },
+            {
+              "title": "Raw-data spot-check recomputation (5-6 sessions)",
+              "description": "Pick 5-6 representative sessions spanning normal cases and the known outlier (220515), including at least one from each recording batch (fChR2/fChR5/fChR4/cChR1/DJC). Load the raw .mat spike files directly from /data001/projects/enserrog/AbigailData/energy_over_time/, independently re-derive (fresh code, not copy-pasted from the pipeline) N neurons, spike-bin matrix shape, mean firing rates, and pairwise correlations C_ij, and cross-check against the pipeline's cached intermediate outputs for the same sessions. Also independently recompute the P(K) empirical distribution and the 'Ising closer than independent' comparison from the cached h/J fits to confirm the reported r_ising/r_independent/collective-behavior flags are reproducible. Run as a single SLURM batch job (sbatch, not interactive shell) with adequate cores. Save verification_spotcheck.csv (per-session comparison of pipeline vs independently-recomputed values) and a short markdown write-up of any discrepancies found."
+            },
+            {
+              "title": "Surrogate-null falsification experiment (core new experiment)",
+              "description": "Directly test the paper's central claim by assuming the method carries no real collective-activity information and trying to reject that null. For each session in the audit sample (extend to all sessions if the SLURM job finishes with time to spare), generate firing-rate-matched surrogate spike trains that destroy pairwise synchrony (independent-neuron shuffling across time bins, preserving each neuron's own rate profile) with 100-200 shuffle repeats. Refit the Ising model (coniii MCH) on each surrogate, recompute the P(K) Ising-vs-independent distance and the energy/J-coupling arbitration statistic, and build a null distribution of these effect sizes per session. Compare the real-data effect size against this null (empirical p-value) to determine whether the reported collective-behavior signal exceeds chance. Submit as a SLURM job parallelized across shuffles/sessions with multiprocessing/joblib and --cpus-per-task=16+ as the cluster guidance specifies. Produce a real-vs-null comparison figure (plain, no formatting polish yet) and a results table/write-up: surrogate_null_control_results.csv + writeup.md."
+            },
+            {
+              "title": "Session-level diagnostics and outlier review",
+              "description": "Compile one master table across every session x stimulus condition (all ~21-24 sessions) pulling already-computed values from the results tree: N neurons, r_ising (pairwise and triplet), P(K) fit distance, collective-behavior flag, arbitration classification, J-coupling peak timing/lag classification. Identify outlier sessions beyond the already-known 220515 case (e.g. by z-scoring each metric across sessions), and check whether outliers correlate with recording batch, N neurons, or session length. Save session_diagnostics_table.csv and an outlier write-up with supporting plain diagnostic plots (unformatted, for internal review only)."
+            },
+            {
+              "title": "Run and document the decision-tree stage",
+              "description": "Execute build_decision_tree_dataset.py then run_decision_tree.py on math-alderaan (currently has zero narrative write-up per project memory -- only raw run outputs exist). Use proper train/test split or cross-validation, capture real accuracy/AUC and feature-importance numbers, and write a findings note (decision_tree_findings.md) covering what the tree does and does not support, to close the one clearly-identified documentation gap in the existing analysis."
+            },
+            {
+              "title": "Capture the target figure-format spec (no regeneration yet)",
+              "description": "Document the exact convention already used in shared/results/comparisons/ (bold top-left panel labels like 'A1'/'B1', no in-plot legend, one companion .txt sidecar per figure holding the quantitative summary that becomes the caption) as figure_format_spec.md with a concrete example (fields, ordering, precision). This captures the target style for when figure regeneration is authorized later, per your instruction to hold off on editing figures until claims are verified."
+            },
+            {
+              "title": "Compile the master verification + paper-prep report",
+              "description": "Write VERIFICATION_REPORT.md synthesizing all of the above: a methods section framing the Ising/Hamiltonian energy-decomposition approach as a general collective-activity detector (not Purkinje-cell-specific), the code-audit outcome, the raw-data spot-check outcome, the surrogate-null falsification result and what it does/doesn't prove about the method's unique ability to detect collective behavior beyond firing-rate/independent-neuron accounts, the session-outlier findings, the decision-tree findings, and an explicit, numbered list of remaining holes and open questions (generalizability evidence needed for non-cerebellar systems, any unresolved discrepancies from the audit, any session-level anomalies left unexplained) for you to weigh in on before figure work or manuscript drafting begins."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "desired_outputs": [
+    "code_audit_findings.md",
+    "verification_spotcheck.csv + report",
+    "surrogate_null_control results (figures + table + writeup)",
+    "session_diagnostics_table.csv + outlier writeup",
+    "decision_tree findings note",
+    "VERIFICATION_REPORT.md (paper-prep master document)"
+  ],
+  "feasibility": {
+    "rationale": "The code, intermediate results, and raw .mat spike files are all reachable on the HPC cluster (64 CPU/512GB nodes, SLURM). The hardest new piece — a surrogate-null control that tests whether the Ising/P(K) collective-activity signal exceeds what chance-level firing-rate-matched shuffling produces — is a well-established statistical technique (comparable to jitter/shuffle controls in the Unitary-Events/SPADE literature) and is directly computable by re-running the existing fitting pipeline on shuffled spike trains many times per session.",
+    "confidence": "medium"
+  }
+}

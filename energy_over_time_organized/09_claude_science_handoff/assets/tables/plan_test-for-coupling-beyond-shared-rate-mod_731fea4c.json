@@ -1,0 +1,62 @@
+{
+  "version": 3,
+  "created_at": "2026-09-29T05:21:36.441Z",
+  "task_summary": "Test for coupling beyond shared rate modulation, and characterize the late epoch and strongest sessions",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Export spikes and fold assignments locally",
+              "description": "Run one cluster job that writes, for each of the 63 conditions, the binarized spike matrix (reaches × 700 bins × N, uint8) plus reach ids to spikes_all.npz, using the same 5-fold split over reaches as cv_llr.py (rng seeded by stim). Pull it down, check shapes against per_reach_compact (1,249 reaches) and check that firing rates match the stored firing_rate column. Deliverable: spikes_all.npz (checkpoint)."
+            },
+            {
+              "title": "Build and validate the time-varying-field model",
+              "description": "Write tvfield_model.py with three nested models fitted by pseudo-likelihood (one L2-penalized logistic regression per neuron, J symmetrized):\n- M0: independent neurons with time-varying fields h_i(t), expressed on a smooth basis of about 20 raised-cosine functions over the 7-s reach. This is equivalent to the earlier time-varying-rate independent model.\n- M1: the same time-varying fields plus static couplings J.\n- Ms: static fields plus J, i.e. the standard Ising fit, kept as a reference.\nPick the penalty by inner cross-validation.\nValidate in two ways: (a) on synthetic data with known h(t) and J, including a J = 0 case, recover the parameters and confirm no spurious coupling gain; (b) compare the PL-estimated J from Ms with the stored MCH J (expect r > 0.9). Deliverables: tvfield_model.py, tvfield_validation.csv, and a validation figure."
+            },
+            {
+              "title": "Held-out comparison: coupling beyond shared rates",
+              "description": "For every condition and fold, score held-out reaches per 10-ms bin with (i) conditional pseudo-log-likelihood for all conditions and (ii) exact log-likelihood (enumerated log Z(t)) for conditions with N ≤ 20. The key quantity is M1 − M0: what couplings add once fields track the reach.\nNull: trial-shuffled surrogates, which permute reach identity independently for each neuron. This keeps every neuron's reach-locked rate exactly but removes trial-to-trial co-variation, and gives the expected M1 − M0 when there is no real coupling. 20 shuffles per condition, run in parallel locally or on the cluster if slow.\nSummarize by phase (baseline, acceleration, deceleration, post, late +0.5 to +1.5 s): session-level Wilcoxon tests against the shuffle null, with BH-FDR. Deliverables: tvfield_cv_scores.csv, tvfield_phase_summary.csv, trial_shuffle_null.csv, and tvfield_vs_independent.png/.pdf (time course of M1 − M0 against the null band, plus per-session phase panels)."
+            },
+            {
+              "title": "Recompute the energy decomposition under the new model",
+              "description": "Using M1's time-varying h(t) and static J, recompute the coupling and field energy terms per bin. Test whether the movement-related coupling-term energy drop (result B2) survives once fields track the reach, or whether it moves into the field term. Same phases and session-level statistics as before. Deliverables: energy_decomposition_tvfield.csv and a two-panel comparison figure (stationary model vs time-varying-field model)."
+            },
+            {
+              "title": "Late post-reach epoch: consistency checks",
+              "description": "The +0.5 to +1.5 s epoch was found in this dataset, so these checks test consistency, not confirmation, and the report will say so. Check whether the epoch appears (a) separately in each of the 3 stimuli, (b) in odd-numbered and even-numbered reaches separately, and (c) in the new M1 − M0 measure from step 3, which is independent of the covariance split that first flagged it. Deliverables: late_epoch_consistency.csv and late_epoch_consistency.png."
+            },
+            {
+              "title": "Profile the sessions with the strongest effects",
+              "description": "Per session, collect the effect sizes: single-reach J peaks at peak velocity (B7), flat-FR J modulation (B9), M1 − M0 gain, and the late-epoch effect. Correlate them with N, mean firing rate, number of reaches, recording date and animal grouping (20xxxx session prefix), and pair-correlation structure. Ask whether 220516, 210511, 210425, 210608 and 210512 share a property. Spearman correlations with FDR; report the small n. Deliverables: session_effect_profile.csv and strong_session_profile.png."
+            },
+            {
+              "title": "Write patch files for the three code issues",
+              "description": "Write unified diffs, without applying them to project code, for:\n- aggregate_transition_analysis.py: label sessions by the session directory, not parent.name;\n- pk_j_analysis.py line 449: move the backslash out of the f-string so it runs on Python 3.10;\n- the two timing scripts: add shared/ to sys.path.\nTest each patch on a copy on the cluster by rerunning one stimulus and confirming the output matches the workaround runs. Deliverables: patches/*.diff and patches/PATCH_NOTES.md."
+            },
+            {
+              "title": "Update report, results log, and cluster copy",
+              "description": "Write TIMEVARYING_FIELD_ISING_REPORT.md covering the question, models, validation, results, null and verdict. Update RESULTS_LOG_FOR_PAPER.md: resolve E1, restate B2/B10/B11 as the evidence requires, record the late-epoch status and the strong-session profile, and update the figure table. Save all artifacts. Copy everything to 07_presubmission_checks/timevarying_field/ on math-alderaan with a direct copy command (not a queued job) and confirm with a directory listing."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "desired_outputs": [
+    "TIMEVARYING_FIELD_ISING_REPORT.md",
+    "tvfield_vs_independent.png/.pdf (main result figure)",
+    "late_epoch_consistency.png, strong_session_profile.png",
+    "Tables: tvfield_cv_scores.csv, tvfield_phase_summary.csv, trial_shuffle_null.csv, late_epoch_consistency.csv, session_effect_profile.csv",
+    "Patch files for the three code issues (not applied)",
+    "Updated RESULTS_LOG_FOR_PAPER.md; everything mirrored to 07_presubmission_checks/timevarying_field/ on math-alderaan"
+  ],
+  "feasibility": {
+    "confidence": "medium",
+    "rationale": "Everything needed is already on the cluster: the binarized spikes, landmarks and fold assignments for all 63 conditions. The core model (fields that vary over the reach plus fixed couplings) can be fitted by pseudo-likelihood as per-neuron logistic regressions, which runs locally in minutes; exact held-out likelihood is feasible for N ≤ 20. There are two limits. First, the late post-reach epoch was found in this same dataset, so any re-test here checks consistency only and cannot confirm it; confirmation needs new recordings. Second, the project-code fixes will be written as patch files for your review, not applied."
+  }
+}

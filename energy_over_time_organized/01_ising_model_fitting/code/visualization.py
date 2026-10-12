@@ -1,0 +1,1346 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+"""
+Visualization functions for the Ising model analysis.
+This module contains functions for creating and saving plots of model results.
+"""
+
+import os
+from itertools import combinations
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.ticker import FuncFormatter
+import pandas as pd
+from scipy.interpolate import CubicSpline
+from utils import calculate_time_dependent_firing_rate
+
+plt.rcParams.update({
+    "axes.grid":        False,
+    "font.size":        17,
+    "axes.titlesize":   19,
+    "axes.labelsize":   17,
+    "xtick.labelsize":  15,
+    "ytick.labelsize":  15,
+    "legend.fontsize":  15,
+    "figure.titlesize": 19,
+})
+
+
+def _savefig(fig, path: str, **kwargs):
+    """Save *fig* as PNG then as SVG.
+
+    svg.fonttype='path' converts every glyph to a vector outline (traced with
+    matplotlib's own bundled font) instead of writing a ``<text>`` element
+    that names a font family for the viewer to supply. The previous
+    ``'none'`` setting kept text selectable/editable, but relies on the
+    viewer actually having one of the listed fallback fonts installed with
+    the needed glyphs -- e.g. Unicode subscript characters (used for things
+    like "Cij") are missing from many common fonts and rendered as a tofu
+    box in Adobe Illustrator even though the fallback chain looks fine in
+    the SVG source. 'path' makes the SVG render identically to the PNG
+    everywhere, at the cost of glyphs no longer being editable/selectable
+    text (fine here: any panel-letter edits, e.g. adding a "1"/"2" suffix
+    per session, are done by adding a new text box next to it, not by
+    retyping the existing glyph).
+    """
+    import os as _os
+    fig.savefig(path, **kwargs)
+    svg_path = _os.path.splitext(path)[0] + ".svg"
+    svg_kwargs = {k: v for k, v in kwargs.items() if k != "dpi"}
+    with plt.rc_context({"svg.fonttype": "path"}):
+        fig.savefig(svg_path, **svg_kwargs)
+
+
+def _panel_letter(ax, letter, fontsize=26):
+    """Bold panel-letter annotation in the top-left corner of *ax*."""
+    ax.text(0.02, 0.97, letter, transform=ax.transAxes,
+            fontsize=fontsize, fontweight="bold", va="top", ha="left", zorder=6)
+
+
+# Unicode subscript equivalents for characters that commonly show up after an
+# underscore in these labels (e.g. "C_ij", "J_12"). Deliberately not using
+# mathtext ($C_{ij}$) for this: with svg.fonttype='none', mathtext glyphs are
+# hard-coded to a bare 'DejaVu Sans' with no fallback chain, so viewers without
+# that exact font (e.g. Affinity Designer) render it in some unrelated default
+# font. These are plain Unicode characters, so they stay on the normal text
+# path and keep the same full font-family fallback chain as the rest of the
+# label -- see the svg.fonttype comment on plot_model_quality_summary_from_arrays.
+_SUBSCRIPT_MAP = {
+    "0": "\u2080", "1": "\u2081", "2": "\u2082", "3": "\u2083", "4": "\u2084",
+    "5": "\u2085", "6": "\u2086", "7": "\u2087", "8": "\u2088", "9": "\u2089",
+    "+": "\u208a", "-": "\u208b", "=": "\u208c", "(": "\u208d", ")": "\u208e",
+    "a": "\u2090", "e": "\u2091", "h": "\u2095", "i": "\u1d62", "j": "\u2c7c",
+    "k": "\u2096", "l": "\u2097", "m": "\u2098", "n": "\u2099", "o": "\u2092",
+    "p": "\u209a", "r": "\u1d63", "s": "\u209b", "t": "\u209c", "u": "\u1d64",
+    "v": "\u1d65", "x": "\u2093",
+}
+
+
+def _subscriptify(label):
+    """Rewrite ``name_sub`` runs in *label* as ``name`` followed by *sub* in
+    true Unicode subscript characters (e.g. ``"measured C_ij"`` ->
+    ``"measured Cᵢⱼ"``). Only characters with a subscript equivalent in
+    ``_SUBSCRIPT_MAP`` are converted; if the run right after ``"_"`` starts
+    with anything else (e.g. an uppercase letter), that underscore is left
+    untouched instead of being partially/incorrectly converted.
+    """
+    out = []
+    i = 0
+    n = len(label)
+    while i < n:
+        ch = label[i]
+        if ch == "_":
+            j = i + 1
+            while j < n and label[j] in _SUBSCRIPT_MAP:
+                j += 1
+            if j > i + 1:
+                out.append("".join(_SUBSCRIPT_MAP[c] for c in label[i + 1:j]))
+                i = j
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+
+def create_output_directory(output_dir):
+    """
+    Create output directory for saving plots.
+    
+    Parameters:
+    -----------
+    output_dir : str
+        Path to output directory
+        
+    Returns:
+    --------
+    str
+        Path to created directory
+    """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        print(f"Created output directory: {output_dir}")
+    
+    return output_dir
+
+def plot_phase_transition(results, output_dir):
+    """
+    Create plots for phase transition analysis.
+    
+    Parameters:
+    -----------
+    results : dict
+        Results from phase transition analysis
+    output_dir : str
+        Directory to save plots
+        
+    Returns:
+    --------
+    CubicSpline
+        Spline function that maps temperature to energy
+    """
+    # Extract data from results
+    temp_range = results['temp_range']
+    pos_avg_pos = results['pos_avg_pos']
+    neg_avg_pos = results['neg_avg_pos']
+    pos_avg_energy = results['pos_avg_energy']
+    neg_avg_energy = results['neg_avg_energy']
+    avg_heat_capacity_pos = results['avg_heat_capacity_pos']
+    avg_heat_capacity_neg = results['avg_heat_capacity_neg']
+    c_temp = results['critical_temp']
+    critical_energy = results['critical_energy']
+    
+    # Plot 1: Average spin vs temperature
+    plt.figure(figsize=(10, 6))
+    plt.title("Average Spin per Temperature")
+    plt.plot(temp_range, pos_avg_pos, c='blue', label='Positive initialization')
+    plt.plot(temp_range, neg_avg_pos, c='orange', label='Negative initialization')
+    
+    # Resting point - average of last 10 points
+    conv_bar = np.mean(neg_avg_pos[-10:])
+    plt.axhline(y=conv_bar, color='k', linestyle='--', alpha=0.5)
+    
+    plt.xlabel("Temperature")
+    plt.ylabel("Average Spin / N²")
+    plt.legend()
+    _savefig(plt.gcf(), os.path.join(output_dir, "avg_spin_vs_temp.png"))
+    plt.close()
+    
+    # Save data to CSV
+    spin_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Spin': pos_avg_pos,
+        'Negative_Initialization_Spin': neg_avg_pos
+    })
+    spin_df.to_csv(os.path.join(output_dir, "avg_spin_vs_temp.csv"), index=False)
+    
+    # Plot 2: Heat capacity
+    plt.figure(figsize=(10, 6))
+    plt.title("Heat Capacity vs Temperature")
+    plt.plot(temp_range, avg_heat_capacity_pos, c='blue', label='Positive initialization')
+    plt.plot(temp_range, avg_heat_capacity_neg, c='orange', label='Negative initialization')
+    
+    # Mark critical temperature
+    plt.axvline(x=c_temp, color='r', linestyle='--')
+    plt.text(c_temp + 0.05, max(avg_heat_capacity_pos) * 0.8, 
+             f'Critical T = {c_temp:.2f}', rotation=90, color='r')
+    
+    plt.xlabel("Temperature")
+    plt.ylabel("Heat Capacity")
+    plt.legend()
+    _savefig(plt.gcf(), os.path.join(output_dir, "heat_capacity.png"))
+    plt.close()
+    
+    # Save data to CSV
+    heat_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Heat_Capacity': avg_heat_capacity_pos,
+        'Negative_Initialization_Heat_Capacity': avg_heat_capacity_neg
+    })
+    heat_df.to_csv(os.path.join(output_dir, "heat_capacity.csv"), index=False)
+    
+    # Plot 3: Energy vs temperature
+    plt.figure(figsize=(10, 6))
+    plt.title("Energy per Temperature")
+    plt.plot(temp_range, pos_avg_energy, c='blue', label='Positive initialization')
+    plt.plot(temp_range, neg_avg_energy, c='orange', label='Negative initialization')
+    
+    # Mark critical temperature and energy
+    plt.axvline(x=c_temp, color='r', linestyle='--')
+    plt.axhline(y=critical_energy, color='g', linestyle='--')
+    plt.text(c_temp + 0.05, min(pos_avg_energy + neg_avg_energy), 
+             f'Critical T = {c_temp:.2f}', rotation=90, color='r')
+    plt.text(temp_range[0] + 0.05, critical_energy + 0.2, 
+             f'Critical E = {critical_energy:.2f}', color='g')
+    
+    plt.xlabel("Temperature")
+    plt.ylabel("Energy")
+    plt.legend()
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_vs_temp.png"))
+    plt.close()
+    
+    # Save data to CSV
+    energy_df = pd.DataFrame({
+        'Temperature': temp_range,
+        'Positive_Initialization_Energy': pos_avg_energy,
+        'Negative_Initialization_Energy': neg_avg_energy
+    })
+    energy_df.to_csv(os.path.join(output_dir, "energy_vs_temp.csv"), index=False)
+    
+    # Save critical values to their own CSV
+    critical_df = pd.DataFrame({
+        'Phase': [os.path.basename(output_dir)],
+        'Critical_Temperature': [c_temp],
+        'Critical_Energy': [critical_energy]
+    })
+    
+    # Determine if it's a reach phase directory
+    base_dir = os.path.dirname(output_dir)
+    csv_path = os.path.join(base_dir, "critical_values.csv")
+    
+    # If the CSV exists, append to it, otherwise create it
+    if os.path.exists(csv_path):
+        existing_df = pd.read_csv(csv_path)
+        combined_df = pd.concat([existing_df, critical_df], ignore_index=True)
+        combined_df.to_csv(csv_path, index=False)
+    else:
+        critical_df.to_csv(csv_path, index=False)
+    
+    # Also save to the phase directory
+    critical_df.to_csv(os.path.join(output_dir, "critical_values.csv"), index=False)
+    
+    print(f"Phase transition plots and CSVs saved to {output_dir}")
+    
+    return CubicSpline(temp_range, pos_avg_energy)
+
+def plot_energy_across_time(stats, critical_energy, output_dir, title_prefix="", show_mid_point=True, neural_data=None, window_size=10, stim_idx_offset=0):
+    """
+    Plot energy and kinematic data (x, y, z coordinates) across time.
+    
+    Parameters:
+    -----------
+    stats : dict
+        Statistics calculated across trials containing x_kinematics, y_kinematics, z_kinematics, energy
+    critical_energy : float
+        Critical energy from phase transition analysis
+    output_dir : str
+        Directory to save plots
+    title_prefix : str, optional
+        Prefix for plot titles (default="")
+    show_mid_point : bool, optional
+        Whether to mark the middle point (default=True)
+    neural_data : list, optional
+        List of neural data arrays where each stimulus contains trials of binary spike vectors (default=None)
+    window_size : int, optional
+        Size of the sliding window for firing rate calculation (default=10)
+    stim_idx_offset : int, optional
+        Added to the loop index when naming output files and plot titles, so that
+        a single-stimulus call from stim_2's pipeline saves stim_2 (not stim_0).
+        Default 0 preserves the original behaviour for multi-stimulus calls.
+        
+    Returns:
+    --------
+    None
+    """
+    x_kinematics = stats['x_kinematics']
+    y_kinematics = stats['y_kinematics']
+    z_kinematics = stats['z_kinematics']
+    energy = stats['energy']
+    j_values = stats.get('j_values', None)
+    h_values = stats.get('h_values', None)
+
+    
+    for _loop_i, (x_kin, y_kin, z_kin, eng) in enumerate(zip(x_kinematics, y_kinematics, z_kinematics, energy)):
+        i = _loop_i + stim_idx_offset
+        # Create figure with stacked subplots: X, Y, Z, Energy, and optionally Firing Rate
+        n_subplots = 6 if neural_data is not None else 5
+        plt.figure(figsize=(12, 3*n_subplots))
+        
+        # X-coordinate subplot
+        plt.subplot(n_subplots, 1, 1)
+        plt.title(f"{title_prefix} X-Coordinate Over Time, Stim_{i}")
+        
+        plt.plot(x_kin['mean'], '-r', linewidth=2, label='mean X')
+        plt.plot(x_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(x_kin['lower'], '-b', label='lower CI', alpha=0.5)
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_x_kin in enumerate(x_kinematics):
+            if j != i:
+                plt.plot(other_x_kin['mean'], '-', label=f"mean X stim_{j}", alpha=0.7)
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(x_kin['mean']))), x_kin['upper'], x_kin['lower'], 
+                         color="blue", alpha=0.15)
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(x_kin['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("X Position")
+        plt.legend()
+        
+        # Y-coordinate subplot
+        plt.subplot(n_subplots, 1, 2)
+        plt.title(f"{title_prefix} Y-Coordinate Over Time, Stim_{i}")
+        
+        plt.plot(y_kin['mean'], '-g', linewidth=2, label='mean Y')
+        plt.plot(y_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(y_kin['lower'], '-b', label='lower CI', alpha=0.5)
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_y_kin in enumerate(y_kinematics):
+            if j != i:
+                plt.plot(other_y_kin['mean'], '-', label=f"mean Y stim_{j}", alpha=0.7)
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(y_kin['mean']))), y_kin['upper'], y_kin['lower'], 
+                         color="green", alpha=0.15)
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(y_kin['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("Y Position")
+        plt.legend()
+        
+        # Z-coordinate subplot
+        plt.subplot(n_subplots, 1, 3)
+        plt.title(f"{title_prefix} Z-Coordinate Over Time, Stim_{i}")
+        
+        plt.plot(z_kin['mean'], '-r', linewidth=2, label='mean Z', color='red')
+        plt.plot(z_kin['upper'], '-b', label='upper CI', alpha=0.5)
+        plt.plot(z_kin['lower'], '-b', label='lower CI', alpha=0.5)
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_z_kin in enumerate(z_kinematics):
+            if j != i:
+                plt.plot(other_z_kin['mean'], '-', label=f"mean Z stim_{j}", alpha=0.7)
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(z_kin['mean']))), z_kin['upper'], z_kin['lower'], 
+                         color="red", alpha=0.15)
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(z_kin['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("Z Position")
+        plt.legend()
+
+        # Energy subplot --
+        plt.subplot(n_subplots, 1, 4)
+        plt.title(f"{title_prefix} Energy of Neural Activity Over Time, Stim_{i}")
+        
+        # Fill between confidence intervals
+        plt.fill_between(list(range(len(eng['mean']))), eng['upper'], eng['lower'], 
+                         color="purple", alpha=0.15)
+        
+        plt.plot(eng['mean'], '-', linewidth=2, label='mean Energy', color='purple')
+        
+        # Plot other stimulus means for comparison if available
+        for j, other_eng in enumerate(energy):
+            if j != i:
+                plt.plot(other_eng['mean'], '-', label=f"mean Energy stim_{j}", alpha=0.7)
+        
+        # Mark critical energy and mean energy
+        plt.axhline(y=critical_energy, color='r', linestyle='--',
+                   label=f"Critical Energy = {critical_energy:.2f}")
+        plt.axhline(y=np.mean(eng['mean']), color='b', linestyle='-.',
+                   label=f"Mean Energy = {np.mean(eng['mean']):.2f}")
+        
+        # Mark midpoint if requested
+        if show_mid_point and len(eng['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+        
+        plt.ylabel("Energy")
+        plt.legend()
+        
+        # ── Subplot 5: h & J values ──────────────────────────────────────
+        plt.subplot(n_subplots, 1, 5)
+        plt.title(f"{title_prefix} Local Fields and Interactions, Stim_{i}")
+        
+        if show_mid_point and len(j_values[i]['mean']) > 100:
+            mid_point = 400
+            plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+            plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+
+        
+        plt.plot(j_values[i]['mean'], '-', label=f"[j] - mean Energy stim_{i}")
+        plt.plot(h_values[i]['mean'], '-', label=f"[h] - mean Energy stim_{i}")
+
+        plt.ylabel("Energy")
+        plt.legend()
+
+        # Firing rate subplot if neural data is provided
+        if neural_data is not None:
+            plt.subplot(n_subplots, 1, 6)
+            plt.title(f"{title_prefix} Time-Dependent Firing Rate (window={window_size}), Stim_{i}")
+            
+            # Calculate firing rates for each trial in the current stimulus
+            firing_rates = []
+            for trial in neural_data[i]:
+                # Calculate time-dependent firing rate for this trial
+                # trial shape is (time_bins, num_neurons)
+                # We want the mean firing rate across all neurons
+                rate = calculate_time_dependent_firing_rate(trial, window_size)
+                # Ensure rate is 1-dimensional
+                rate = np.squeeze(rate)
+                firing_rates.append(rate)
+            
+            # Convert to numpy array for easier computation
+            firing_rates = np.array(firing_rates)
+            
+            # Calculate mean and confidence intervals across trials
+            mean_firing = np.mean(firing_rates, axis=0)
+            std_firing = np.std(firing_rates, axis=0)
+            ci_firing = 1.96 * std_firing / np.sqrt(firing_rates.shape[0])
+            
+            # Ensure all arrays are 1-dimensional
+            mean_firing = np.squeeze(mean_firing)
+            ci_firing = np.squeeze(ci_firing)
+            
+            # Plot mean firing rate and confidence intervals
+            plt.plot(mean_firing, '-', linewidth=2, label='mean Firing Rate', color='orange')
+            plt.fill_between(range(len(mean_firing)), 
+                           mean_firing - ci_firing,
+                           mean_firing + ci_firing,
+                           color='orange', alpha=0.15)
+            
+            # Mark midpoint if requested
+            if show_mid_point and len(mean_firing) > 100:
+                mid_point = 400
+                plt.axvline(x=mid_point, color='g', linestyle='--', alpha=0.7, label='midpoint')
+                plt.axvline(x=mid_point - 25, color='g', linestyle=':', alpha=0.5)
+            
+            plt.xlabel("Time")
+            plt.ylabel("Firing Rate")
+            plt.legend()
+            
+            # Save firing rate data to CSV
+            firing_df = pd.DataFrame({
+                'Time': range(len(mean_firing)),
+                'Mean_Firing_Rate': mean_firing,
+                'Upper_CI': mean_firing + ci_firing,
+                'Lower_CI': mean_firing - ci_firing,
+                'Window_Size': [window_size] * len(mean_firing)
+            })
+            firing_df.to_csv(os.path.join(output_dir, f"firing_rates_stim_{i}.csv"), index=False)
+        else:
+            # Add x-label to the last subplot if no firing rate subplot
+            plt.xlabel("Time")
+        
+        plt.tight_layout()
+        _savefig(plt.gcf(), os.path.join(output_dir, f"energy_kinematics_stim_{i}.png"), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Save data to CSV files
+        time_points = list(range(len(x_kin['mean'])))
+        
+        # X-coordinate CSV
+        x_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_X_Position': x_kin['mean'],
+            'Upper_CI': x_kin['upper'],
+            'Lower_CI': x_kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_x_kin in enumerate(x_kinematics):
+            if j != i and len(other_x_kin['mean']) == len(x_kin['mean']):
+                x_df[f'Mean_X_Position_Stim_{j}'] = other_x_kin['mean']
+        
+        x_df.to_csv(os.path.join(output_dir, f"x_kinematics_stim_{i}.csv"), index=False)
+        
+        # Y-coordinate CSV
+        y_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Y_Position': y_kin['mean'],
+            'Upper_CI': y_kin['upper'],
+            'Lower_CI': y_kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_y_kin in enumerate(y_kinematics):
+            if j != i and len(other_y_kin['mean']) == len(y_kin['mean']):
+                y_df[f'Mean_Y_Position_Stim_{j}'] = other_y_kin['mean']
+        
+        y_df.to_csv(os.path.join(output_dir, f"y_kinematics_stim_{i}.csv"), index=False)
+        
+        # Z-coordinate CSV
+        z_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Z_Position': z_kin['mean'],
+            'Upper_CI': z_kin['upper'],
+            'Lower_CI': z_kin['lower']
+        })
+        
+        # Add other stim means for comparison
+        for j, other_z_kin in enumerate(z_kinematics):
+            if j != i and len(other_z_kin['mean']) == len(z_kin['mean']):
+                z_df[f'Mean_Z_Position_Stim_{j}'] = other_z_kin['mean']
+        
+        z_df.to_csv(os.path.join(output_dir, f"z_kinematics_stim_{i}.csv"), index=False)
+        
+        # Energy CSV
+        eng_df = pd.DataFrame({
+            'Time': time_points,
+            'Mean_Energy': eng['mean'],
+            'Upper_CI': eng['upper'],
+            'Lower_CI': eng['lower'],
+            'Critical_Energy': [critical_energy] * len(eng['mean']),
+            'Mean_Energy_Overall': [np.mean(eng['mean'])] * len(eng['mean'])
+        })
+        
+        # Add other stim means for comparison
+        for j, other_eng in enumerate(energy):
+            if j != i and len(other_eng['mean']) == len(eng['mean']):
+                eng_df[f'Mean_Energy_Stim_{j}'] = other_eng['mean']
+        
+        eng_df.to_csv(os.path.join(output_dir, f"energy_stim_{i}.csv"), index=False)
+    
+    print(f"Energy and kinematic (X, Y, Z) plots and CSVs saved to {output_dir}")
+
+def plot_transition_points(energy_data, kinematic_data, energy_transition_points, output_dir, stim_idx=0,
+                          firing_rate_transition_points=None, firing_rate_data=None):
+    """
+    Plot transition points on position, velocity, acceleration, energy, firing rate, and
+    firing-rate change (time derivative, same as in identify_firing_rate_transition_points).
+    
+    Compares energy-based and firing-rate-based transition points with different colors
+    to visualize which kinematic transitions are detected by each signal.
+    
+    Parameters:
+    -----------
+    energy_data : ndarray
+        Energy values over time
+    kinematic_data : ndarray
+        Position (kinematic) values over time
+    energy_transition_points : list
+        Indices of transition points identified from energy
+    output_dir : str
+        Directory to save plots
+    stim_idx : int, optional
+        Stimulus index (default=0)
+    firing_rate_transition_points : list, optional
+        Indices of transition points identified from firing rate (default=None).
+        When provided, both types are plotted with different colors for comparison.
+    firing_rate_data : ndarray, optional
+        Firing rate values over time for plotting (default=None).
+        When provided, firing rate and its discrete derivative (``np.gradient``) are plotted
+        below energy; firing-rate transitions are detected from large |d(FR)/dt| vs std.
+        
+    Returns:
+    --------
+    None
+    """
+    kinematic_data = np.array(kinematic_data)
+    energy_data = np.array(energy_data)
+    
+    # Compute velocity and acceleration from position
+    velocity = np.gradient(kinematic_data)
+    acceleration = np.gradient(velocity)
+    
+    # Align lengths (energy may differ slightly)
+    n_points = len(kinematic_data)
+    energy_data = energy_data[:n_points] if len(energy_data) > n_points else np.pad(
+        energy_data, (0, max(0, n_points - len(energy_data))), mode='edge'
+    )[:n_points]
+    
+    if firing_rate_transition_points is None:
+        firing_rate_transition_points = []
+    
+    # Align firing rate data if provided
+    firing_rate_data = np.array(firing_rate_data) if firing_rate_data is not None else None
+    firing_rate_deriv = None
+    if firing_rate_data is not None:
+        firing_rate_data = firing_rate_data[:n_points] if len(firing_rate_data) > n_points else np.pad(
+            firing_rate_data, (0, max(0, n_points - len(firing_rate_data))), mode='edge'
+        )[:n_points]
+        firing_rate_deriv = np.gradient(firing_rate_data)
+    
+    # Find overlap: points detected by both energy and firing rate
+    energy_set = set(energy_transition_points)
+    fr_set = set(firing_rate_transition_points)
+    both_set = energy_set & fr_set
+    
+    # 6 subplots when firing rate present: + panel for d(FR)/dt (matches transition detection)
+    n_subplots = 6 if firing_rate_data is not None else 4
+    plt.figure(figsize=(14, 2.5 * n_subplots))
+    
+    time_axis = np.arange(n_points)
+    
+    def _add_transition_lines():
+        for pt in energy_transition_points:
+            if pt < n_points:
+                plt.axvline(x=pt, color='red', linestyle='--', alpha=0.7, linewidth=1)
+        for pt in firing_rate_transition_points:
+            if pt < n_points:
+                plt.axvline(x=pt, color='blue', linestyle=':', alpha=0.7, linewidth=1)
+        for pt in both_set:
+            if pt < n_points:
+                plt.axvline(x=pt, color='purple', linestyle='-', alpha=0.9, linewidth=1.5)
+    
+    # Subplot 1: Position
+    plt.subplot(n_subplots, 1, 1)
+    plt.title(
+        f"Position, Velocity, Acceleration, Energy, Firing Rate & d(FR)/dt with Transition Points, Stim_{stim_idx}"
+    )
+    plt.plot(time_axis, kinematic_data, '-b', linewidth=1.5, label='Position')
+    _add_transition_lines()
+    plt.ylabel("Position")
+    plt.legend(handles=[
+        plt.Line2D([0], [0], color='red', linestyle='--', label='Energy transition'),
+        plt.Line2D([0], [0], color='blue', linestyle=':', label='Firing rate transition'),
+        plt.Line2D([0], [0], color='purple', linestyle='-', linewidth=2, label='Both (shared)')
+    ], loc='upper right')
+    
+    # Subplot 2: Velocity
+    plt.subplot(n_subplots, 1, 2)
+    plt.plot(time_axis, velocity, '-g', linewidth=1.5, label='Velocity')
+    _add_transition_lines()
+    plt.ylabel("Velocity")
+    
+    # Subplot 3: Acceleration
+    plt.subplot(n_subplots, 1, 3)
+    plt.plot(time_axis, acceleration, '-m', linewidth=1.5, label='Acceleration')
+    _add_transition_lines()
+    plt.ylabel("Acceleration")
+    
+    # Subplot 4: Energy
+    plt.subplot(n_subplots, 1, 4)
+    plt.plot(time_axis, energy_data, '-', color='darkgreen', linewidth=1.5, label='Energy')
+    _add_transition_lines()
+    plt.ylabel("Energy")
+    if firing_rate_data is None:
+        plt.xlabel("Time")
+    
+    # Subplot 5: Firing Rate (if available)
+    if firing_rate_data is not None:
+        plt.subplot(n_subplots, 1, 5)
+        plt.plot(time_axis, firing_rate_data, '-', color='orange', linewidth=1.5, label='Firing Rate')
+        _add_transition_lines()
+        plt.ylabel("Firing Rate")
+        
+        # Subplot 6: change in firing rate (same derivative used for firing-rate transitions)
+        plt.subplot(n_subplots, 1, 6)
+        plt.plot(
+            time_axis,
+            firing_rate_deriv,
+            '-',
+            color='darkorange',
+            linewidth=1.5,
+            label='d(FR)/dt',
+        )
+        _add_transition_lines()
+        plt.xlabel("Time")
+        plt.ylabel("Firing rate change")
+    
+    plt.tight_layout()
+    _savefig(plt.gcf(), os.path.join(output_dir, f"transition_points_stim_{stim_idx}.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Save data to CSV with position, velocity, acceleration, energy, firing rate, and both transition types
+    time_points = list(range(n_points))
+    csv_data = {
+        'Time': time_points,
+        'Position': kinematic_data,
+        'Velocity': velocity,
+        'Acceleration': acceleration,
+        'Energy_Data': energy_data[:n_points],
+        'Energy_Transition': [1 if i in energy_transition_points else 0 for i in range(n_points)],
+        'Firing_Rate_Transition': [1 if i in firing_rate_transition_points else 0 for i in range(n_points)],
+        'Both_Transition': [1 if i in both_set else 0 for i in range(n_points)]
+    }
+    if firing_rate_data is not None:
+        csv_data['Firing_Rate_Data'] = firing_rate_data[:n_points]
+        csv_data['Firing_Rate_Derivative'] = firing_rate_deriv
+    transitions_df = pd.DataFrame(csv_data)
+    
+    transitions_df.to_csv(os.path.join(output_dir, f"transition_points_stim_{stim_idx}.csv"), index=False)
+    
+    print(f"Transition points plot and CSV saved to {output_dir} (energy: {len(energy_transition_points)}, "
+          f"firing rate: {len(firing_rate_transition_points)}, shared: {len(both_set)})")
+
+def plot_energy_histogram(energy_values, critical_energy, output_dir, stim_idx=0, bins=50):
+    """
+    Plot histogram of energy values for neural activity.
+    
+    Parameters:
+    -----------
+    energy_values : ndarray
+        Energy values to plot
+    critical_energy : float
+        Critical energy from phase transition analysis
+    output_dir : str
+        Directory to save plots
+    stim_idx : int, optional
+        Stimulus index (default=0)
+    bins : int, optional
+        Number of bins for histogram (default=50)
+        
+    Returns:
+    --------
+    None
+    """
+    plt.figure(figsize=(10, 6))
+    plt.title(f"Distribution of Neural Energy Values, Stim_{stim_idx}")
+    
+    # Plot histogram
+    hist, bin_edges = np.histogram(energy_values, bins=bins, density=True)
+    plt.hist(energy_values, bins=bins, alpha=0.7, color='steelblue', density=True)
+    
+    # Mark critical energy
+    plt.axvline(x=critical_energy, color='r', linestyle='--',
+               label=f"Critical Energy = {critical_energy:.2f}")
+    
+    # Mark mean energy
+    mean_energy = np.mean(energy_values)
+    plt.axvline(x=mean_energy, color='g', linestyle='-.',
+               label=f"Mean Energy = {mean_energy:.2f}")
+    
+    plt.xlabel("Energy")
+    plt.ylabel("Density")
+    plt.legend()
+    
+    _savefig(plt.gcf(), os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.png"))
+    plt.close()
+    
+    # Save histogram data to CSV
+    bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+    hist_df = pd.DataFrame({
+        'Bin_Center': bin_centers,
+        'Density': hist,
+        'Bin_Left_Edge': bin_edges[:-1],
+        'Bin_Right_Edge': bin_edges[1:],
+    })
+    
+    # Add critical and mean energy values
+    hist_df['Critical_Energy'] = critical_energy
+    hist_df['Mean_Energy'] = mean_energy
+    
+    # Save to CSV
+    hist_df.to_csv(os.path.join(output_dir, f"energy_histogram_stim_{stim_idx}.csv"), index=False)
+    
+    print(f"Energy histogram and CSV saved to {output_dir}")
+
+def _draw_model_quality_panels(fig, outer_spec,
+                               corr2_orig, corr2_model, J_params,
+                               corr3_orig, corr3_model, corr3_indep,
+                               k_axis, P_data, P_ising, P_indep, N,
+                               max_k_plot=None, panel_suffix=""):
+    """
+    Draw the 4-panel (A-D) model-quality figure into a 4x1 sub-grid carved
+    out of *outer_spec* (a SubplotSpec/GridSpec cell) within *fig*. Panels
+    are identified only by their corner letter (A-D), not a descriptive
+    title -- what each one shows goes in the paper's figure caption instead.
+
+    Split out of ``plot_model_quality_summary_from_arrays`` so the same
+    panel-drawing code can be placed into one column of a larger figure (see
+    ``compare_sessions.py``, which puts two sessions side by side); each
+    panel letter gets *panel_suffix* appended (e.g. "A1"/"A2") so the two
+    copies stay distinguishable once combined.
+
+    Returns the list of the four created axes, so callers can e.g.
+    ``fig.align_ylabels()`` across one or more such panel groups.
+    """
+    corr2_orig  = np.asarray(corr2_orig,  dtype=float)
+    corr2_model = np.asarray(corr2_model, dtype=float)
+    corr3_orig  = np.asarray(corr3_orig,  dtype=float)
+    corr3_model = np.asarray(corr3_model, dtype=float)
+    corr3_indep = np.asarray(corr3_indep, dtype=float)
+    J_params    = np.asarray(J_params,    dtype=float)
+    k_axis      = np.asarray(k_axis)
+    P_data      = np.asarray(P_data,  dtype=float)
+    P_ising     = np.asarray(P_ising, dtype=float)
+    P_indep     = np.asarray(P_indep, dtype=float)
+
+    gs = outer_spec.subgridspec(4, 1)
+
+    def _sym_limits(*arrays, pad_frac=0.06):
+        """Shared axis limits spanning all *arrays* with a small margin."""
+        allv = np.concatenate([np.asarray(a, dtype=float).ravel() for a in arrays])
+        lo, hi = float(allv.min()), float(allv.max())
+        pad = pad_frac * (hi - lo) if hi > lo else max(abs(hi), 0.1) * 0.1
+        return lo - pad, hi + pad
+
+    # --- (A) Pairwise k-corr ---
+    ax_pair = fig.add_subplot(gs[0])
+    ax_pair.scatter(corr2_orig, corr2_model, s=14, alpha=0.5, c="k", edgecolors="none")
+    # Scale to the data rather than forcing the full [0, 1] range, which left
+    # most of the panel empty.
+    lo, hi = _sym_limits(corr2_orig, corr2_model)
+    ax_pair.plot([lo, hi], [lo, hi], "k--", lw=1.2)
+    # Matched x/y limits put the identity line corner to corner, so no explicit
+    # aspect is needed -- forcing one would only shrink the axes inside its cell.
+    ax_pair.set_xlim(lo, hi)
+    ax_pair.set_ylim(lo, hi)
+    ax_pair.locator_params(nbins=5)
+    ax_pair.set_xlabel(_subscriptify("measured C_ij"))
+    ax_pair.set_ylabel(_subscriptify("reconstructed C_ij"))
+    _panel_letter(ax_pair, "A" + panel_suffix)
+
+    # Inset: zoom on the densest cluster of small correlations.  Only drawn
+    # when a meaningful share of points actually falls inside the zoom window,
+    # otherwise it renders as an empty box.
+    try:
+        lim = max(0.002, min(0.01, np.percentile(np.abs(corr2_orig), 95) * 2))
+        inside = np.mean((np.abs(corr2_orig) <= lim) & (np.abs(corr2_model) <= lim))
+        # Redundant if the main panel is already at the zoom scale.
+        if inside > 0.05 and (hi - lo) > 4 * (2 * lim):
+            ax_in = ax_pair.inset_axes([0.60, 0.07, 0.37, 0.33])
+            ax_in.scatter(corr2_orig, corr2_model, s=7, alpha=0.45, c="gray")
+            ax_in.plot([-lim, lim], [-lim, lim], "k--", lw=0.8)
+            ax_in.set_xlim(-lim, lim)
+            ax_in.set_ylim(-lim, lim)
+            ax_in.set_title("zoom", fontsize=14, pad=3)
+            ax_in.tick_params(labelsize=11, pad=1)
+            ax_in.set_facecolor("white")
+    except Exception:
+        pass
+
+    # --- (B) J distribution ---
+    ax_j = fig.add_subplot(gs[1])
+    ax_j.hist(J_params, bins=min(50, max(10, len(J_params) // 5)), density=True,
+              color="steelblue", edgecolor="white", alpha=0.85)
+    ax_j.set_xlabel("coupling J")
+    ax_j.set_ylabel("P(J)")
+    _panel_letter(ax_j, "B" + panel_suffix)
+
+    # --- (C) Triplet correlations: Ising vs data, and independent vs data ---
+    ax_trip = fig.add_subplot(gs[2])
+
+    # Ising model (red)
+    ax_trip.scatter(corr3_orig, corr3_model, s=11, alpha=0.5, c="red",
+                    edgecolors="none", zorder=3)
+    # Independent model prediction <s_i><s_j><s_k> (black circles)
+    ax_trip.scatter(corr3_orig, corr3_indep, s=11, alpha=0.4, c="black",
+                    edgecolors="none", zorder=2)
+
+    lo3, hi3 = _sym_limits(corr3_orig, corr3_model, corr3_indep)
+    ax_trip.plot([lo3, hi3], [lo3, hi3], "k--", lw=1.2)
+    ax_trip.set_xlim(lo3, hi3)
+    ax_trip.set_ylim(lo3, hi3)
+    ax_trip.locator_params(nbins=5)
+
+    ax_trip.set_xlabel("measured triplet correlation")
+    ax_trip.set_ylabel("predicted triplet correlation")
+    _panel_letter(ax_trip, "C" + panel_suffix)
+
+    # --- (D) P(K): data vs Ising vs independent (Poisson-binomial from empirical p_i) ---
+    ax_pk = fig.add_subplot(gs[3])
+
+    # Floor is anchored to the smallest nonzero probability across all
+    # three curves (data, Ising, AND independent) -- matching the original
+    # plot's behavior -- so the independent model's true divergence in the
+    # tails (often the smallest values on the panel) is fully visible
+    # rather than being pulled up to whatever data/Ising happen to resolve.
+    core_pk = np.concatenate([P_data, P_ising, P_indep])
+    positive_core = core_pk[core_pk > 0]
+    pk_floor = float(positive_core.min()) if positive_core.size else 1e-6
+    y_floor = pk_floor / 10.0
+
+    # Spike counts that never occurred have P(K) = 0 exactly -- typically
+    # K=0, but also the high-K tail in some sessions -- and a log axis has
+    # no position for exact zero. Clipping them to the y-axis floor made
+    # the curve dive sharply at those points, which dominated the panel
+    # visually and made it hard to judge how close data/Ising actually are
+    # over the K range where both are nonzero. Masking them out (gap in
+    # the line) instead keeps the panel's shape driven by the real,
+    # comparable values.
+    def _mask_zero(arr):
+        arr = np.asarray(arr, dtype=float).copy()
+        arr[arr <= 0] = np.nan
+        return arr
+
+    P_data_plot  = _mask_zero(P_data)
+    P_ising_plot = _mask_zero(P_ising)
+    P_indep_plot = _mask_zero(P_indep)
+
+    ax_pk.plot(k_axis, P_data_plot,  "o-", color="blue",  ms=5, lw=1.4)
+    ax_pk.plot(k_axis, P_ising_plot, "o-", color="red",   ms=5, lw=1.4)
+    ax_pk.plot(k_axis, P_indep_plot, "-",  color="black", lw=1.8)
+    ax_pk.set_xlabel("K (simultaneous spikes per bin)")
+    ax_pk.set_ylabel("P(K)")
+    _panel_letter(ax_pk, "D" + panel_suffix)
+    k_hi = float(N if max_k_plot is None else min(N, max_k_plot))
+    ax_pk.set_xlim(-0.5, k_hi + 0.5)
+
+    ax_pk.set_yscale("log")
+    ax_pk.set_ylim(bottom=y_floor)
+    # A plain log axis's default locator can crowd many decades onto a
+    # tail that reaches down tens of orders of magnitude; numticks picks
+    # a readable subset.
+    ax_pk.locator_params(axis="y", numticks=6)
+    # Must come after set_yscale/locator_params, which install their own
+    # formatter. The default emits mathtext ($\mathdefault{10^{-6}}$),
+    # which the SVG backend writes without a font fallback; a plain
+    # "1e-6" label keeps every string on matplotlib's normal text path.
+    def _pk_fmt(y, _):
+        if y <= 0:
+            return ""
+        exp = np.log10(y)
+        if abs(exp - round(exp)) > 1e-6:
+            return ""
+        return f"1e{int(round(exp))}"
+    ax_pk.yaxis.set_major_formatter(FuncFormatter(_pk_fmt))
+
+    return [ax_pair, ax_j, ax_trip, ax_pk]
+
+
+def plot_model_quality_summary_from_arrays(
+        corr2_orig, corr2_model, J_params,
+        corr3_orig, corr3_model, corr3_indep,
+        k_axis, P_data, P_ising, P_indep, N,
+        output_dir, filename="model_quality_summary.png", max_k_plot=None):
+    """
+    Render the 4-panel model-quality figure from precomputed statistics
+    (pairwise/triplet correlations, J couplings, P(K) curves).
+
+    This is the plotting half of ``plot_model_quality_summary``, split out so
+    the figure can be regenerated purely from the CSVs it writes
+    (``model_quality_summary_pairwise/triplet/J_values/P_K.csv``) without
+    needing the raw spike data or Monte Carlo samples again — see
+    ``regen_model_quality_summary.py``.
+
+    Panels are labelled A-D in the top-left corner (no legend; colors are
+    fixed: Ising=red, independent=black/gray, data=blue, identity=dashed
+    black).
+    """
+    # Scoped to this figure only -- doesn't affect the module-wide rcParams
+    # used by the other plotting functions in this file.
+    #
+    # Every label here is plain ASCII with no mathtext. Kept off mathtext even
+    # though svg.fonttype='path' now sidesteps the font-fallback problems
+    # mathtext used to cause in SVG -- there's no benefit to reintroducing it
+    # for these plain axis labels. unicode_minus=False keeps tick labels
+    # ASCII too, using '-' instead of U+2212.
+    with plt.rc_context({
+        "font.size":        21,
+        "axes.titlesize":   24,
+        "axes.labelsize":   21,
+        "xtick.labelsize":  19,
+        "ytick.labelsize":  19,
+        "axes.unicode_minus": False,
+    }):
+        # Constrained layout with small pads keeps the four panels close
+        # together; sized up from the original to leave room for the larger
+        # fonts and panel letters. Stacked 4x1 (rather than 2x2) so multiple
+        # of these figures can be placed side by side; panel dimensions are
+        # kept roughly the same as the 2x2 layout (~7.5 x 6.25 each).
+        fig = plt.figure(figsize=(7.5, 25.0), layout="constrained")
+        fig.get_layout_engine().set(w_pad=0.02, h_pad=0.02, wspace=0.05, hspace=0.08)
+        outer_spec = fig.add_gridspec(1, 1)[0, 0]
+
+        axes = _draw_model_quality_panels(
+            fig, outer_spec,
+            corr2_orig, corr2_model, J_params,
+            corr3_orig, corr3_model, corr3_indep,
+            k_axis, P_data, P_ising, P_indep, N,
+            max_k_plot=max_k_plot, panel_suffix="",
+        )
+
+        # Stacked in a single column, each panel's y-label otherwise sits right
+        # next to its own tick labels -- so panels with narrower tick labels
+        # (e.g. "P(J)" next to single/double-digit counts) end up offset from
+        # panels with wider ones (e.g. "reconstructed C_ij" next to "-0.2").
+        # align_ylabels shifts them all to a common x position (done at draw
+        # time, so it composes fine with the constrained-layout engine above).
+        fig.align_ylabels(axes)
+
+        out_path = os.path.join(output_dir, filename)
+        _savefig(fig, out_path, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+
+def plot_model_quality_summary(original_data, model_samples, multipliers, N, output_dir,
+                               filename="model_quality_summary.png",
+                               max_k_plot=None):
+    """
+    Single figure: pairwise correlations (k=2), J distribution, triplet correlations (k=3),
+    and P(K) simultaneous spikes (data vs Ising vs independent Poisson-binomial).
+
+    **P(K) procedure (panel D)**
+
+    1. **Binary spikes** per bin: ``σ ∈ {0,1}^N`` (from ``{-1,+1}`` via ``(s+1)/2`` if needed).
+    2. **Data:** ``K(t) = Σᵢ σᵢ``; ``P_data(K) = (# bins with K spikes) / (total bins)``.
+    3. **Independent model:** marginal rates from data ``p_i = ⟨σᵢ⟩``, then Poisson-binomial
+       ``P_ind(K)`` = coefficient of ``z^K`` in ``∏ᵢ [(1-p_i) + p_i z]``, computed by
+       convolving Bernoulli masses (same as sum of independent Bernoullis).
+    4. **Ising:** same histogram of ``K`` from Monte Carlo samples ``model_samples``.
+
+    See ``plot_model_quality_summary_from_arrays`` for the plotting code —
+    this function only computes the underlying statistics from raw data/
+    samples and writes them to CSV, then delegates rendering.
+
+    Parameters
+    ----------
+    original_data : ndarray
+        Observed data (n_bins, N): spins in ``{-1, 1}`` or binary ``{0, 1}``.
+    model_samples : ndarray
+        Metropolis samples from the fitted Ising model (same convention as ``original_data``).
+    multipliers : ndarray
+        Full parameter vector [h_1..h_N, J_ij...].
+    N : int
+        Number of neurons.
+    output_dir : str
+        Output directory.
+    filename : str
+        Output PNG filename.
+    max_k_plot : int, optional
+        If set, x-axis is limited to ``[0, max_k_plot]`` (e.g. 20 for large N). Default ``None`` uses ``0 … N``.
+
+    Writes CSVs to ``output_dir``:
+        ``model_quality_summary_h_fields.csv``, ``model_quality_summary_J_couplings.csv``, …;
+        ``model_quality_summary_P_K.csv`` — K, counts, P_data, P_ising, P_independent;
+        ``model_quality_summary_P_K_metadata.csv`` — N, sample sizes;
+        ``model_quality_summary_independent_marginals.csv`` — per-neuron empirical ``p_i = ⟨σᵢ⟩``;
+        plus pairwise and triplet correlation CSVs.
+
+    Returns
+    -------
+    None
+    """
+    from coniii.utils import k_corr
+
+    original_data = np.asarray(original_data)
+    model_samples = np.asarray(model_samples)
+    h_params = np.asarray(multipliers[:N], dtype=float)
+    J_params = np.asarray(multipliers[N:])
+
+    corr2_orig = k_corr(original_data, 2)
+    corr2_model = k_corr(model_samples, 2)
+    corr3_orig = k_corr(original_data, 3)
+    corr3_model = k_corr(model_samples, 3)
+
+    # Independent model triplet prediction: ⟨σᵢ σⱼ σₖ⟩_ind = ⟨σᵢ⟩⟨σⱼ⟩⟨σₖ⟩
+    si = k_corr(original_data, 1)   # shape (N,) — mean spin per neuron
+    corr3_indep = np.array([si[i] * si[j] * si[k]
+                             for i, j, k in combinations(range(N), 3)])
+
+    def _binary_spike_matrix(X):
+        X = np.asarray(X, dtype=float)
+        if X.min() < 0:  # {-1, +1}
+            return (X + 1.0) / 2.0
+        return (X > 0).astype(float)  # hard binarize
+
+    def _spike_counts_per_bin(X):
+        sigma = _binary_spike_matrix(X)
+        return np.sum(sigma, axis=1).astype(int)
+
+    sigma_data = _binary_spike_matrix(original_data)
+    K_data = _spike_counts_per_bin(original_data)
+    K_model = _spike_counts_per_bin(model_samples)
+
+    # Independent model: p_i = ⟨σᵢ⟩ from data; P_ind(K) from ∏ᵢ [(1-p_i) + p_i z] via convolution.
+    p_i_marginal = np.mean(sigma_data, axis=0)
+    P_indep = np.array([1.0])
+    for p_i in p_i_marginal:
+        P_indep = np.convolve(P_indep, [1.0 - p_i, p_i])
+
+    k_axis = np.arange(N + 1)
+    P_data = np.bincount(K_data, minlength=N + 1).astype(float) / max(len(K_data), 1)
+    P_ising = np.bincount(K_model, minlength=N + 1).astype(float) / max(len(K_model), 1)
+
+    plot_model_quality_summary_from_arrays(
+        corr2_orig, corr2_model, J_params,
+        corr3_orig, corr3_model, corr3_indep,
+        k_axis, P_data, P_ising, P_indep, N,
+        output_dir, filename=filename, max_k_plot=max_k_plot,
+    )
+
+    n_data = len(original_data)
+    n_ising = len(model_samples)
+    count_data = np.bincount(K_data, minlength=N + 1)
+    count_ising = np.bincount(K_model, minlength=N + 1)
+
+    # Save summary CSV
+    summary_df = pd.DataFrame({
+        "pairwise_corr_orig": corr2_orig,
+        "pairwise_corr_model": corr2_model,
+    })
+    summary_df.to_csv(os.path.join(output_dir, "model_quality_summary_pairwise.csv"), index=False)
+
+    trip_df = pd.DataFrame({
+        "triplet_corr_orig": corr3_orig,
+        "triplet_corr_model": corr3_model,
+        "triplet_corr_independent": corr3_indep,
+    })
+    trip_df.to_csv(os.path.join(output_dir, "model_quality_summary_triplet.csv"), index=False)
+
+    pk_df = pd.DataFrame({
+        "K": k_axis,
+        "count_data": count_data,
+        "count_ising": count_ising,
+        "P_data": P_data,
+        "P_ising": P_ising,
+        "P_independent": P_indep,
+    })
+    pk_df.to_csv(os.path.join(output_dir, "model_quality_summary_P_K.csv"), index=False)
+
+    pd.DataFrame([{
+        "N_neurons": N,
+        "n_data_samples": n_data,
+        "n_ising_samples": n_ising,
+    }]).to_csv(os.path.join(output_dir, "model_quality_summary_P_K_metadata.csv"), index=False)
+
+    pd.DataFrame({
+        "neuron_index_1based": np.arange(1, N + 1),
+        "p_i_marginal_data": p_i_marginal,
+    }).to_csv(os.path.join(output_dir, "model_quality_summary_independent_marginals.csv"), index=False)
+
+    pd.DataFrame({
+        "neuron_index_1based": np.arange(1, N + 1),
+        "h": h_params,
+    }).to_csv(os.path.join(output_dir, "model_quality_summary_h_fields.csv"), index=False)
+
+    j_rows = [
+        {"neuron_i_1based": i + 1, "neuron_j_1based": j + 1, "J": J_params[idx]}
+        for idx, (i, j) in enumerate(combinations(range(N), 2))
+    ]
+    pd.DataFrame(j_rows).to_csv(os.path.join(output_dir, "model_quality_summary_J_couplings.csv"), index=False)
+
+    pd.DataFrame({"J": J_params}).to_csv(os.path.join(output_dir, "model_quality_summary_J_values.csv"), index=False)
+
+    print(f"Model quality summary figure saved to {out_path}")
+
+
+def plot_model_quality(original_data, model_samples, output_dir, max_corr_order=6):
+    """
+    Plot comparison of correlations between original data and model samples.
+    
+    Parameters:
+    -----------
+    original_data : ndarray
+        Original spike data
+    model_samples : ndarray
+        Samples generated from the model
+    output_dir : str
+        Directory to save plots
+    max_corr_order : int, optional
+        Maximum correlation order to evaluate (default=6)
+        
+    Returns:
+    --------
+    None
+    """
+    from coniii.utils import k_corr
+    
+    for i in range(2, max_corr_order + 1):
+        plt.figure(figsize=(8, 6))
+        plt.title(f"{i}-point Correlation Comparison")
+        
+        # Calculate correlations
+        original_corr = k_corr(original_data, i)
+        model_corr = k_corr(model_samples, i)
+        
+        # Plot comparison
+        plt.scatter(original_corr, model_corr, alpha=0.7)
+        plt.plot([0, 1], [0, 1], 'r--', label="Perfect Match")
+        
+        plt.xlabel("Original Data Correlation")
+        plt.ylabel("Model Correlation")
+        plt.legend()
+        
+        # Calculate correlation coefficient
+        corr_coef = np.corrcoef(original_corr, model_corr)[0, 1]
+        plt.text(0.05, 0.95, f"Correlation: {corr_coef:.4f}", 
+                transform=plt.gca().transAxes, fontsize=16, 
+                bbox=dict(facecolor='white', alpha=0.8))
+        
+        _savefig(plt.gcf(), os.path.join(output_dir, f"correlation_order_{i}.png"))
+        plt.close()
+        
+        # Save correlation data to CSV
+        corr_df = pd.DataFrame({
+            'Original_Correlation': original_corr,
+            'Model_Correlation': model_corr
+        })
+        corr_df['Correlation_Coefficient'] = corr_coef
+        corr_df.to_csv(os.path.join(output_dir, f"correlation_order_{i}.csv"), index=False)
+    
+    print(f"Model quality plots and CSVs saved to {output_dir}")
+
+def plot_energy_distribution_by_k(results, output_dir, num_bins=50):
+    """
+    Plot a heatmap showing the distribution of energy values for each k value.
+    
+    Parameters:
+    -----------
+    results : dict
+        Results from calculate_energy_by_neuron_count containing:
+        - 'k_values': list of k values (number of neurons on)
+        - 'energies_by_k': list of lists, where energies_by_k[i] contains energies for k=k_values[i]
+    output_dir : str
+        Directory to save plots
+    num_bins : int, optional
+        Number of bins for energy histogram (default=50)
+        
+    Returns:
+    --------
+    None
+    """
+    k_values = results['k_values']
+    energies_by_k = results['energies_by_k']
+    
+    # Find the energy range across all k values
+    all_energies = []
+    for energies in energies_by_k:
+        all_energies.extend(energies)
+    
+    if len(all_energies) == 0:
+        print("Warning: No energy values to plot")
+        return
+    
+    energy_min = np.min(all_energies)
+    energy_max = np.max(all_energies)
+    
+    # Create bins for energy
+    energy_bins = np.linspace(energy_min, energy_max, num_bins + 1)
+    energy_centers = (energy_bins[:-1] + energy_bins[1:]) / 2
+    
+    # Create histogram matrix: rows = k values, columns = energy bins
+    histogram_matrix = np.zeros((len(k_values), num_bins))
+    
+    for i, (k, energies) in enumerate(zip(k_values, energies_by_k)):
+        if len(energies) > 0:
+            hist, _ = np.histogram(energies, bins=energy_bins)
+            histogram_matrix[i, :] = hist
+    
+    # Normalize each row to show probability density (optional - can also show counts)
+    # For better visualization, normalize by max count per row
+    row_maxes = histogram_matrix.max(axis=1, keepdims=True)
+    row_maxes[row_maxes == 0] = 1  # Avoid division by zero
+    histogram_matrix_normalized = histogram_matrix / row_maxes
+    
+    # Create the heatmap
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Use imshow for heatmap
+    im = ax.imshow(histogram_matrix_normalized, aspect='auto', cmap='viridis', 
+                   origin='lower', interpolation='nearest')
+    
+    # Set ticks and labels
+    ax.set_xlabel('Energy Bin', fontsize=16)
+    ax.set_ylabel('Number of Neurons On (k)', fontsize=16)
+    ax.set_title('Energy Distribution Heatmap by Number of Neurons On', fontsize=19, fontweight='bold')
+    
+    # Set x-axis ticks (show fewer ticks for readability)
+    n_x_ticks = min(10, num_bins)
+    x_tick_indices = np.linspace(0, num_bins - 1, n_x_ticks).astype(int)
+    ax.set_xticks(x_tick_indices)
+    ax.set_xticklabels([f'{energy_centers[idx]:.2f}' for idx in x_tick_indices], rotation=45)
+    
+    # Set y-axis ticks (show all k values)
+    ax.set_yticks(range(len(k_values)))
+    ax.set_yticklabels(k_values)
+    
+    # Add colorbar
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Normalized Frequency', fontsize=15)
+    
+    # Add grid for better readability
+    
+    plt.tight_layout()
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_distribution_by_k_heatmap.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Also create a version with raw counts (not normalized)
+    fig2, ax2 = plt.subplots(figsize=(12, 8))
+    
+    im2 = ax2.imshow(histogram_matrix, aspect='auto', cmap='viridis', 
+                     origin='lower', interpolation='nearest')
+    
+    ax2.set_xlabel('Energy Bin', fontsize=16)
+    ax2.set_ylabel('Number of Neurons On (k)', fontsize=16)
+    ax2.set_title('Energy Distribution Heatmap by Number of Neurons On (Raw Counts)', 
+                  fontsize=19, fontweight='bold')
+    
+    ax2.set_xticks(x_tick_indices)
+    ax2.set_xticklabels([f'{energy_centers[idx]:.2f}' for idx in x_tick_indices], rotation=45)
+    ax2.set_yticks(range(len(k_values)))
+    ax2.set_yticklabels(k_values)
+    
+    cbar2 = plt.colorbar(im2, ax=ax2)
+    cbar2.set_label('Count', fontsize=15)
+    
+    
+    plt.tight_layout()
+    _savefig(plt.gcf(), os.path.join(output_dir, "energy_distribution_by_k_heatmap_counts.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Save data to CSV
+    heatmap_df = pd.DataFrame(histogram_matrix, 
+                             index=[f'k={k}' for k in k_values],
+                             columns=[f'E_{i:.2f}' for i in energy_centers])
+    heatmap_df.to_csv(os.path.join(output_dir, "energy_distribution_by_k_heatmap.csv"))
+    
+    # Save summary statistics
+    summary_data = []
+    for k, energies in zip(k_values, energies_by_k):
+        if len(energies) > 0:
+            summary_data.append({
+                'k': k,
+                'mean_energy': np.mean(energies),
+                'std_energy': np.std(energies),
+                'min_energy': np.min(energies),
+                'max_energy': np.max(energies),
+                'median_energy': np.median(energies),
+                'num_samples': len(energies)
+            })
+    
+    summary_df = pd.DataFrame(summary_data)
+    summary_df.to_csv(os.path.join(output_dir, "energy_by_k_summary.csv"), index=False)
+    
+    print(f"Energy distribution heatmap and CSVs saved to {output_dir}")

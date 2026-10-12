@@ -1,0 +1,29 @@
+effect,covariate,rho,p,p_fdr
+J peaks at peak velocity (excess over control),population size N,-0.05461643109408144,0.8141052987759702,0.9497895152386319
+J peaks at peak velocity (excess over control),reaches,-0.24739667221778586,0.27960272676848413,0.4118133589356134
+J peaks at peak velocity (excess over control),mean spike probability/bin,0.06493506493506493,0.7797509033508973,0.9492619692967446
+J peaks at peak velocity (excess over control),mean |pair correlation|,0.3051948051948052,0.17852871608932538,0.30703059957867246
+J peaks at peak velocity (excess over control),max pair correlation,0.3,0.18641143545847969,0.30703059957867246
+J peaks at peak velocity (excess over control),FR movement modulation,0.005194805194805195,0.9821704184352004,0.9866273665163273
+J peaks at peak velocity (excess over control),2022 cohort,0.017407765595569783,0.9402998619287342,0.9866273665163273
+J / FR modulation (flat-FR dissociation),population size N,0.4759431852484239,0.02919044699919093,0.07430295599794055
+J / FR modulation (flat-FR dissociation),reaches,0.22265700499600727,0.3319888734194892,0.44265183122598556
+J / FR modulation (flat-FR dissociation),mean spike probability/bin,0.2532467532467532,0.2680179144710945,0.4118133589356134
+J / FR modulation (flat-FR dissociation),mean |pair correlation|,-0.4402597402597402,0.04578807772937217,0.09862047510941697
+J / FR modulation (flat-FR dissociation),max pair correlation,0.0038961038961038965,0.9866273665163273,0.9866273665163273
+J / FR modulation (flat-FR dissociation),FR movement modulation,-0.5493506493506494,0.009895938735993823,0.030787364956425225
+J / FR modulation (flat-FR dissociation),2022 cohort,-0.31333978072025614,0.1666331806885352,0.30703059957867246
+coupling gain beyond time-varying rates,population size N,0.6573477599537658,0.001203630719675603,0.0067403320301833766
+coupling gain beyond time-varying rates,reaches,-0.4843766424474544,0.026069930202506832,0.07299580456701912
+coupling gain beyond time-varying rates,mean spike probability/bin,0.24025974025974026,0.29415239923972386,0.4118133589356134
+coupling gain beyond time-varying rates,mean |pair correlation|,0.5636363636363637,0.007792500417952205,0.02727375146283272
+coupling gain beyond time-varying rates,max pair correlation,0.9142857142857143,6.836939778522557e-09,1.914343137986316e-07
+coupling gain beyond time-varying rates,FR movement modulation,0.461038961038961,0.03541978661443525,0.08264616876701558
+coupling gain beyond time-varying rates,2022 cohort,0.6963106238227913,0.000454508860258674,0.003181562021810718
+late-epoch coupling gain change,population size N,-0.02925880237182934,0.8998135511065851,0.9866273665163273
+late-epoch coupling gain change,reaches,-0.40625137753657464,0.06763739927984916,0.13527479855969832
+late-epoch coupling gain change,mean spike probability/bin,-0.07272727272727272,0.7540636728389069,0.9492619692967446
+late-epoch coupling gain change,mean |pair correlation|,0.8207792207792207,5.1607825485236015e-06,7.225095567933043e-05
+late-epoch coupling gain change,max pair correlation,0.625974025974026,0.0024016012615434247,0.01013877077024644
+late-epoch coupling gain change,FR movement modulation,0.6233766233766234,0.00253469269256161,0.01013877077024644
+late-epoch coupling gain change,2022 cohort,0.7659416862050704,5.174963483032426e-05,0.00048299659174969316
