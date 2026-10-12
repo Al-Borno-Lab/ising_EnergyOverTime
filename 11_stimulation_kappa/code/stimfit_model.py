@@ -45,7 +45,7 @@ def build_units(Xs, groups):
 class StimFit:
     """Negative penalised log-likelihood and exact gradient for the joint model."""
 
-    def __init__(self, units, B, lamB=1e-5, lamJ=1e-4, lamD=1e-3, lamK=0.0, fit_kappa=True, chunk_budget=3e7):
+    def __init__(self, units, B, lamB=1e-5, lamJ=1e-4, lamD=1e-5, lamK=0.0, fit_kappa=True, chunk_budget=3e7):
         self.u = units; self.B = B; self.K = B.shape[1]; self.N = units["N"]; self.G = units["G"]
         self.nb = units["nblocks"]; self.lam = (lamB, lamJ, lamD, lamK); self.fit_kappa = fit_kappa
         self.S = states(self.N); self.iu = np.triu_indices(self.N, 1); self.nP = len(self.iu[0])

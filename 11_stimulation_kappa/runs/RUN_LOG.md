@@ -7,3 +7,4 @@ Never edit past rows; failed runs stay in the log.
 |---|---|---|---|---|---|---|
 | 2026-10-12 14:30 | submitted | MacBook-Pro-140 | 2617525 | - | `11_stimulation_kappa/results/validation` | synthetic validation (local, 13 procs): python code/validate_stimfit.py 13 results/validation 12 8; SYNTHETIC; 40 tasks; criteria VALIDATION_CRITERIA_2026-10-12.md |
 | 2026-10-12 14:37 | failed | MacBook-Pro-140 | 2617525 (+uncommitted changes in experiment) | - | `11_stimulation_kappa/results/validation` | local validation aborted after 11/40 tasks (Mac shared with E10 run, too slow); rerun on cluster with identical code/criteria |
+| 2026-10-12 14:37 | submitted | MacBook-Pro-140 | 0ac4bc3 | 4362873 | `~/ising_wt/e11/results/validation` | sbatch code/sbatch_validate.sh (40 procs): validate_stimfit.py 40 results/validation 12 8; SYNTHETIC; 40 tasks; same criteria |

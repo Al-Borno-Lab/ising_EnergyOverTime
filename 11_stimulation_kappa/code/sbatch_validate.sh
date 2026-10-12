@@ -9,4 +9,4 @@
 # Synthetic validation of stimfit_model (criteria: VALIDATION_CRITERIA_2026-10-12.md). Run from ~/ising_wt/e11.
 cd "$HOME/ising_wt/e11"
 singularity exec "$HOME/projectDir/singularity-env/inverse-ising-arm-2.sif" /entrypoint.sh \
-  python code/validate_stimfit.py 40 results/validation 12 8
+  python code/validate_stimfit.py 40 "${1:-results/validation}" 12 8

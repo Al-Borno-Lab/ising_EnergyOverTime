@@ -38,3 +38,15 @@ Refits of the same data: 1500-iteration cap, `lamK = 1e-3` → Δκ = 0.21 (conv
 `lamK = 0` → Δκ = 0.44; `lamD = 1e-5` made no difference. The ridge on κ shrinks it because κ is one scalar with plenty of
 data behind it. Defaults changed to **`lamK = 0`** and **maxiter = 800**. The criteria and scenarios above are unchanged,
 and all five scenarios are run with the new defaults. Those four smoke fits are development only and are not counted.
+
+## Result of run 1 (2026-10-12, defaults lamD = 1e-3, lamK = 0; cluster job 4362873; `assets/tables/validation_run1_*`)
+Passed: criteria 1 (A 0.447, E 0.472), 3, 4 (100% converged), 5 (median J corr 0.9996); B (mean Δκ 0.074, 8/8 under 0.3) and D (0.027, 8/8).
+**Failed criterion 2 in scenario C** (rate change confined to the pulse window): mean Δκ = 0.43, sd 0.29, only 1/8 replicates under 0.3.
+This is a false positive of the model as specified. Overall: FAIL.
+
+## Amendment 2 (2026-10-12, after run 1; criteria and scenarios unchanged)
+Diagnosis: same mechanism as amendment 1. The window intercepts d_g exist to absorb uniform rate shifts, but their ridge
+(`lamD = 1e-3`, in per-bin-normalised units) is large against the information in a 6-bin window, so d_g is shrunk and the
+unabsorbed rate shift leaks into κ. Change: **`lamD = 1e-5`** (equal to `lamB`). Nothing else changes.
+All five scenarios are rerun with the same seeds (run 2). Run 1 stays on record; both runs are reported. If run 2 fails
+any criterion, the failure is reported as is.
