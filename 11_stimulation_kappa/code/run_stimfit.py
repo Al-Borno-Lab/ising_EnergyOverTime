@@ -115,10 +115,13 @@ def run_task(task):
         Xk = shuffle_blocks(Xk, np.random.default_rng(seed_shuf))
     Xk, groups, B = crop(Xk, groups)
     res = sm.fit_session(Xk, groups, B, maxiter=MAXITER, tol=TOL, **LAM)
+    reran = False
+    if not res["converged"]:                                            # pre-registered: rerun once from the last iterate, 2000 iterations
+        res = sm.fit_session(Xk, groups, B, p0=res["p"], maxiter=2000, tol=TOL, **LAM); reran = True
     row = dict(session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
                groups=res["groups"], kappa=[float(k) for k in res["kappa"]], converged=res["converged"], nit=res["nit"],
                ll=res["ll"], seed_subset=[SEED0, int(date)], seed_shuffle=seed_shuf, seed_pseudo=[SEED0, int(date), 7],
-               t_range=[T_LO, T_HI], maxiter=MAXITER, tol=TOL, lam=LAM, secs=time.time() - t0)
+               t_range=[T_LO, T_HI], maxiter=MAXITER, tol=TOL, lam=LAM, reran=reran, secs=time.time() - t0)
     if kind == "primary" or kind == "exact":
         row.update(thermo_small.window_thermo(Xk, groups, B, res))
     os.makedirs(os.path.dirname(path), exist_ok=True)

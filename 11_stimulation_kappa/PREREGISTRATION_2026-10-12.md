@@ -20,7 +20,7 @@ block-specific fields and window intercepts.
 P(s) ∝ exp(h_b(t)·s + ½ a_{r,t} sᵀJs), s ∈ {−1,+1}^N; a = 1 + κ_g inside window group g, else 1; h_b(t) = B(t)W_b (+ d_g inside group g).
 - Basis: cubic B-splines built on bins 300–559 (`bspline_basis_crop` in `code/tvfield_model_basis.py`): 25-bin knots 300–340, 5-bin knots 340–559, clamped ends (the 5-bin spacing is that of E09 `bspline_basis(400)`). 260 bins per block.
 - Penalties (per-bin-normalised): λ_B = 1e-5 on W, λ_J = 1e-4 on J, λ_D = 1e-5 on d_g, **λ_κ = 0**. L-BFGS-B, ≤ 800 iterations, exact enumeration.
-- Convergence rule: a non-converged fit is rerun once with 2000 iterations; if it still has not converged it is excluded and listed. A session needs ≥ 5 converged subsets (N > 16) or a converged fit (N ≤ 16), else it is reported as failed and left out of S1–S3.
+- Convergence rule: a non-converged fit is rerun once from its last iterate with 2000 iterations (`reran` is stored); if it still has not converged it is excluded and listed. A session needs ≥ 5 converged subsets (N > 16) or a converged fit (N ≤ 16), else it is reported as failed and left out of S1–S3.
 
 ## 4. Windows
 - **Pulse** (stim_1, per reach): bins `floor(onset_float)` … +5 (60 ms). Primary rounding: floor (the bin containing the laser time).
@@ -79,3 +79,12 @@ Scenarios (all SYNTHETIC): A κ = +0.5; B rate-only ramp; C rate change confined
 
 ### Amendment A1 (2026-10-12, before any real-data fit)
 `assets/tables/laser_onsets.csv` regenerated to keep excluded reaches with their `exclude` flag (1249 rows; the 1092 `exclude == 0` rows are identical to the previous table). Needed only for sensitivity analysis 3 (all reaches). Extraction only; no model was fitted. `run_stimfit.py` gained task filters (`--subsets`, `--nshuf`) used for the smoke test; no analysis choice changed.
+
+### Amendment A2 (2026-10-12, before the full real-data run)
+- **Fit settings.** Optimiser tolerance `ftol = 1e-7` (validation amendment 5; validation run 5 passes). Chosen on iteration counts and log-likelihood, not on Δκ.
+  **Disclosure:** smoke and diagnosis fits on session 210511 (N = 12, subset all neurons) and the timing fit on session 220519 (subset 0) were run and their κ values were visible before this amendment.
+  In 210511 the primary Δκ_raw was about 0.00 (κ_pulse −0.32, κ_control −0.32). Those fits are logged in `runs/RUN_LOG.md` as smoke/diagnosis and are **not** used as results; the same sessions are refitted in the full run.
+  A stronger spline ridge (λ_B 1e-4) was tested on 210511 and rejected because it changes the model (log-likelihood −2,400 nats), not because of its κ.
+- **Rerun rule implemented** as in section 3 (one rerun, 2000 iterations).
+- **Null mean** needs at least 10 converged shuffles of 20 for a (session, subset), else that subset is dropped from S1 and listed.
+- **Cost (measured).** One 16-neuron fit: 11.4 CPU-min (session 220519, 306 iterations); N = 12: about 3 CPU-min. Total for the full plan (21 sessions, all variants on all subsets, 20 shuffles): about 590 CPU-hours, i.e. about 3.1 h wall time per job as 3 jobs × 64 CPUs.
