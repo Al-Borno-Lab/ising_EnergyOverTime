@@ -45,7 +45,7 @@ def build_units(Xs, groups):
 class StimFit:
     """Negative penalised log-likelihood and exact gradient for the joint model."""
 
-    def __init__(self, units, B, lamB=1e-5, lamJ=1e-4, lamD=1e-3, lamK=1e-3, fit_kappa=True, chunk_budget=3e7):
+    def __init__(self, units, B, lamB=1e-5, lamJ=1e-4, lamD=1e-3, lamK=0.0, fit_kappa=True, chunk_budget=3e7):
         self.u = units; self.B = B; self.K = B.shape[1]; self.N = units["N"]; self.G = units["G"]
         self.nb = units["nblocks"]; self.lam = (lamB, lamJ, lamD, lamK); self.fit_kappa = fit_kappa
         self.S = states(self.N); self.iu = np.triu_indices(self.N, 1); self.nP = len(self.iu[0])
@@ -131,7 +131,7 @@ class StimFit:
         p = np.zeros(self.size); p[slice(*self.slices["W"])] = W0.ravel()
         return p
 
-    def fit(self, p0=None, maxiter=400, tol=1e-9):
+    def fit(self, p0=None, maxiter=800, tol=1e-9):
         p0 = self.init() if p0 is None else p0
         res = minimize(self.f, p0, jac=True, method="L-BFGS-B", options=dict(maxiter=maxiter, ftol=tol, gtol=1e-7))
         W, D, kap, J = self.unpack(res.x)
@@ -139,7 +139,7 @@ class StimFit:
                     ll=-res.fun * self.nbins)
 
 
-def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=400, **lam):
+def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=800, **lam):
     """Convenience: build units, fit, return result dict (adds group names)."""
     units = build_units(Xs, groups)
     sf = StimFit(units, B, fit_kappa=fit_kappa, **lam)

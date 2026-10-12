@@ -31,3 +31,10 @@ SYNTHETIC DATA, method validation only. No real data is touched.
 5. Median over fits of corr(Ĵ, J_true) over pairs ≥ 0.90.
 
 Any change to this document after the first validation run is made as a dated amendment below, never by editing above.
+
+## Amendment 1 (2026-10-12, before the validation run; no criterion changed)
+A development smoke fit (scenario A, seed 0, `lamK = 1e-3`, 300 iterations) returned Δκ = 0.21 and did not converge.
+Refits of the same data: 1500-iteration cap, `lamK = 1e-3` → Δκ = 0.21 (converged: the ridge, not the iteration cap, is the cause);
+`lamK = 0` → Δκ = 0.44; `lamD = 1e-5` made no difference. The ridge on κ shrinks it because κ is one scalar with plenty of
+data behind it. Defaults changed to **`lamK = 0`** and **maxiter = 800**. The criteria and scenarios above are unchanged,
+and all five scenarios are run with the new defaults. Those four smoke fits are development only and are not counted.
