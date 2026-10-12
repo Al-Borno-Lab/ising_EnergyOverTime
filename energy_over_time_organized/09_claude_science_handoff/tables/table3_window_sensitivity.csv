@@ -1,0 +1,6 @@
+label,n,n_leads_accel_phase,n_lags_decel_phase,n_simultaneous,mean_lag,median_lag,pct_decel_phase,sign_test_p,wilcoxon_p
+window 325-450,20,8,12,0,12.3,18.5,60.0,0.5034,0.0456
+window 350-425,12,8,4,0,-4.58,-8.0,33.3,0.3877,0.582
+window 350-475,27,10,17,0,11.3,15.0,63.0,0.2478,0.027
+window 350-475 (all-stim variant),12,4,8,0,6.42,2.5,66.7,0.3877,0.3311
+arbitration_j_manual (default window),20,8,12,0,12.3,18.5,60.0,0.5034,0.0456

@@ -1,0 +1,24 @@
+test,subset,n,median,n_pos,p
+late LLR (Ising − time-varying indep.),stim 0,21,0.08236228528665922,14.0,0.05469322204589844
+late covariance part of J,stim 0,21,-5.003891649728312e-06,10.0,0.1789875030517578
+late LLR (Ising − time-varying indep.),stim 1,21,-0.014728128079523718,10.0,0.10321426391601562
+late covariance part of J,stim 1,21,0.00020659178346098137,12.0,0.08219528198242188
+late LLR (Ising − time-varying indep.),stim 2,21,0.025626036379867975,13.0,0.08219528198242188
+late covariance part of J,stim 2,21,0.001164652080808052,14.0,0.010125160217285156
+late LLR (Ising − time-varying indep.),odd reaches,21,0.10183460441650981,13.0,0.05469322204589844
+late LLR (Ising − time-varying indep.),even reaches,21,0.008299851848892481,11.0,0.09579944610595703
+odd vs even reach split-half agreement (conditions),Spearman rho,63,0.8861847158218127,,4.759294769103777e-22
+late LLR (Ising − time-varying indep.),2021 sessions,15,-0.034308881130097994,6.0,0.890380859375
+late LLR (Ising − time-varying indep.),2022 sessions,6,1.55565640052725,6.0,0.03125
+"coupling gain (M1 − M0), late − baseline",all sessions,21,0.10304997553486499,13.0,0.014165878295898438
+"lagged-state gain, late − baseline",all sessions,21,0.03272316322521912,13.0,0.03191947937011719
+epoch-specific J: held-out gain in late epoch,all sessions,21,-0.016202051451419168,6.0,0.1571340560913086
+"epoch-specific J: fitted coupling change, late",all sessions,21,0.007523619273432233,17.0,0.000720977783203125
+"coupling gain (M1 − M0), late − baseline",2021 sessions,15,-0.0026536009625557112,7.0,0.45428466796875
+"lagged-state gain, late − baseline",2021 sessions,15,-0.004117637605708696,7.0,0.7197265625
+epoch-specific J: held-out gain in late epoch,2021 sessions,15,-0.016202051451419168,3.0,0.05535888671875
+"epoch-specific J: fitted coupling change, late",2021 sessions,15,0.0048347561700013,11.0,0.041259765625
+"coupling gain (M1 − M0), late − baseline",2022 sessions,6,1.9664271779902671,6.0,0.03125
+"lagged-state gain, late − baseline",2022 sessions,6,1.119956599321106,6.0,0.03125
+epoch-specific J: held-out gain in late epoch,2022 sessions,6,0.004435657831820684,3.0,0.84375
+"epoch-specific J: fitted coupling change, late",2022 sessions,6,0.02418830667665085,6.0,0.03125

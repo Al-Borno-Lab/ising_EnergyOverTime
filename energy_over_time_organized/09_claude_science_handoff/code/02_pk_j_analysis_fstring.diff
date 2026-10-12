@@ -1,0 +1,32 @@
+--- a/04_collective_activity_pk/code/pk_j_analysis.py
++++ b/04_collective_activity_pk/code/pk_j_analysis.py
+@@ -43,6 +43,8 @@
+     gaussian_smooth        as _gaussian_smooth,
+ )
+ 
++CHECK = "\u2713"  # used inside f-string expressions; a literal backslash there needs Python >= 3.12
++
+ # Each row of per_reach_state.csv is one 10 ms time bin; x/y/z positions are
+ # recorded in cm. Used to convert bin indices to ms and position deltas to
+ # cm/s, cm/s^2 for axis labels and unit-correct kinematic traces.
+@@ -445,7 +447,7 @@
+             f"r_indep={_na(pk_mets['r_independent'])}  "
+             f"Ising_indep_dist={_na(pk_mets['ising_indep_dist'])}\n"
+             f"IsingCloser(\u00b1{R_TOL:g})={pk_mets['ising_closer']}  "
+-            f"Hypothesis={'MET \u2713' if hypothesis_met else 'not met'}"
++            f"Hypothesis={'MET ' + CHECK if hypothesis_met else 'not met'}"
+         )
+ 
+     fig = plt.figure(figsize=(15, 24), layout="constrained")
+@@ -662,9 +664,9 @@
+ 
+     _bottom_note(fig, (
+         f"SW(r_ising): W={sw_ri:.3f} p={sw_ri_p:.4f} "
+-        f"[{'non-normal \u2713' if sw_ri_p < 0.05 else 'normal'}]    "
++        f"[{'non-normal ' + CHECK if sw_ri_p < 0.05 else 'normal'}]    "
+         f"SW(r_indep): W={sw_rd:.3f} p={sw_rd_p:.4f} "
+-        f"[{'non-normal \u2713' if sw_rd_p < 0.05 else 'normal'}]"
++        f"[{'non-normal ' + CHECK if sw_rd_p < 0.05 else 'normal'}]"
+     ))
+     path = os.path.join(output_dir, "pk_pearson_boxplot_indep_wilcoxon.png")
+     _savefig(fig, path, dpi=150, bbox_inches="tight")

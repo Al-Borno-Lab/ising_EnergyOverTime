@@ -1,0 +1,64 @@
+{
+  "version": 3,
+  "created_at": "2026-09-26T03:57:25.765Z",
+  "task_summary": "Close the six pre-submission open items and update the paper results log",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Set up fitting environment and validate solver",
+              "description": "On math-alderaan, create a dedicated environment (cloned from ising_env) with coniii installed; try conda-forge and a pinned pip version. If coniii cannot be installed, implement the same MCH-style Boltzmann-learning fit in numba: Metropolis sampling, learning rate 1/(i+1), max_iter 75, chain length max(100N, 2000). Validate by refitting 3 conditions (210421 stim 0, 210511 stim 1, 220517 stim 0) and comparing the result with the stored J_parameters.csv / h_parameters.csv (Pearson r of J_ij, model vs. data pairwise correlations). Also time one fit per N to size the later jobs. Deliverables: solver_validation.csv and solver_validation.png (fitted vs. stored J scatter)."
+            },
+            {
+              "title": "Confirm bin width (item 6)",
+              "description": "Read column 0 (time) of the n_* and l_* matrices in the 9 raw .mat files (filenames say 'bin10') and report dt and its spread. Cross-check against BIN_MS = 10.0 in pk_j_analysis.py. Deliverable: bin_width_check.txt. If dt = 10 ms, convert every sample lag in the results log to ms."
+            },
+            {
+              "title": "Co-silence decomposition of the coupling term (item 1)",
+              "description": "SLURM job over all 63 conditions: load the binarized spike columns from per_reach_state.csv and the fitted J_ij, then split ΣJ_ij s_i s_j per bin into co-active (+1,+1), co-silent (−1,−1) and discordant contributions. Check that the three parts sum to the j column (tolerance 1e-9). Normalise each part by pair count. Analyse locally, aligned to peak velocity with baseline z-scoring, phase-mean ΔE contributions, and session-level Wilcoxon + BH-FDR, as in B2/B3. Key question: is the movement-related J rise carried by co-active or co-silent pairs, and does the answer depend on N or on the firing-rate pause? Deliverables: cosilence_decomposition.csv and cosilence_decomposition.png (stacked time courses, per-session phase contributions, dependence on N)."
+            },
+            {
+              "title": "Surrogate refit of couplings (item 2)",
+              "description": "For each of the 63 conditions, generate 100 rate-preserving surrogates (each neuron's binarized train independently time-permuted, as in the falsification test) and refit h, J with the validated solver, parallelised across 64 cores per SLURM job. Per condition, compare real vs. surrogate: mean |J_ij|, the ΣJss movement modulation, and the Ising-vs-independent P(K) advantage. Report the empirical p (fraction of surrogates ≥ real) and a z-score. Pass criterion: couplings collapse toward zero on surrogates and stay above the 95th surrogate percentile on real data. Deliverables: surrogate_refit_results.csv and surrogate_refit_J.png."
+            },
+            {
+              "title": "Time-resolved Ising vs independent comparison (item 3)",
+              "description": "5-fold cross-validation over reaches: fit the Ising and independent (per-neuron Bernoulli) models on the training reaches, then compute the per-bin log-likelihood ratio log P_Ising(s_t) − log P_indep(s_t) on held-out reaches. log Z is computed exactly for N ≤ 24 and by annealed importance sampling above that (checked against exact values at N = 20-24). Align to peak velocity and test pre-reach vs. acceleration vs. deceleration vs. post, per session with FDR. Also test the flat-firing-rate conditions, including 210511 stim 1. Key question: does the pairwise model's advantage increase during the reach, and does it do so where firing rate is flat? Deliverables: timeresolved_llr.csv and timeresolved_ising_vs_independent.png."
+            },
+            {
+              "title": "Resolve duplicated units in 210620 and 220515 (item 4)",
+              "description": "Identify the duplicated pair in each session from the binarized spike columns (pair correlation 0.985 / 0.89). Drop the lower-rate unit of each pair, refit the 6 conditions with the validated solver, and recompute energy/J/h per bin. Re-run the energy decomposition, J time-course, single-reach peak clustering and FR-vs-J arbitration using the refitted sessions. Deliverables: dedup_units.csv (which units were dropped), dedup_effect.csv (key statistics with original / excluded / deduplicated sessions)."
+            },
+            {
+              "title": "Regenerate the three fixed scripts (item 5)",
+              "description": "Run arbitration_j_many.py, test_collective_j_timing.py (including the unbiased build_dataset_raw_extrema path via --raw_csv_out) and aggregate_transition_analysis.py by sbatch, writing into a new folder, 07_presubmission_checks/regenerated/, so the old outputs are not overwritten. Tabulate the new values next to the legacy claims (J-lag fraction, pooled Cohen's d, cross-correlation lead/lag signs). Any lag test that uses a peak-search window is re-checked with the control-window method. Deliverable: regenerated_vs_legacy.csv."
+            },
+            {
+              "title": "Re-render the two biased figures",
+              "description": "Rebuild panel b of phase_timing_summary.png and the peak-timing rows of sensitivity_robustness.png, expressing each lag as real minus control-window lag. Use this to replace the earlier biased versions; save them as new versions of the existing artifacts."
+            },
+            {
+              "title": "Write resolution report and update the results log",
+              "description": "Write OPEN_ITEMS_RESOLUTION.md, covering method, result and verdict for each item. Update RESULTS_LOG_FOR_PAPER.md: close Section E, move results between A-D as the evidence requires, convert lags to ms if confirmed, and update the figure table. Save all artifacts and mirror them to energy_over_time_organized/07_presubmission_checks/ on math-alderaan, confirming the files arrived with a directory listing."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "desired_outputs": [
+    "OPEN_ITEMS_RESOLUTION.md",
+    "Updated RESULTS_LOG_FOR_PAPER.md (Section E closed; A-D revised)",
+    "Figures: cosilence_decomposition.png, surrogate_refit_J.png, timeresolved_ising_vs_independent.png, corrected phase_timing_summary.png and sensitivity_robustness.png",
+    "Result tables for each item, mirrored to energy_over_time_organized/07_presubmission_checks/ on math-alderaan"
+  ],
+  "feasibility": {
+    "rationale": "Everything needed is on the cluster: the binarized spike columns and fitted h/J for all 63 conditions, the raw .mat for 9 sessions, and the three fixed scripts with their command-line options. There is one real risk. coniii, the solver the pipeline used, is no longer installed and its pip build currently fails. The plan is to fix the build or, failing that, re-implement the same Monte-Carlo Boltzmann-learning fit (checked against the stored J) before any refitting. The surrogate refit and the cross-validated likelihood comparison are the expensive steps, a few hours of SLURM time, and both run as parallel sbatch jobs. Any regenerated script output that relies on an asymmetric peak-search window will be checked with the control-window test before it is trusted.",
+    "confidence": "medium"
+  }
+}

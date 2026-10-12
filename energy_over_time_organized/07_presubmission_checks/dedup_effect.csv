@@ -1,0 +1,31 @@
+variant,test,median,p
+original (21 sessions),"coupling ΔE, acceleration",-0.2981838629083843,1.33514404296875e-05
+original (21 sessions),"field ΔE, acceleration",-0.08706055839422937,0.9186935424804688
+original (21 sessions),"coupling ΔE, deceleration",-0.21118478206999466,0.00013065338134765625
+original (21 sessions),"field ΔE, deceleration",-0.12775083849652238,0.8381938934326172
+original (21 sessions),"coupling ΔE, post",-0.20588736585429848,0.000720977783203125
+original (21 sessions),"field ΔE, post",-0.013210971737284657,1.0
+original (21 sessions),J minus FR modulation,-1.375772077083346,0.005541801452636719
+original (21 sessions),J z-peak (session mean),4.62213674465231,
+original (21 sessions),single-reach J peak within ±5 of peak vel,0.08472222222222221,
+original (21 sessions),"rho(J mod, FR mod) across conditions",0.7436635944700462,2.9109604055019763e-12
+excluded (19 sessions),"coupling ΔE, acceleration",-0.2981838629083843,5.340576171875e-05
+excluded (19 sessions),"field ΔE, acceleration",-0.021275047085820512,0.8287849426269531
+excluded (19 sessions),"coupling ΔE, deceleration",-0.20869227501469445,0.000522613525390625
+excluded (19 sessions),"field ΔE, deceleration",-0.004748979265291359,0.6225624084472656
+excluded (19 sessions),"coupling ΔE, post",-0.20588736585429848,0.000965118408203125
+excluded (19 sessions),"field ΔE, post",-0.0017598921261877305,0.8595733642578125
+excluded (19 sessions),J minus FR modulation,-1.375772077083346,0.00945281982421875
+excluded (19 sessions),J z-peak (session mean),4.62213674465231,
+excluded (19 sessions),single-reach J peak within ±5 of peak vel,0.07878787878787878,
+excluded (19 sessions),"rho(J mod, FR mod) across conditions",0.7214804252009335,2.430164642159372e-10
+deduplicated (21 sessions),"coupling ΔE, acceleration",-0.29963828141502175,1.33514404296875e-05
+deduplicated (21 sessions),"field ΔE, acceleration",-0.08706055839422937,0.8917322158813477
+deduplicated (21 sessions),"coupling ΔE, deceleration",-0.20869227501469445,0.00013065338134765625
+deduplicated (21 sessions),"field ΔE, deceleration",-0.12775083849652238,0.8381938934326172
+deduplicated (21 sessions),"coupling ΔE, post",-0.20588736585429848,0.000720977783203125
+deduplicated (21 sessions),"field ΔE, post",-0.009796396867012799,1.0
+deduplicated (21 sessions),J minus FR modulation,-1.1560912652641528,0.0062808990478515625
+deduplicated (21 sessions),J z-peak (session mean),4.62213674465231,
+deduplicated (21 sessions),single-reach J peak within ±5 of peak vel,0.08472222222222221,
+deduplicated (21 sessions),"rho(J mod, FR mod) across conditions",0.7404953917050692,4.021712654717328e-12

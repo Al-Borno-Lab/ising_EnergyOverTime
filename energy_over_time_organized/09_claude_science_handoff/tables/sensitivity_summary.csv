@@ -1,0 +1,85 @@
+check,variant,test,n_sessions,statistic,p,direction,p_fdr_within_check
+energy decomposition,all sessions,"coupling ΔE contribution, acceleration",21,-0.2981838629083843,1.33514404296875e-05,negative,0.00016021728515625
+energy decomposition,all sessions,"field ΔE contribution, acceleration",21,-0.08706055839422937,0.9186935424804688,negative,1.0
+energy decomposition,all sessions,"coupling ΔE contribution, deceleration",21,-0.21118478206999466,0.00013065338134765625,negative,0.000522613525390625
+energy decomposition,all sessions,"field ΔE contribution, deceleration",21,-0.12775083849652238,0.8381938934326172,negative,1.0
+energy decomposition,all sessions,"coupling ΔE contribution, post",21,-0.20588736585429848,0.000720977783203125,negative,0.0017303466796874999
+energy decomposition,all sessions,"field ΔE contribution, post",21,-0.013210971737284657,1.0,negative,1.0
+energy decomposition,excl. 210620/220515,"coupling ΔE contribution, acceleration",19,-0.2981838629083843,5.340576171875e-05,negative,0.0003204345703125
+energy decomposition,excl. 210620/220515,"field ΔE contribution, acceleration",19,-0.021275047085820512,0.8287849426269531,negative,1.0
+energy decomposition,excl. 210620/220515,"coupling ΔE contribution, deceleration",19,-0.20869227501469445,0.000522613525390625,negative,0.001567840576171875
+energy decomposition,excl. 210620/220515,"field ΔE contribution, deceleration",19,-0.004748979265291359,0.6225624084472656,negative,1.0
+energy decomposition,excl. 210620/220515,"coupling ΔE contribution, post",19,-0.20588736585429848,0.000965118408203125,negative,0.00193023681640625
+energy decomposition,excl. 210620/220515,"field ΔE contribution, post",19,-0.0017598921261877305,0.8595733642578125,negative,1.0
+peak timing (signal max),"all, window -50/+100",energy: lag to peak acceleration,21,-22.0,0.07905600788417368,before,0.15811201576834735
+peak timing (signal max),"all, window -50/+100",energy: acceleration-phase enrichment (3/63),21,3.0,0.7924713097650752,n.s.,0.8846191364819443
+peak timing (signal max),"all, window -50/+100",j: lag to peak acceleration,21,30.0,0.0019407571899736017,after,0.020505593008104093
+peak timing (signal max),"all, window -50/+100",j: acceleration-phase enrichment (10/63),21,10.0,0.007825831999356107,enriched,0.04166476304373707
+peak timing (signal max),"all, window -50/+100",h: lag to peak acceleration,21,5.0,0.22371780852294876,after,0.32540772148792546
+peak timing (signal max),"all, window -50/+100",h: acceleration-phase enrichment (8/63),21,8.0,0.053967483728606734,n.s.,0.12952196094865615
+peak timing (signal max),"all, window -50/+100",firing_rate: lag to peak acceleration,21,-2.0,0.4444002962979384,before,0.5613911937760103
+peak timing (signal max),"all, window -50/+100",firing_rate: acceleration-phase enrichment (8/63),21,8.0,0.053967483728606734,n.s.,0.12952196094865615
+peak timing (signal max),"excl., window -50/+100",energy: lag to peak acceleration,19,-22.0,0.09875238927128258,before,0.18960458740086253
+peak timing (signal max),"excl., window -50/+100",energy: acceleration-phase enrichment (3/57),19,3.0,0.7148496734629208,n.s.,0.857819608155505
+peak timing (signal max),"excl., window -50/+100",j: lag to peak acceleration,19,30.0,0.002899250446552986,after,0.020505593008104093
+peak timing (signal max),"excl., window -50/+100",j: acceleration-phase enrichment (9/57),19,9.0,0.00984776634933797,enriched,0.04297207134256569
+peak timing (signal max),"excl., window -50/+100",h: lag to peak acceleration,19,14.0,0.18413634250225153,after,0.2762045137533773
+peak timing (signal max),"excl., window -50/+100",h: acceleration-phase enrichment (5/57),19,5.0,0.30014863527672714,n.s.,0.41163241409379725
+peak timing (signal max),"excl., window -50/+100",firing_rate: lag to peak acceleration,19,3.0,0.2861372502961751,after,0.40395847100636484
+peak timing (signal max),"excl., window -50/+100",firing_rate: acceleration-phase enrichment (6/57),19,6.0,0.15596083171485095,n.s.,0.24148773942944662
+peak timing (signal max),window -25/+100,energy: lag to peak acceleration,21,3.0,0.13518670023207044,after,0.2162987203713127
+peak timing (signal max),window -25/+100,energy: acceleration-phase enrichment (4/63),21,4.0,0.7430784322239578,n.s.,0.8699454816280482
+peak timing (signal max),window -25/+100,j: lag to peak acceleration,21,30.0,0.0011527069795673173,after,0.020505593008104093
+peak timing (signal max),window -25/+100,j: acceleration-phase enrichment (10/63),21,10.0,0.025292232725889232,enriched,0.08093514472284555
+peak timing (signal max),window -25/+100,h: lag to peak acceleration,21,32.0,0.0012241444211248383,after,0.020505593008104093
+peak timing (signal max),window -25/+100,h: acceleration-phase enrichment (8/63),21,8.0,0.12213155464057344,n.s.,0.20214878009474227
+peak timing (signal max),window -25/+100,firing_rate: lag to peak acceleration,21,26.0,0.029804316063686352,after,0.08941294819105906
+peak timing (signal max),window -25/+100,firing_rate: acceleration-phase enrichment (8/63),21,8.0,0.12213155464057344,n.s.,0.20214878009474227
+peak timing (signal max),window -75/+100,energy: lag to peak acceleration,21,-24.0,0.04195795662189887,before,0.11188788432506365
+peak timing (signal max),window -75/+100,energy: acceleration-phase enrichment (2/63),21,2.0,0.8771523723965324,n.s.,0.9083414526535952
+peak timing (signal max),window -75/+100,j: lag to peak acceleration,21,30.0,0.0029903989803485138,after,0.020505593008104093
+peak timing (signal max),window -75/+100,j: acceleration-phase enrichment (10/63),21,10.0,0.002663246557878317,enriched,0.020505593008104093
+peak timing (signal max),window -75/+100,h: lag to peak acceleration,21,4.0,0.43408274717424733,after,0.5613911937760103
+peak timing (signal max),window -75/+100,h: acceleration-phase enrichment (8/63),21,8.0,0.024921211946455905,enriched,0.08093514472284555
+peak timing (signal max),window -75/+100,firing_rate: lag to peak acceleration,21,-12.0,0.7676407211749356,before,0.8773036813427836
+peak timing (signal max),window -75/+100,firing_rate: acceleration-phase enrichment (7/63),21,7.0,0.06387055833257949,n.s.,0.13329507825929632
+peak timing (signal max),window -50/+75,energy: lag to peak acceleration,21,-24.0,0.03247095208821191,before,0.09168268824906892
+peak timing (signal max),window -50/+75,energy: acceleration-phase enrichment (3/63),21,3.0,0.8835398960978249,n.s.,0.9083414526535952
+peak timing (signal max),window -50/+75,j: lag to peak acceleration,21,20.0,0.0075802369008569365,after,0.04166476304373707
+peak timing (signal max),window -50/+75,j: acceleration-phase enrichment (10/63),21,10.0,0.025292232725889232,enriched,0.08093514472284555
+peak timing (signal max),window -50/+75,h: lag to peak acceleration,21,2.0,0.930740018559143,after,0.930740018559143
+peak timing (signal max),window -50/+75,h: acceleration-phase enrichment (8/63),21,8.0,0.12213155464057344,n.s.,0.20214878009474227
+peak timing (signal max),window -50/+75,firing_rate: lag to peak acceleration,21,-5.0,0.8894176723899786,before,0.9083414526535952
+peak timing (signal max),window -50/+75,firing_rate: acceleration-phase enrichment (8/63),21,8.0,0.12213155464057344,n.s.,0.20214878009474227
+peak timing (signal max),window -50/+125,energy: lag to peak acceleration,21,-11.0,0.6638037273349311,before,0.8169892028737613
+peak timing (signal max),window -50/+125,energy: acceleration-phase enrichment (2/63),21,2.0,0.8771523723965324,n.s.,0.9083414526535952
+peak timing (signal max),window -50/+125,j: lag to peak acceleration,21,30.0,0.0013206744302887176,after,0.020505593008104093
+peak timing (signal max),window -50/+125,j: acceleration-phase enrichment (7/63),21,7.0,0.06387055833257949,n.s.,0.13329507825929632
+peak timing (signal max),window -50/+125,h: lag to peak acceleration,21,25.0,0.008680158967445223,after,0.04166476304373707
+peak timing (signal max),window -50/+125,h: acceleration-phase enrichment (7/63),21,7.0,0.06387055833257949,n.s.,0.13329507825929632
+peak timing (signal max),window -50/+125,firing_rate: lag to peak acceleration,21,-2.0,0.44443469507267486,before,0.5613911937760103
+peak timing (signal max),window -50/+125,firing_rate: acceleration-phase enrichment (8/63),21,8.0,0.024921211946455905,enriched,0.08093514472284555
+arbitration: modulation depth,all sessions,energy minus firing rate,21,-2.1904690481544007,0.0018587112426757812,FR stronger,0.0037174224853515625
+arbitration: modulation depth,all sessions,j minus firing rate,21,-1.375772077083346,0.005541801452636719,FR stronger,0.006650161743164062
+arbitration: modulation depth,all sessions,h minus firing rate,21,-2.8698405589889466,0.00013065338134765625,FR stronger,0.0007839202880859375
+arbitration: modulation depth,excl. 210620/220515,energy minus firing rate,19,-2.1904690481544007,0.005329132080078125,FR stronger,0.006650161743164062
+arbitration: modulation depth,excl. 210620/220515,j minus firing rate,19,-1.375772077083346,0.00945281982421875,FR stronger,0.00945281982421875
+arbitration: modulation depth,excl. 210620/220515,h minus firing rate,19,-2.8698405589889466,0.000335693359375,FR stronger,0.001007080078125
+criticality proxy (sliding variance),W=15,Var(energy) peak lag to peak velocity,21,1.0,0.6513036801556162,after,0.6513036801556162
+criticality proxy (sliding variance),W=15,Var(energy) trough lag to peak velocity,21,31.0,0.00029277801513671875,after,0.0052700042724609375
+criticality proxy (sliding variance),W=15,Var(j) peak lag to peak velocity,21,9.0,0.027283044916111405,after,0.07015640121285789
+criticality proxy (sliding variance),W=15,Var(j) trough lag to peak velocity,21,12.0,0.05216055045471801,after,0.09388899081849242
+criticality proxy (sliding variance),W=15,Var(h) peak lag to peak velocity,21,-9.0,0.4978175013901468,before/at,0.5600812160729489
+criticality proxy (sliding variance),W=15,Var(h) trough lag to peak velocity,21,35.0,0.0020943460747549067,after,0.00942455733639708
+criticality proxy (sliding variance),W=25,Var(energy) peak lag to peak velocity,21,5.0,0.5780697648877229,after,0.6120738687046477
+criticality proxy (sliding variance),W=25,Var(energy) trough lag to peak velocity,21,36.0,0.001016792327845186,after,0.009151130950606674
+criticality proxy (sliding variance),W=25,Var(j) peak lag to peak velocity,21,11.0,0.05158566243003631,after,0.09388899081849242
+criticality proxy (sliding variance),W=25,Var(j) trough lag to peak velocity,21,9.0,0.07898803390860644,after,0.12925314639590144
+criticality proxy (sliding variance),W=25,Var(h) peak lag to peak velocity,21,-9.0,0.14908546341369186,before/at,0.2236281951205378
+criticality proxy (sliding variance),W=25,Var(h) trough lag to peak velocity,21,32.0,0.003306707513288986,after,0.011904147047840348
+criticality proxy (sliding variance),W=40,Var(energy) peak lag to peak velocity,21,4.0,0.4978499698426212,after,0.5600812160729489
+criticality proxy (sliding variance),W=40,Var(energy) trough lag to peak velocity,21,38.0,0.0020685221009487595,after,0.00942455733639708
+criticality proxy (sliding variance),W=40,Var(j) peak lag to peak velocity,21,2.0,0.33033728780205096,after,0.44734760527899425
+criticality proxy (sliding variance),W=40,Var(j) trough lag to peak velocity,21,25.0,0.0477798462606429,after,0.09388899081849242
+criticality proxy (sliding variance),W=40,Var(h) peak lag to peak velocity,21,-6.0,0.34793702632810664,before/at,0.44734760527899425
+criticality proxy (sliding variance),W=40,Var(h) trough lag to peak velocity,21,34.0,0.0063548350880809745,after,0.019064505264242925

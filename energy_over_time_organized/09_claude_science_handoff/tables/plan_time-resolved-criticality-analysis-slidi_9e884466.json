@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "created_at": "2026-09-15T21:40:39.170Z",
+  "task_summary": "Time-resolved criticality analysis: sliding-window energy-fluctuation proxy vs. kinematics",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Pull per_reach_state.csv for a pilot session and inspect structure",
+              "description": "Download per_reach_state.csv for one session (210421, all 3 stims) from the cluster. Confirm per-reach time alignment (reach_idx, trial length, sampling rate) and that energy/j/h/firing_rate/x/y/z columns line up correctly across reaches. Compute basic descriptive stats (energy range, j range, h range, number of reaches per stim) as a sanity check before building the sliding-window machinery."
+            },
+            {
+              "title": "Implement and pilot the sliding-window fluctuation proxy on one session",
+              "description": "Write a windowed-variance function: for each reach, slide a window (start at W=25 samples, step=5, matching the finer end of window sizes already used in this project's other timing tests) across the energy, j, and h time series, computing Var(energy), Var(j), Var(h) per window position. Average across reaches within a stim to get one C(t), C_j(t), C_h(t) trajectory per session/stim. Plot all three trajectories against the trial's mean velocity/acceleration time course for the pilot session (210421) as a first visual check that the signal looks reasonable (not just noise) before scaling up. Save pilot_criticality_proxy.png."
+            },
+            {
+              "title": "Scale the fluctuation-proxy computation to every available session/stim",
+              "description": "Run the windowed-variance computation (Step 2's function) across all sessions/stims with per_reach_state.csv on the cluster (target the same ~21 sessions x up to 3 stims used elsewhere in this audit). For each session/stim, extract the peak location of C(t) (and separately C_j(t), C_h(t)) and its timing relative to peak velocity and peak acceleration, using the same direct-index-subtraction lag convention already validated and fixed (lag = argmax(C(t)) - kinematic_peak_idx). Save criticality_timing_raw.csv with one row per session/stim/trace (C, C_j, C_h)."
+            },
+            {
+              "title": "Statistical test: does the fluctuation peak time-lock to a kinematic phase?",
+              "description": "Test whether C(t)'s peak (and C_j(t)/C_h(t) separately) falls preferentially in the acceleration or deceleration phase relative to peak velocity, using the same rigor already built this session: collapse repeated stimulus reps to one value per animal (base_animal_id grouping) before any sign test, apply Wilcoxon signed-rank on the lag magnitudes, and apply the Benjamini-Hochberg FDR correction across the three traces (C, C_j, C_h) tested together. Save criticality_timing_stats.csv and a summary table comparing this result directly against the existing J-peak-timing verification (verification_j_timing_accel_vs_decel.md) to see if the two measures agree or disagree on which phase is 'more critical.'"
+            },
+            {
+              "title": "Produce the deliverable figure and findings write-up",
+              "description": "Using the figure-style skill, render a publication-quality 2-panel figure: (top) a representative session's C(t)/C_j(t)/C_h(t) trajectories overlaid with velocity/acceleration and the detected peak markers; (bottom) the cross-session summary of lag values (forest-plot style, matching the aggregate_transition_analysis.py convention already fixed this session) with the FDR-corrected significance markers. Save time_resolved_criticality.png. Write time_resolved_criticality_findings.md summarizing the method, the per-session results table, whether a significant time-locked criticality signal was found, how it compares to the J-peak accel/decel result, and honest caveats (this is a fixed-model data-fluctuation proxy, not a refit-per-window model -- explicitly note this is Option 2 from the earlier design choice, and that Option 1 remains a valid follow-up if this shows a real effect worth confirming more rigorously)."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "feasibility": {
+    "rationale": "All required data (per-timepoint energy/j/h decomposition, kinematics) already exists in per_reach_state.csv for every processed session/stim on the cluster. The fluctuation-proxy approach needs no new model fitting or remote MCMC jobs -- it's a windowed variance computation over existing columns, so a single-session pilot can run locally/on the login node before scaling. Main risk is the same one that limited the earlier J-peak timing test: session-level statistical power (~15-21 independent animals), so the plan reuses the rep-collapsing + FDR-correction framework already built and fixed this session.",
+    "confidence": "high"
+  }
+}

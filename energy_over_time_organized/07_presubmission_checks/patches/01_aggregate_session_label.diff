@@ -1,0 +1,19 @@
+--- a/shared/code/aggregate_transition_analysis.py
++++ b/shared/code/aggregate_transition_analysis.py
+@@ -76,7 +76,15 @@
+ 
+ 
+ def session_label(sdir: Path) -> str:
+-    """Human-readable label: parent folder name (rep) + leaf."""
++    """Human-readable label: the nearest ancestor folder named '<experiment>_repN'.
++
++    In the organized layout the CSV sits in <session>_results/<session>_rep1/full_reach/stim_K,
++    so sdir.parent.name is 'full_reach' for every session and all sessions collapsed into one
++    label. Walk up to the first '_repN' folder instead; fall back to the parent name."""
++    import re
++    for p in [sdir] + list(sdir.parents):
++        if re.search(r"_rep\d+$", p.name, flags=re.IGNORECASE):
++            return p.name
+     return sdir.parent.name
+ 
+ 

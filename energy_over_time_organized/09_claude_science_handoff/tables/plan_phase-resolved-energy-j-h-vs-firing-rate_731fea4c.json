@@ -1,0 +1,65 @@
+{
+  "version": 3,
+  "created_at": "2026-09-24T16:50:55.545Z",
+  "task_summary": "Phase-resolved energy/J/h vs firing-rate coupling to reach acceleration and deceleration",
+  "agents": [],
+  "phases": [
+    {
+      "name": "Plan",
+      "delegations": [
+        {
+          "steps": [
+            {
+              "title": "Pull per-reach data and define kinematic phases",
+              "description": "Copy all 63 per_reach_state.csv files from energy_over_time_organized/01_ising_model_fitting/results/ to the local workspace after checking total size. Compute velocity and acceleration the same way shared/src/arbitration.py does (DT = 0.01 s), both per reach and trial-averaged. Define phase boundaries from the acceleration trace itself: acceleration onset, peak acceleration, the acceleration zero-crossing (= peak velocity, the accel/decel boundary), and peak deceleration. Then label every sample as acceleration or deceleration phase. Save phase_landmarks.csv (session, stim, landmark indices) and a QC figure, phase_landmarks_qc.png, showing each session's mean velocity and acceleration with the landmarks overlaid."
+            },
+            {
+              "title": "Energy decomposition: which term drives E(t)",
+              "description": "Experiment A. For each session/stim, split E(t) = J-term + h-term and compute each term's share of energy variance over the reach (Var(J), Var(h), 2Cov(J,h), divided by Var(E)). Compute this for the whole reach, the acceleration phase only, and the deceleration phase only. Test whether the J share differs between the two phases (paired Wilcoxon on session means, n = 21). Outputs: energy_decomposition_by_phase.csv and energy_decomposition_by_phase.png (stacked variance shares per phase with per-session points)."
+            },
+            {
+              "title": "Correlate each signal with acceleration by phase",
+              "description": "For each signal (energy, J-term, h-term, firing rate): compute the Spearman correlation with signed acceleration and with |acceleration|, separately within the acceleration and deceleration phases. Do this per reach, then average per session. Also compute the full-reach cross-correlation peak lag using the corrected sign convention (positive = signal lags kinematics). Build a null distribution of 1,000 circular shifts per reach, which preserves autocorrelation, and report z-scores and empirical p. Collapse the 3 stims to one value per session before group tests, and apply BH-FDR across signal × phase × measure. Outputs: phase_correlations.csv and phase_correlations_summary.csv."
+            },
+            {
+              "title": "Peak-timing test against acceleration landmarks",
+              "description": "Detect each signal's peak and trough in the trial-averaged trace inside a fixed search window. The window (peak-acceleration landmark minus 50 to plus 100 samples) is chosen in advance and set in terms of kinematics rather than absolute sample indices. Also flag any extremum that sits on the window boundary. For each extremum, report which phase it falls in and its lag to peak acceleration, peak velocity (the zero-crossing) and peak deceleration. Session-level sign tests and Wilcoxon tests, with FDR correction. This repeats the earlier accel/decel verification using the true zero-crossing boundary and a pre-registered window, and now includes h, energy and firing rate alongside J. Output: peak_timing_by_phase.csv."
+            },
+            {
+              "title": "Arbitration: Ising terms vs firing rate",
+              "description": "Head-to-head comparison per session: does energy, J or h track acceleration or deceleration better than firing rate? Measures: paired difference in |Spearman r| within each phase, and paired difference in absolute peak distance to the relevant landmark. Tests: Wilcoxon signed-rank across sessions plus a win/loss count, with FDR correction. Output: arbitration_vs_firing_rate.csv."
+            },
+            {
+              "title": "Per-session arbitration-style timing figures",
+              "description": "One figure per session/stim, extending the existing arbitration.py 4-panel layout to 6 stacked panels on a shared time axis: velocity, acceleration (acceleration phase shaded blue, deceleration phase red), energy, J-term, h-term and firing rate. Each signal panel shows the mean ± SEM across reaches, the detected peak marker, dashed lines at peak acceleration, zero-crossing and peak deceleration, and an annotation with the lag and phase-wise r. Each figure follows the house PNG+PDF+TXT triplet convention from figure_format_spec.md; the .txt sidecar gives N neurons, lags, correlations and phase labels. Output: 63 figure triplets in a per_session_figures/ folder."
+            },
+            {
+              "title": "Summary figures across sessions",
+              "description": "Publication-grade multi-panel summary built with the figure-style rules. (a) Lag of each signal's peak relative to the accel/decel boundary, as a strip plot with the median, with energy/J/h/firing rate in a consistent colour per signal. (b) Phase-wise correlation with acceleration for each signal, acceleration versus deceleration phase, with paired session lines. (c) Arbitration panel: paired |r| of each Ising term against firing rate. (d) Energy variance share of J versus h by phase. Output: phase_timing_summary.png/.pdf. Every panel states n sessions and gives FDR-corrected p values."
+            },
+            {
+              "title": "Sensitivity checks",
+              "description": "Re-run the key tests from steps 3-5 under three variations: (i) excluding sessions 210620 and 220515 (suspected duplicated unit); (ii) search windows of ±25 samples around the pre-registered one; (iii) the criticality proxy (sliding-window variance) at W = 15/25/40 samples, to test whether the pilot result (Var(J) peak about 21 samples after the velocity peak, Var(h) time-locked to it) holds. Output: sensitivity_summary.csv plus a compact robustness figure, sensitivity_robustness.png, showing effect direction and significance for each variation."
+            },
+            {
+              "title": "Write report and record results on cluster",
+              "description": "Write PHASE_TIMING_REPORT.md covering the question, methods (phase definition, null model, session-level stats, FDR), results tables, figures, and a verified/not-verified distinction for each claim, alongside the earlier accel/decel verification. Save every CSV, figure and the analysis script as artifacts. Mirror everything to energy_over_time_organized/03_j_coupling_vs_kinematics_timing/results/phase_correlation_arbitration/ on math-alderaan, then list the directory contents to confirm the files arrived."
+            }
+          ]
+        }
+      ],
+      "id": "phase-0"
+    }
+  ],
+  "desired_outputs": [
+    "PHASE_TIMING_REPORT.md",
+    "phase_timing_summary.png/.pdf",
+    "63 per-session arbitration-style timing figures (PNG+PDF+TXT)",
+    "phase_correlations.csv, peak_timing_by_phase.csv, arbitration_vs_firing_rate.csv, energy_decomposition_by_phase.csv, sensitivity_summary.csv",
+    "Results mirrored to the cluster results folder"
+  ],
+  "feasibility": {
+    "rationale": "\n<parameter name=\"rationale\">All inputs already exist: 63 per_reach_state.csv files (21 sessions × 3 stims) that include per-reach energy, j, h, firing_rate and x/y/z. The analysis only uses those files, so no Ising refitting is needed and everything runs locally within minutes. The main limitations are 21 sessions (the 3 stims per session are not independent) and two sessions with a suspected duplicated unit. Both are handled with session-level statistics and a sensitivity re-run.",
+    "confidence": "high"
+  }
+}
