@@ -17,7 +17,7 @@ import numpy as np
 from multiprocessing import Pool
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import stimfit_model as sm
-from tvfield_model_basis import bspline_basis
+from tvfield_model_basis import bspline_basis_crop
 import thermo_small
 
 NCAP = 16; NSUB = 10; NSHUF = 20; W = 6; SEED0 = 20261012
@@ -74,10 +74,10 @@ def make_design(Xs, ex, onset_float, variant, rng_ctrl, use_excluded=False):
     return Xk, groups
 
 
-def crop(Xs, groups, B):
+def crop(Xs, groups):
     Xs = [X[:, T_LO:T_HI] for X in Xs]
     groups = [dict(g, mask=g["mask"][:, T_LO:T_HI]) for g in groups]
-    return Xs, groups, B[T_LO:T_HI]
+    return Xs, groups, bspline_basis_crop(T_LO, T_HI)
 
 
 def subsets_for(date, N):
@@ -111,7 +111,7 @@ def run_task(task):
     if kind.startswith("shuf"):
         k = int(kind.split("_")[1]); seed_shuf = [SEED0, int(date), sub_i, 100 + k]
         Xk = shuffle_blocks(Xk, np.random.default_rng(seed_shuf))
-    Xk, groups, B = crop(Xk, groups, bspline_basis(400))
+    Xk, groups, B = crop(Xk, groups)
     res = sm.fit_session(Xk, groups, B, maxiter=800)
     row = dict(session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
                groups=res["groups"], kappa=[float(k) for k in res["kappa"]], converged=res["converged"], nit=res["nit"],

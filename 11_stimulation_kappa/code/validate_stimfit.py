@@ -9,7 +9,7 @@ import numpy as np
 from multiprocessing import Pool
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import stimfit_model as sm
-from tvfield_model_basis import bspline_basis
+from tvfield_model_basis import bspline_basis_crop
 
 T = 700; W = 6; T_LO, T_HI = 300, 560; SCEN = ["A", "B", "C", "D", "E"]
 
@@ -64,7 +64,7 @@ def simulate(scen, N, seed, R=60):
 def task(args):
     scen, seed, N, R = args
     t0 = time.time(); Xs, groups, J, kt = simulate(scen, N, seed, R)
-    B = bspline_basis(400)[T_LO:T_HI]
+    B = bspline_basis_crop(T_LO, T_HI)
     Xs = [X[:, T_LO:T_HI] for X in Xs]; groups = [dict(g, mask=g["mask"][:, T_LO:T_HI]) for g in groups]
     res = sm.fit_session(Xs, groups, B, maxiter=800)
     iu = np.triu_indices(N, 1)

@@ -74,3 +74,14 @@ Pass criteria for run 3:
   (2) B, C, D: |mean Δκ| ≤ 0.12; (3) |mean κ̂_control| ≤ 0.12; (4) convergence ≥ 95%; the per-replicate rule is dropped. The sd of Δκ is **reported, not tested**:
   it is the single-session precision and drives the power statement for n = 21 sessions.
 Failing any criterion is reported as a failure.
+
+## Result of run 3 (job 4362993; `assets/tables/validation_run3_*`): FAIL
+Parameter recovery was fine where the fit finished (R = 60: A 0.444, E 0.483, B 0.077, C −0.024, D 0.023; R = 18: A 0.465, E 0.483, B −0.009, D −0.005, sd of Δκ 0.12–0.15),
+but **criterion 4 failed badly: 117 of 120 fits hit the 800-iteration cap without converging** (runs 1–2: 100% converged in about 400). R = 18 scenario C
+also failed criterion 2 (mean Δκ 1.33, sd 5.4) because of a single runaway unconverged fit (κ_pulse = 21).
+
+## Amendment 4 (2026-10-12, after run 3, BEFORE run 4; criteria unchanged)
+Diagnosis: run 3 cropped the E09 basis (`bspline_basis(400)[300:560]`), which leaves edge spline columns that are only partly inside the range;
+they are weakly determined and slow the optimiser (and let κ run away when the window information is small). Change: **a basis built directly on bins 300–559**
+(`bspline_basis_crop`: 25-bin knots 300–340, 5-bin knots 340–559, clamped ends). Development smoke on the three worst cases (C/R18/seed 7, A/R60/seed 0, D/R18/seed 0):
+all converged in 322–362 iterations (about 30 s). Run 4 repeats the whole run 3 design with the same seeds; criteria 1–5 and the R = 18 criteria as in amendment 3.
