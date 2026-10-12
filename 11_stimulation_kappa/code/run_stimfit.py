@@ -23,7 +23,7 @@ import thermo_small
 NCAP = 16; NSUB = 10; NSHUF = 20; W = 6; SEED0 = 20261012
 T_LO, T_HI = 0, 700                     # fitted bin range (set in the pre-registration)
 EXACT_SESSION = None                    # set from the command line (--exact <session>)
-MAXITER = int(os.environ.get("E11_MAXITER", 800)); TOL = float(os.environ.get("E11_TOL", 1e-9))
+MAXITER = int(os.environ.get("E11_MAXITER", 800)); TOL = float(os.environ.get("E11_TOL", 1e-7))
 LAM = {k: float(os.environ["E11_" + k.upper()]) for k in ("lamB", "lamJ", "lamD", "lamK") if "E11_" + k.upper() in os.environ}
 _cache = {}
 

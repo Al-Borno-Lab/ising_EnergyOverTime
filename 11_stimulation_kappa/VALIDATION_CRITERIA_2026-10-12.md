@@ -90,3 +90,9 @@ all converged in 322–362 iterations (about 30 s). Run 4 repeats the whole run 
 R = 60 (8 replicates): all of criteria 1–5 pass. Δκ: A 0.445, E 0.485, B 0.076, C −0.015, D 0.024; 120/120 fits converged; median corr(Ĵ, J) 0.999.
 R = 18 (16 replicates, session-sized): all criteria pass. Δκ: A 0.465 (sd 0.12), E 0.482 (0.15), B −0.004 (0.13), C −0.002 (0.27), D −0.004 (0.14); median corr(Ĵ, J) 0.995.
 Single-session precision at session-sized R: sd of Δκ ≈ 0.12–0.15 (0.27 when a rate change is confined to the window). Over n = 21 sessions that is a standard error of about 0.03–0.06.
+
+## Amendment 5 (2026-10-12, after run 4, BEFORE run 5; criteria unchanged): optimiser tolerance 1e-7
+Real-data smoke fits (session 210511, N = 12, see PREREGISTRATION amendment A2) needed 640–800 iterations (synthetic: about 330) and one shuffle-null refit hit the
+800-iteration cap with a runaway κ (1.6). Diagnosis on that session (primary design + that shuffle, 4 settings): optimiser tolerance `ftol` 1e-9 → 1e-7 cuts iterations 798 → 339,
+changes the log-likelihood by 7 nats of 278,700 and κ by ≤ 0.02, and the shuffle refit then converges. A stronger spline ridge (`lamB` 1e-4) was rejected: it changes the model
+(log-likelihood −2,400 nats, κ in both windows +0.3). **Change: default `tol = 1e-7`.** Run 5 repeats run 4 (same seeds, same criteria) with this tolerance.

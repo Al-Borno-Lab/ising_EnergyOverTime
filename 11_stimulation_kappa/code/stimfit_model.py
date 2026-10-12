@@ -131,7 +131,7 @@ class StimFit:
         p = np.zeros(self.size); p[slice(*self.slices["W"])] = W0.ravel()
         return p
 
-    def fit(self, p0=None, maxiter=800, tol=1e-9):
+    def fit(self, p0=None, maxiter=800, tol=1e-7):
         p0 = self.init() if p0 is None else p0
         res = minimize(self.f, p0, jac=True, method="L-BFGS-B", options=dict(maxiter=maxiter, ftol=tol, gtol=1e-7))
         W, D, kap, J = self.unpack(res.x)
@@ -139,7 +139,7 @@ class StimFit:
                     ll=-res.fun * self.nbins)
 
 
-def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=800, tol=1e-9, **lam):
+def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=800, tol=1e-7, **lam):
     """Convenience: build units, fit, return result dict (adds group names)."""
     units = build_units(Xs, groups)
     sf = StimFit(units, B, fit_kappa=fit_kappa, **lam)
