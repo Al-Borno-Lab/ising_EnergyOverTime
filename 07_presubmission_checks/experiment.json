@@ -1,0 +1,27 @@
+{
+  "id": "E07",
+  "title": "Pre-submission checks and time-varying-field model",
+  "status": "complete",
+  "owner": "claude-science",
+  "started": "",
+  "updated": "2026-10-12",
+  "question": "Which claims survive controls (shuffles, control windows, dedup, CV, time-varying fields)?",
+  "headline": "Coupling beyond reach-locked rates in 21/21 sessions; no evidence coupling strengthens during reach; timing claims withdrawn. See RESULTS_LOG A5-A8, B, D.",
+  "depends_on": [
+    "E01"
+  ],
+  "results_log_ids": [
+    "A1",
+    "A3",
+    "A4",
+    "A5",
+    "A7",
+    "A8",
+    "B2",
+    "B10",
+    "B11",
+    "B12"
+  ],
+  "preregistration": null,
+  "cluster_results": "/home/enserrog/ising_EnergyOverTime/07_presubmission_checks/results"
+}

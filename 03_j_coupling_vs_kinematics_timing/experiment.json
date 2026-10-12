@@ -1,0 +1,20 @@
+{
+  "id": "E03",
+  "title": "J coupling vs kinematics timing",
+  "status": "superseded",
+  "owner": "claude-science",
+  "started": "",
+  "updated": "2026-10-12",
+  "question": "Do J jumps lead or lag kinematic events?",
+  "headline": "WITHDRAWN: 'J lags in ~70%' and 'J best indicator' fail against control windows (D table). See E07.",
+  "depends_on": [
+    "E01"
+  ],
+  "results_log_ids": [
+    "B7",
+    "B12",
+    "D"
+  ],
+  "preregistration": null,
+  "cluster_results": "/home/enserrog/ising_EnergyOverTime/03_j_coupling_vs_kinematics_timing/results"
+}
