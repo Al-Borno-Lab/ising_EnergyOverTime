@@ -139,11 +139,11 @@ class StimFit:
                     ll=-res.fun * self.nbins)
 
 
-def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=800, **lam):
+def fit_session(Xs, groups, B, fit_kappa=True, p0=None, maxiter=800, tol=1e-9, **lam):
     """Convenience: build units, fit, return result dict (adds group names)."""
     units = build_units(Xs, groups)
     sf = StimFit(units, B, fit_kappa=fit_kappa, **lam)
-    res = sf.fit(p0=p0, maxiter=maxiter)
+    res = sf.fit(p0=p0, maxiter=maxiter, tol=tol)
     res["groups"] = [g["name"] for g in groups]
     return res
 

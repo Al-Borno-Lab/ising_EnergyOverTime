@@ -23,6 +23,8 @@ import thermo_small
 NCAP = 16; NSUB = 10; NSHUF = 20; W = 6; SEED0 = 20261012
 T_LO, T_HI = 0, 700                     # fitted bin range (set in the pre-registration)
 EXACT_SESSION = None                    # set from the command line (--exact <session>)
+MAXITER = int(os.environ.get("E11_MAXITER", 800)); TOL = float(os.environ.get("E11_TOL", 1e-9))
+LAM = {k: float(os.environ["E11_" + k.upper()]) for k in ("lamB", "lamJ", "lamD", "lamK") if "E11_" + k.upper() in os.environ}
 _cache = {}
 
 
@@ -112,11 +114,11 @@ def run_task(task):
         k = int(kind.split("_")[1]); seed_shuf = [SEED0, int(date), sub_i, 100 + k]
         Xk = shuffle_blocks(Xk, np.random.default_rng(seed_shuf))
     Xk, groups, B = crop(Xk, groups)
-    res = sm.fit_session(Xk, groups, B, maxiter=800)
+    res = sm.fit_session(Xk, groups, B, maxiter=MAXITER, tol=TOL, **LAM)
     row = dict(session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
                groups=res["groups"], kappa=[float(k) for k in res["kappa"]], converged=res["converged"], nit=res["nit"],
                ll=res["ll"], seed_subset=[SEED0, int(date)], seed_shuffle=seed_shuf, seed_pseudo=[SEED0, int(date), 7],
-               t_range=[T_LO, T_HI], secs=time.time() - t0)
+               t_range=[T_LO, T_HI], maxiter=MAXITER, tol=TOL, lam=LAM, secs=time.time() - t0)
     if kind == "primary" or kind == "exact":
         row.update(thermo_small.window_thermo(Xk, groups, B, res))
     os.makedirs(os.path.dirname(path), exist_ok=True)
