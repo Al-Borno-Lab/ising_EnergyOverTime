@@ -134,6 +134,10 @@ def main():
         if a.startswith("--tasks="): kinds = a.split("=", 1)[1]
         if a.startswith("--exact="): exact = a.split("=", 1)[1]
     kinds = kinds.split(",")
+    only_sub = None; nshuf = NSHUF
+    for a in sys.argv[1:]:
+        if a.startswith("--subsets="): only_sub = [int(x) for x in a.split("=", 1)[1].split(",")]
+        if a.startswith("--nshuf="): nshuf = int(a.split("=", 1)[1])
     tasks = []
     z = np.load(npz, allow_pickle=True)
     for d in sess:
@@ -142,9 +146,10 @@ def main():
             if d == exact: tasks.append((npz, laser, outdir, d, 0, "exact", True))
             continue
         for si in range(len(subsets_for(d, N))):
+            if only_sub is not None and si not in only_sub: continue
             for k in kinds:
                 if k == "shuffles":
-                    tasks += [(npz, laser, outdir, d, si, "shuf_%d" % j, False) for j in range(NSHUF)]
+                    tasks += [(npz, laser, outdir, d, si, "shuf_%d" % j, False) for j in range(nshuf)]
                 else:
                     tasks.append((npz, laser, outdir, d, si, k, False))
     cost = {d: 4 ** min(z["X_%s_0" % d].shape[2], NCAP) for d in sess}
