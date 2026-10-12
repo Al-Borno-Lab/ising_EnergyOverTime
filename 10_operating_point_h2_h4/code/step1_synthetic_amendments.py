@@ -6,7 +6,7 @@ import numpy as np, pandas as pd, multiprocessing as mp
 from scipy.optimize import minimize
 HERE = os.path.dirname(os.path.abspath(__file__))
 H09 = os.path.join(HERE, "..", "..", "09_claude_science_handoff", "code")
-NCPU, OUT, TRUTH = int(sys.argv[1]), sys.argv[2], os.path.abspath(sys.argv[3])
+NCPU, OUT, TRUTH = int(sys.argv[1]), os.path.abspath(sys.argv[2]), os.path.abspath(sys.argv[3])
 os.makedirs(OUT, exist_ok=True)
 os.chdir(os.path.dirname(TRUTH))           # run_h0 loads h0_truth_J.npz from cwd at import
 sys.path.insert(0, H09)
