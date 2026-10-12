@@ -2,7 +2,7 @@
   "id": "E11",
   "title": "Stimulation model: does optogenetic perturbation change coupling (kappa)?",
   "status": "planned",
-  "owner": "unassigned",
+  "owner": "grad-researcher-2",
   "started": "2026-10-12",
   "updated": "2026-10-12",
   "question": "Does closed-loop optogenetic stimulation change Purkinje-cell coupling (scalar kappa in the pulse window), or only firing rates?",

@@ -1,6 +1,6 @@
 # E11 · Stimulation model: does optogenetic perturbation change coupling (kappa)?
 
-Status: see `experiment.json` · Owner: unassigned · Started: 2026-10-12
+Status: see `experiment.json` · Owner: grad-researcher-2 · Started: 2026-10-12
 
 > This file is the **experiment write-up**: what we ask and how. Results go in `RESULTS.md`, never here.
 > Background: [HANDOFF](../09_claude_science_handoff/HANDOFF_CLAUDE_CODE.md) §9.4 and §10;
