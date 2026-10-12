@@ -217,3 +217,9 @@ docs/_build/
 .Rhistory
 .RData
 .Ruserdata
+
+# Experiment tracking: commit small figures/tables in each experiment's assets/ (see energy_over_time_organized/PROTOCOL.md)
+!energy_over_time_organized/**/assets/
+!energy_over_time_organized/**/assets/**
+!energy_over_time_organized/**/experiment.json
+!energy_over_time_organized/_template/**

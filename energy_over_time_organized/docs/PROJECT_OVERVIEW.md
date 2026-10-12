@@ -1,5 +1,7 @@
 # Project Overview: Ising/Maximum-Entropy Analysis of Purkinje-Cell Population Activity During Reaching
 
+> **Superseded as the project index by [../README.md](../README.md).** Headline findings below predate the pre-submission checks; several are withdrawn (see RESULTS_LOG_FOR_PAPER.md, table D).
+
 This project fits pairwise Maximum-Entropy (Ising) models to Purkinje-cell population
 spike recordings from mice performing a reaching task (~21-68 sessions, 2021-04-21 to
 2022-05-20, 3 stimulation conditions each), and asks whether the model's emergent

@@ -1,4 +1,4 @@
-# Results log for manuscript (updated 2026-09-29, second pass: time-varying-field model added)
+# Results log for manuscript (updated 2026-09-30: bounded A8 wording; preliminary stimulation-block look in C)
 
 This log sorts the results of the Purkinje-cell pairwise maximum-entropy (Ising) analysis into established (A), robust (B), suggestive (C) and withdrawn (D). Every number comes from a saved artifact. Details of the pre-submission checks are in OPEN_ITEMS_RESOLUTION.md. Cluster tree: `math-alderaan.ucdenver.pvt:/home/enserrog/ising_EnergyOverTime/energy_over_time_organized/` (new checks are in `07_presubmission_checks/`).
 
@@ -15,7 +15,7 @@ This log sorts the results of the Purkinje-cell pairwise maximum-entropy (Ising)
 | A5 | Pairwise structure beyond time-varying rates exists at rest | Ising beats a time-varying-rate independent model in the pre-reach baseline in 16/21 sessions (p_FDR = 0.004) | timeresolved_llr_summary.csv |
 | A6 | J can change from correlation structure alone | Synthetic two-population simulation | 06_synthetic_validation_simulation |
 | A7 | **Couplings carry information beyond shared, reach-locked rate modulation** | With fields that vary over the reach, adding J improves held-out prediction in 21/21 sessions and 63/63 conditions above a trial-shuffle null (median +0.26 nats/bin). Exact likelihood agrees (38/39, N ≤ 20). Survives removing all pairs with r > 0.5 | TIMEVARYING_FIELD_ISING_REPORT.md, tvfield_cv_scores.csv |
-| A8 | **Coupling does not measurably change during the reach** | Coupling gain above null is the same at baseline, acceleration, deceleration and post (change p ≥ 0.45). Epoch-specific couplings do not improve held-out prediction (9/21, p = 0.71) | tvfield_phase_summary.csv, epochJ_summary.csv |
+| A8 | **No evidence that coupling strengthens during the reach (at 10-ms resolution); moderate changes not excluded** | Coupling gain above null does not differ between baseline and acceleration, deceleration or post (change p ≥ 0.45). The estimate is imprecise: acceleration change relative to baseline −15% (bootstrap 95% CI −28% to +93%, n = 21 sessions). Epoch-specific couplings do not improve held-out prediction (9/21, p = 0.71), although the fitted reach-epoch offset leans positive (+44% of baseline mean J, 95% CI +26 to +66%, 17/21) | tvfield_phase_summary.csv, epochJ_summary.csv |
 
 A2 and A3 use shuffles that also remove reach-locked rate modulation. They therefore establish structure beyond *stationary* independence; the separation of coupling from shared rate modulation comes from A5 and B10.
 
@@ -38,13 +38,14 @@ A2 and A3 use shuffles that also remove reach-locked rate modulation. They there
 
 **Model dependence of B2 (new).** With time-varying fields, the energy drop is carried by the field term (≈ −0.17 vs −0.01 per neuron at peak; field 20/21, p_FDR = 2e-5). The coupling term still falls (18/21) but is about 20 times smaller. B2 therefore describes how a stationary model absorbs rate changes, not a coupling change in the population.
 
-**How A7, A8, B2, B10 and B11 fit together (recommended wording).** "Purkinje-cell populations show pairwise coupling beyond their shared, reach-locked rate modulation. This coupling is present at rest and does not measurably change during reaching. Movement-related changes in the population's energy landscape are carried by changes in the fields (firing rates)." Avoid "neurons become more coordinated during the reach".
+**How A7, A8, B2, B10 and B11 fit together (recommended wording).** "Purkinje-cell populations show pairwise coupling beyond their shared, reach-locked rate modulation. This coupling is already present at rest. At 10-ms resolution we found no evidence that it strengthens during reaching, although moderate changes cannot be excluded. Movement-related changes in population activity were carried mainly by the fields (firing rates)." Avoid "neurons become more coordinated during the reach" and "coupling is constant". Discussion notes: Nashef et al. (PMC10370034) report reach-related Purkinje-cell synchrony at millisecond spike timing, which our 10-ms binarized analysis does not test. The coupling is statistical and most likely reflects shared input (parallel fibers, climbing fibers, interneurons) rather than direct connections between Purkinje cells. About a quarter of the gain is also captured by 200-ms-lagged states (0.05 vs 0.18 nats/bin), so most of it is fast, same-bin co-variation.
 
 ## C. Suggestive only (do not state as findings)
 - **Late post-reach coupling epoch (+0.5 to +1.5 s), 2022 cohort only.** In the time-varying-field model the coupling gain rises late (13/21, p_FDR = 0.023). It is carried entirely by the 6 sessions from 2022 (6/6, median +1.97 nats/bin; 2021: 7/15, p = 0.45) and survives pair pruning. It is reproducible within session (odd vs even reaches ρ = 0.89) but not consistent across stimuli. A 200-ms lagged control also rises (6/6), so part of it is slow shared fluctuation, and epoch-specific J does not improve prediction. It was found in these data, so it needs new recordings or a pre-registered test.
 - **Acceleration-phase J maxima:** 10/63 conditions, against about 4 expected from phase length. Borderline after FDR.
 - **Early energy maxima:** energy maxima come earlier than control (−350 ms, p_FDR = 0.017), but only in 2 of 6 window variants.
 - **aggregate_transition_analysis:** energy-spike bins have lower acceleration in stim 0 only (d = −0.103, p_FDR = 0.021); stims 1-2 are not significant.
+- **Stimulation blocks (preliminary, per-block fits).** Around peak velocity the coupling term is above the last 5 baseline reaches from the first stimulated reach (+0.93 baseline-SD, 16/21, p = 0.009) through the block (last 5: +0.33, 17/21, p = 0.013) and in early washout (+0.48, 14/21, p = 0.038); none survives FDR. Needs the joint one-model-per-session test with true stimulation timing (stimfit_model.py, validated on synthetic data). Figure: stim_block_reach_trajectories.
 - **Partial flat-FR example:** 210619 stim 2.
 
 ## D. Withdrawn or not supported
@@ -96,12 +97,12 @@ A2 and A3 use shuffles that also remove reach-locked rate modulation. They there
 
 ### Key figures
 
-![Coupling beyond shared rates](07_presubmission_checks/timevarying_field/tvfield_vs_independent.png)
+![Coupling beyond shared rates]({{artifact:art_fe52f274-3acc-4c0e-9331-0ff3f865c9f7}})
 
-![Coupling source](07_presubmission_checks/coupling_source_checks.png)
+![Coupling source]({{artifact:art_f79ff9ab-6cc1-4959-b3b8-21436f0032a4}})
 
-![Energy decomposition](03_j_coupling_vs_kinematics_timing/results/phase_correlation_arbitration/energy_decomposition_by_phase.png)
+![Energy decomposition]({{artifact:art_99fe21b3-98be-43e4-ab8c-c9144dbe2f2d}})
 
-![J timing](03_j_coupling_vs_kinematics_timing/results/phase_correlation_arbitration/J_timing_rise_decay.png)
+![J timing]({{artifact:art_88c084a6-efe1-4709-aa5b-fa1b91c8fe78}})
 
-![Peak timing vs control](07_presubmission_checks/peak_timing_vs_control.png)
+![Peak timing vs control]({{artifact:art_933e4afc-1d96-4261-95e2-0d910cc464a2}})
