@@ -2,16 +2,16 @@
   "id": "E10",
   "title": "Operating point: amendment checks and H2-H4 on real data",
   "status": "planned",
-  "owner": "unassigned",
+  "owner": "grad-researcher",
   "started": "2026-10-12",
   "updated": "2026-10-12",
   "question": "With J fixed, does coupling influence (multi-information, susceptibility) change in the reach window vs baseline?",
-  "headline": "Planned. Step 1: synthetic check of amendments 2-3; step 2: H2-H4 on real data (cluster).",
+  "headline": "Planned (design written, awaiting go-ahead). Step 1: synthetic check of amendments 2-3; step 2: H2-H4 on real data (cluster).",
   "depends_on": [
     "E09",
     "E08"
   ],
   "results_log_ids": [],
   "preregistration": "../09_claude_science_handoff/reports/PREREGISTRATION_OPERATING_POINT.md",
-  "cluster_results": "/home/enserrog/ising_EnergyOverTime/energy_over_time_organized/10_operating_point_h2_h4/results"
+  "cluster_results": "/home/enserrog/ising_EnergyOverTime/10_operating_point_h2_h4/results"
 }

@@ -24,7 +24,7 @@ reveals that other methods cannot.
 | E07 | [Pre-submission checks and time-varying-field model](07_presubmission_checks/README.md) · [results](07_presubmission_checks/RESULTS.md) | **complete** | claude-science | 2026-10-12 | Coupling beyond reach-locked rates in 21/21 sessions; no evidence coupling strengthens during reach; timing claims withdrawn. See RESULTS_LOG A5-A8, B, D. |
 | E08 | [MCH refit with excluded reaches dropped (current primary fits)](08_exclusion_applied/README.md) · [results](08_exclusion_applied/RESULTS.md) | **complete** | claude-science | 2026-10-12 | No material change: J vs July fits median r=0.996, slope 1.00; 63/63 blocks refit. |
 | E09 | [Exact-ML thermodynamics, H0 validation, operating point H1](09_claude_science_handoff/README.md) · [results](09_claude_science_handoff/RESULTS.md) | **analysis** | claude-science | 2026-10-12 | H0 validation done (primary dI/N accurate). H1 goes AGAINST premise: p(1-p) falls in 17/21 sessions (p=0.018). Amendments 2-3 need synthetic check. |
-| E10 | [Operating point: amendment checks and H2-H4 on real data](10_operating_point_h2_h4/README.md) · [results](10_operating_point_h2_h4/RESULTS.md) | **planned** | unassigned | 2026-10-12 | Planned. Step 1: synthetic check of amendments 2-3; step 2: H2-H4 on real data (cluster). |
+| E10 | [Operating point: amendment checks and H2-H4 on real data](10_operating_point_h2_h4/README.md) · [results](10_operating_point_h2_h4/RESULTS.md) | **planned** | grad-researcher | 2026-10-12 | Planned (design written, awaiting go-ahead). Step 1: synthetic check of amendments 2-3; step 2: H2-H4 on real data (cluster). |
 <!-- STATUS-TABLE:END -->
 
 Status values: `planned` → `running` → `analysis` → `complete`. `superseded` means the experiment was
