@@ -32,7 +32,7 @@ Pass criteria and outcome are logged as a dated amendment (5) in the pre-registr
 ## How to reproduce
 ```bash
 # from the repo root, on the cluster (never run heavy work on the login node)
-bash energy_over_time_organized/10_operating_point_h2_h4/code/run.sh
+bash 10_operating_point_h2_h4/code/run.sh
 ```
 Scripts in `code/` (to be written; none run yet):
 - `code/run.sh`: entry point; step 1 (synthetic, small), then step 2 submitted via sbatch.
