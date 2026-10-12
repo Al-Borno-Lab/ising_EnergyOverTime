@@ -76,3 +76,6 @@ Scenarios (all SYNTHETIC): A κ = +0.5; B rate-only ramp; C rate change confined
 
 ## Amendments
 (none yet)
+
+### Amendment A1 (2026-10-12, before any real-data fit)
+`assets/tables/laser_onsets.csv` regenerated to keep excluded reaches with their `exclude` flag (1249 rows; the 1092 `exclude == 0` rows are identical to the previous table). Needed only for sensitivity analysis 3 (all reaches). Extraction only; no model was fitted. `run_stimfit.py` gained task filters (`--subsets`, `--nshuf`) used for the smoke test; no analysis choice changed.
