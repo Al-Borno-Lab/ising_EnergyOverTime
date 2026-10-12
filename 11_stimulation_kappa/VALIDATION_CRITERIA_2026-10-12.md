@@ -96,3 +96,7 @@ Real-data smoke fits (session 210511, N = 12, see PREREGISTRATION amendment A2) 
 800-iteration cap with a runaway κ (1.6). Diagnosis on that session (primary design + that shuffle, 4 settings): optimiser tolerance `ftol` 1e-9 → 1e-7 cuts iterations 798 → 339,
 changes the log-likelihood by 7 nats of 278,700 and κ by ≤ 0.02, and the shuffle refit then converges. A stronger spline ridge (`lamB` 1e-4) was rejected: it changes the model
 (log-likelihood −2,400 nats, κ in both windows +0.3). **Change: default `tol = 1e-7`.** Run 5 repeats run 4 (same seeds, same criteria) with this tolerance.
+
+## Result of run 5 (job 4363048, tol 1e-7; `assets/tables/validation_run5_*`): PASS
+Identical conclusions to run 4. R = 60: Δκ A 0.448, E 0.481, B 0.075, C −0.009, D 0.024; R = 18: A 0.463 (sd 0.12), E 0.484 (0.15), B −0.005 (0.13), C −0.007 (0.28), D −0.003 (0.14);
+120/120 converged (mean 171 iterations, 38 s per fit); median corr(Ĵ, J) 0.999 / 0.995. This is the final fit configuration.
