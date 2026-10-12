@@ -67,7 +67,12 @@ Sensitivity fits are not null-corrected beyond what is stated; they are compared
 - Binarisation (count > 0) is the pipeline's convention.
 
 ## 9. Synthetic validation summary (method validation only)
-RUN3_SUMMARY_PLACEHOLDER
+Full record: `VALIDATION_CRITERIA_2026-10-12.md` (four runs, four dated amendments, criteria written before the runs). Runs 1 and 3 FAILED and are kept (run 1: ridge on window intercepts too strong, false positive in scenario C; run 3: cropped-basis edge columns, no convergence). Run 4 is the design used here and passes everything.
+Scenarios (all SYNTHETIC): A κ = +0.5; B rate-only ramp; C rate change confined to the 60-ms window; D null; E κ = +0.5 plus the rate ramp. N = 12, windows and fitting range as in sections 3–4.
+- Session-sized data (R = 18 reaches per block, 16 replicates): Δκ = 0.465 (A), 0.482 (E), −0.004 (B), −0.002 (C), −0.004 (D). Single-session sd of Δκ is 0.12–0.15 (0.27 in C). Standard error over 21 sessions about 0.03–0.06.
+- Larger data (R = 60, 8 replicates): 0.445 (A), 0.485 (E), 0.076 (B), −0.015 (C), 0.024 (D); 120/120 converged.
+- Consequences adopted here: recovered κ is about 7–10% below truth; rate-only data can bias Δκ upward by about 0.08 (hence the null correction and the "not interpretable below 0.1" rule); an equivalence bound of 0.3 is well resolved at n = 21, an effect near 0.1 is only marginally resolved.
+- Not validated: N > 12 (real N is up to 16 per fit), real onset jitter (375–418; validation used 400/401), and the shuffle-null correction itself (applied only to real data).
 
 ## Amendments
 (none yet)

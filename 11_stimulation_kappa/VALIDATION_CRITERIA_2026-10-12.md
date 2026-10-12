@@ -85,3 +85,8 @@ Diagnosis: run 3 cropped the E09 basis (`bspline_basis(400)[300:560]`), which le
 they are weakly determined and slow the optimiser (and let κ run away when the window information is small). Change: **a basis built directly on bins 300–559**
 (`bspline_basis_crop`: 25-bin knots 300–340, 5-bin knots 340–559, clamped ends). Development smoke on the three worst cases (C/R18/seed 7, A/R60/seed 0, D/R18/seed 0):
 all converged in 322–362 iterations (about 30 s). Run 4 repeats the whole run 3 design with the same seeds; criteria 1–5 and the R = 18 criteria as in amendment 3.
+
+## Result of run 4 (job 4363017; `assets/tables/validation_run4_*`): PASS
+R = 60 (8 replicates): all of criteria 1–5 pass. Δκ: A 0.445, E 0.485, B 0.076, C −0.015, D 0.024; 120/120 fits converged; median corr(Ĵ, J) 0.999.
+R = 18 (16 replicates, session-sized): all criteria pass. Δκ: A 0.465 (sd 0.12), E 0.482 (0.15), B −0.004 (0.13), C −0.002 (0.27), D −0.004 (0.14); median corr(Ĵ, J) 0.995.
+Single-session precision at session-sized R: sd of Δκ ≈ 0.12–0.15 (0.27 when a rate change is confined to the window). Over n = 21 sessions that is a standard error of about 0.03–0.06.
