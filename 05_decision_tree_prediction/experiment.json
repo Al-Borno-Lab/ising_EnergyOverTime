@@ -1,0 +1,16 @@
+{
+  "id": "E05",
+  "title": "Decision-tree prediction of J-peak blocks",
+  "status": "archived",
+  "owner": "claude-science",
+  "started": "",
+  "updated": "2026-10-12",
+  "question": "Can session features predict whether a block shows a J peak?",
+  "headline": "No write-up of results exists; target (J peak) depends on withdrawn peak definitions.",
+  "depends_on": [
+    "E03"
+  ],
+  "results_log_ids": [],
+  "preregistration": null,
+  "cluster_results": "/home/enserrog/ising_EnergyOverTime/05_decision_tree_prediction/results"
+}
