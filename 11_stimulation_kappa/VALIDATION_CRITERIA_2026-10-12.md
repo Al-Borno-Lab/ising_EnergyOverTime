@@ -50,3 +50,9 @@ Diagnosis: same mechanism as amendment 1. The window intercepts d_g exist to abs
 unabsorbed rate shift leaks into κ. Change: **`lamD = 1e-5`** (equal to `lamB`). Nothing else changes.
 All five scenarios are rerun with the same seeds (run 2). Run 1 stays on record; both runs are reported. If run 2 fails
 any criterion, the failure is reported as is.
+
+## Result of run 2 (2026-10-12, defaults lamD = 1e-5, lamK = 0; cluster job 4362884; `assets/tables/validation_run2_*`)
+**All five criteria pass.** Mean Δκ: A 0.451 (sd 0.066), E 0.476 (0.060); B 0.080 (0.101), C 0.025 (0.127), D 0.021 (0.041);
+mean κ̂_control within ±0.03 everywhere; 8/8 replicates under |Δκ| < 0.3 in B, C, D; 40/40 fits converged; median corr(Ĵ, J) = 0.9996.
+Caveats to carry forward: recovered κ is about 10% below truth (0.45 vs 0.5), and rate-only scenario B shows a small positive bias (+0.08).
+Both are inside the criteria and well inside the planned 0.3 equivalence bound, but they are a reason not to claim precision below about 0.1.
