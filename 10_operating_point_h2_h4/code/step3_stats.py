@@ -25,7 +25,14 @@ nonconv = df[~(df.converged & df.kappa_converged)]
 for _, r in nonconv.iterrows(): warn(f"non-converged: {r.key} sub {r['sub']} (real fit {r.converged}, kappa fit {r.kappa_converged})")
 nan_cols = [c for c in df.columns if df[c].dtype.kind == "f" and df[c].isna().any()]
 for c in nan_cols: warn(f"NaN in column {c}: {df[c].isna().sum()} tasks")
-complete = set(EXP.key[[int(cnt.get(k, 0)) >= n for k, n in zip(EXP.key, EXP.n_expected_tasks)]])
+complete = set(EXP.key[[int(cnt.get(k, 0)) == n for k, n in zip(EXP.key, EXP.n_expected_tasks)]])
+KEYCOLS = ["real_dI", "real_dchiJ", "real_dv", "emp_dcov", "kappa_hat", "kappa_gain_reach", "pred_dchiJ_folds", "null_dI_p95", "null_dI_mean"]
+for k, g in df.groupby("key"):
+    bad = [c for c in KEYCOLS if g[c].isna().any()]
+    if bad:
+        warn(f"condition {k}: NaN in {bad} in {int(g[bad].isna().any(axis=1).sum())} tasks; marked incomplete"); complete.discard(k)
+over = [k for k in cnt.index if k in set(EXP.key) and cnt[k] > int(EXP.set_index("key").n_expected_tasks[k])]
+for k in over: warn(f"condition {k}: more tasks than expected ({cnt[k]})")
 df["task_ok"] = df.converged & df.kappa_converged
 num = [c for c in df.columns if df[c].dtype.kind in "fiub" and c not in ("sub",)]
 cond = df.groupby("key", as_index=False)[num].mean()
@@ -34,9 +41,13 @@ cond["all_converged"] = df.groupby("key").task_ok.all().values
 cond = cond.merge(EXP[["key", "session", "block", "mouse"]], on="key"); cond["cohort"] = np.where(cond.session.str.startswith("21"), "2021", "2022")
 cond["complete"] = cond.key.isin(complete)
 cond.to_csv(f"{out}/tables/e10_conditions.csv", index=False)
+conv = df.assign(cohort=np.where(df.key.str.startswith("21"), "2021", "2022")).groupby("cohort").agg(n_tasks=("key", "size"), real_fit_not_converged=("converged", lambda x: int((~x).sum())),
+        kappa_fit_not_converged=("kappa_converged", lambda x: int((~x).sum())))
+conv.to_csv(f"{out}/tables/e10_convergence_by_cohort.csv"); print(conv.to_string())
 sess_n = cond.groupby("session").complete.sum()
 for s, n in sess_n.items():
     if n < 3: warn(f"session {s}: only {n}/3 complete conditions; session mean uses incomplete data")
+N_SESS_EXPECTED = EXP.session.nunique()
 
 # ---------------- helpers ----------------
 def wil(x):
@@ -57,13 +68,15 @@ def sign_test(n_agree, n):
 def mixed(formula, data, group):
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore"); m = smf.mixedlm(formula, data, groups=data[group]).fit(reml=True)
+            warnings.simplefilter("ignore"); m = smf.mixedlm(formula, data, groups=data[group], missing="drop").fit(reml=True)
         return {k: (float(m.params[k]), float(m.pvalues[k])) for k in m.params.index if k != "Group Var"} | {"group_var": float(m.cov_re.iloc[0, 0])}
     except Exception as e:
         warn(f"mixed model failed ({formula}): {e}"); return {}
 
 def bh(ps):
-    ps = np.asarray(ps, float); m = len(ps); o = np.argsort(ps); q = np.empty(m)
+    ps = np.asarray(ps, float)
+    if np.isnan(ps).any(): warn("NaN p-value entered BH; treated as 1 so that the other q-values remain defined"); ps = np.where(np.isnan(ps), 1.0, ps)
+    m = len(ps); o = np.argsort(ps); q = np.empty(m)
     q[o] = np.minimum(1.0, np.minimum.accumulate((ps[o] * m / (np.arange(m) + 1))[::-1])[::-1]); return q
 
 def analyse(cd, tag):
@@ -71,9 +84,18 @@ def analyse(cd, tag):
     sess = cd.groupby(["session", "cohort", "mouse"], as_index=False).mean(numeric_only=True)
     R = {}
     # H2
-    h2 = wil(sess.real_dI); bound = cd.groupby("session").null_dI_p95.mean()
-    exc = (sess.set_index("session").real_dI > bound).sum(); n_s = len(sess)
-    h2["n_above_null"] = int(exc); h2["p_above_null"] = float(stats.binomtest(int(exc), n_s, 0.05, alternative="greater").pvalue)
+    h2 = wil(sess.real_dI); n_s = len(sess)
+    # A7 primary bound: mean over a session's conditions (and subsets) of the per-task 95th percentile (conservative; ~4-5x too strict for N > 20)
+    bound = cd.groupby("session").null_dI_p95.mean()
+    # sensitivity: Gaussian approximation of the session-averaged null (sd of the mean = sqrt(sum sd_task^2)/n)
+    sd_t = (cd.null_dI_p95 - cd.null_dI_mean) / 1.645; g = cd.assign(sd2=sd_t ** 2).groupby("session")
+    bound_g = g.null_dI_mean.mean() + 1.645 * np.sqrt(g.sd2.sum()) / g.size()
+    sidx = sess.set_index("session"); above = (sidx.real_dI > bound); above_g = (sidx.real_dI > bound_g)
+    sess["null_bound"] = sess.session.map(bound); sess["above_null"] = sess.session.map(above); sess["null_bound_gauss"] = sess.session.map(bound_g); sess["above_null_gauss"] = sess.session.map(above_g)
+    exc = int(above.sum()); h2["n_above_null"] = exc; h2["n_above_null_gauss_sens"] = int(above_g.sum())
+    h2["p_above_null"] = float(stats.binomtest(exc, n_s, 0.05, alternative="greater").pvalue)   # reported; NOT the gate (A7 addendum)
+    h2["above_null_by_cohort"] = "; ".join(f"{c}:{int(above[sess.set_index('session').cohort == c].sum())}/{int((sess.cohort == c).sum())}" for c in sorted(sess.cohort.unique()))
+    h2["gate_majority_above_null"] = bool(exc > n_s / 2)
     mm = mixed("real_dI ~ 1", sess, "mouse"); h2["mixed_mouse_intercept"], h2["mixed_mouse_p"] = mm.get("Intercept", (np.nan, np.nan))
     R["H2"] = h2
     # H3a primary (full-data prediction); sensitivity (fold-averaged)
@@ -85,6 +107,8 @@ def analyse(cd, tag):
                      median_abs_err_gain_vs_frozen=ref["median"], p_vs_frozen=ref["p"])
     # H3b
     R["H3b_kappa"] = wil(sess.kappa_hat); R["H3b_gain"] = wil(sess.kappa_gain_reach)
+    gx = sess.kappa_gain_reach.dropna().values
+    R["H3b_gain"]["p_greater"] = float(stats.wilcoxon(gx, alternative="greater").pvalue) if len(gx) >= 6 and not np.allclose(gx, 0) else np.nan
     # H4a
     sp = spear(cd.real_dv, cd.real_dI, f"{tag} H4a"); R["H4a"] = dict(rho=sp["rho"], p=sp["p"], n=sp["n"])
     mm = mixed("real_dI ~ real_dv", cd, "session"); R["H4a"]["mixed_slope"], R["H4a"]["mixed_p"] = mm.get("real_dv", (np.nan, np.nan))
@@ -93,11 +117,12 @@ def analyse(cd, tag):
     R["H4b_exploratory_FAILED_VALIDATION"] = wil(sess.real_rho - sess.null_rho_mean)
     # verdicts (amendment 7)
     q = bh([R["H2"]["p"], R["H3a"]["p"], R["H4a"]["p"]])
-    h2_ok = q[0] < .05 and R["H2"]["median"] > 0 and R["H2"]["p_above_null"] < .05
-    h3a_ok = R["H3a"]["rho"] > 0 and R["H3a"]["p"] < .05 and R["H3a"]["p_sign"] < .05 and R["H3a"]["sessions_sign_agree"] > n_s / 2
-    h3b_ok = (R["H3b_kappa"]["p"] > .05) and (R["H3b_gain"]["p"] > .05)
+    h2_ok = q[0] < .05 and R["H2"]["median"] > 0 and R["H2"]["gate_majority_above_null"]
+    h3a_ok = R["H3a"]["rho"] > 0 and q[1] < .05 and R["H3a"]["p_sign"] < .05 and R["H3a"]["sessions_sign_agree"] > n_s / 2
+    # H3b (A7 addendum): kappa-hat two-sided (a change in either direction refutes fixed J); held-out gain one-sided (only an IMPROVEMENT refutes)
+    h3b_ok = bool(R["H3b_kappa"]["p"] > .05 and not (R["H3b_gain"]["p_greater"] < .05))
     h3_ok = bool(h3a_ok and h3b_ok); h4a_ok = q[2] < .05 and R["H4a"]["rho"] > 0
-    V = dict(q_H2=q[0], q_H3a=q[1], q_H4a=q[2], H2_supported=bool(h2_ok), H3a_supported=bool(h3a_ok), H3b_no_change=bool(h3b_ok),
+    V = dict(n_sessions=n_s, n_conditions_complete=int(cd.complete.sum()), n_warnings=len(WARN), q_H2=q[0], q_H3a=q[1], q_H4a=q[2], H2_supported=bool(h2_ok), H3a_supported=bool(h3a_ok), H3b_no_change=bool(h3b_ok),
              H3_holds=h3_ok, H4a_supported=bool(h4a_ok), OVERALL_SUPPORTED=bool(h2_ok and h3_ok and h4a_ok))
     if not V["OVERALL_SUPPORTED"]:
         why = []
@@ -113,10 +138,24 @@ def analyse(cd, tag):
     return rows, V, sess
 
 rows, V, sess = analyse(cond, "primary")
-cohort_V = {}
+# cohort rule (section 6; A7 addendum): "present" = cohort-level H2 Wilcoxon median > 0 and p < 0.05; refuted if present in 2022 and absent in 2021.
+# NB the 2022 cohort has 6 sessions: its two-sided Wilcoxon reaches p < 0.05 only if all 6 session differences share a sign (min p = 0.031).
+cohort_V, present = {}, {}
 for co in ("2021", "2022"):
-    r, Vc, _ = analyse(cond[cond.cohort == co], f"cohort_{co}") if cond[cond.cohort == co].session.nunique() >= 6 else ([], None, None)
-    rows += r; cohort_V[co] = Vc
+    cc = cond[cond.cohort == co]
+    if cc.session.nunique() >= 6:
+        r, Vc, _ = analyse(cc, f"cohort_{co}"); rows += r; cohort_V[co] = Vc
+        h = [x for x in r if x["test"] == "H2"][0]; present[co] = bool(h["median"] > 0 and h["p"] < .05)
+    else:
+        warn(f"cohort {co}: fewer than 6 sessions, cohort rule cannot be evaluated"); present[co] = None
+V["H2_present_2021"], V["H2_present_2022"] = present["2021"], present["2022"]
+V["rule_2022_only_triggered"] = bool(present["2022"] and present["2021"] is False)
+if V["rule_2022_only_triggered"]:
+    V["OVERALL_SUPPORTED"] = False; V["refuted_because"] = (V.get("refuted_because", "") + "; " if V.get("refuted_because") else "") + "effect present only in the 2022 cohort (section 6)"
+V["incomplete"] = bool(V["n_sessions"] < N_SESS_EXPECTED or V["n_conditions_complete"] < len(EXP) or any(v is None for v in present.values()))
+V["VERDICT_STATUS"] = "INCOMPLETE (do not interpret)" if V["incomplete"] else ("SUPPORTED" if V["OVERALL_SUPPORTED"] else "REFUTED/NOT SUPPORTED")
+for row in rows:
+    if row["set"] == "primary" and row["test"] == "VERDICT": row.update(V)
 rows += analyse(cond[cond.N_full >= 5], "sens_N_ge_5")[0]
 rows += analyse(cond[cond.all_converged], "sens_converged_only")[0]
 rows += analyse(cond[cond.complete], "sens_complete_conditions_only")[0]
@@ -125,8 +164,7 @@ sess.to_csv(f"{out}/tables/e10_sessions.csv", index=False)
 open(f"{out}/tables/e10_warnings.txt", "w").write("\n".join(WARN) + "\n")
 pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
 print(T[T.set == "primary"].round(4).to_string()); print("\nVERDICT:", V)
-if V["OVERALL_SUPPORTED"] is False:
-    c = {co: (v and v["H2_supported"]) for co, v in cohort_V.items()}; print("per-cohort H2:", c)
+print("per-cohort H2 present:", present, "| cohort verdicts H2_supported:", {co: (v and v["H2_supported"]) for co, v in cohort_V.items()})
 print(f"\n{len(WARN)} warnings (see e10_warnings.txt)")
 fig, ax = plt.subplots(1, 3, figsize=(13, 4))
 ax[0].scatter(sess.real_dv, sess.real_dI, c=(sess.cohort == "2022"), cmap="coolwarm"); ax[0].axhline(0, c="gray", lw=.5); ax[0].axvline(0, c="gray", lw=.5)
