@@ -81,6 +81,7 @@ Bugs found after results are seen are fixed with a dated amendment that disclose
 - Before starting, `git fetch` and branch from the latest `origin/main`. Before opening a PR, rebase onto `origin/main`.
 
 ## Cluster cheatsheet
+- **Job pattern: one SLURM job per task, fanned out.** Submit a SLURM **array** with one element per task (condition, subset, ...), 16–32 CPUs per element, and parallelize the independent fits *inside* the task (real fit, shuffles, CV folds) with a process pool. Don't run one big job with a pool of single-core tasks: it hits the wall-time limit and loses in-progress work. Each task writes its own output file and skips work whose file already exists, so a resubmission resumes. Throttle concurrency (`--array=...%20`, adjusted to cluster load) and give the reason in the run log. Put the heaviest tasks first. Results must not depend on worker order (per-fit deterministic seeds).
 - Host `math-alderaan.ucdenver.pvt` (VPN). SLURM account `ceas-alborno`, partition `math-alderaan`.
   Nodes have 64 CPUs, so parallelise inside the job.
 - Python: `singularity exec $HOME/projectDir/singularity-env/inverse-ising-arm-2.sif /entrypoint.sh python ...`
