@@ -21,7 +21,8 @@ from tvfield_model_basis import bspline_basis_crop
 import thermo_small
 
 NCAP = 16; NSUB = 10; NSHUF = 20; W = 6; SEED0 = 20261012
-T_LO, T_HI = 0, 700                     # fitted bin range (set in the pre-registration)
+PREREG_RANGE = (300, 560)               # PREREGISTRATION section 3: fitted bins 300-559. Run 1 wrongly used (0, 700); the run now refuses to start otherwise.
+T_LO, T_HI = PREREG_RANGE
 EXACT_SESSION = None                    # set from the command line (--exact <session>)
 MAXITER = int(os.environ.get("E11_MAXITER", 800)); TOL = float(os.environ.get("E11_TOL", 1e-7))
 LAM = {k: float(os.environ["E11_" + k.upper()]) for k in ("lamB", "lamJ", "lamD", "lamK") if "E11_" + k.upper() in os.environ}
@@ -36,7 +37,8 @@ def load_session(npz, laser_csv, date):
     on = {}
     for r in csv.DictReader(open(laser_csv)):
         if r["session"] == date and int(r["block"]) == 1:
-            on[int(r["reach_row"])] = float(r["onset_float"])
+            if r["onset_float"] != "":
+                on[int(r["reach_row"])] = (float(r["onset_float"]), int(r["onset_bin"]))
     return Xs, ex, on
 
 
@@ -44,36 +46,45 @@ def session_ids(laser_csv):
     return sorted({r["session"] for r in csv.DictReader(open(laser_csv))})
 
 
-def make_design(Xs, ex, onset_float, variant, rng_ctrl, use_excluded=False):
-    """Returns (Xs_kept, groups) for a variant. Reach rows kept: exclude==0 unless use_excluded."""
-    keep = [np.ones(len(e), bool) if use_excluded else (e == 0) for e in ex]
-    Xk = [X[k] for X, k in zip(Xs, keep)]
-    rows1 = np.array([r for r in np.nonzero(keep[1])[0] if r in onset_float and np.isfinite(onset_float[r])])
-    keep[1] = np.zeros(len(ex[1]), bool); keep[1][rows1] = True
-    Xk = [X[k] for X, k in zip(Xs, keep)]
-    of = np.array([onset_float[r] for r in rows1])
-    if variant == "round": on = np.rint(of).astype(int)
-    elif variant == "shift1": on = np.floor(of).astype(int) + 1
-    else: on = np.floor(of).astype(int)
-    R1 = len(on); pulse = np.zeros((R1, 700), bool)
+def onsets_for_variant(of, ob, variant):
+    """Integer onset bin per stim_1 reach. primary = bin containing the laser time (floor with float tolerance, from merge_laser_onsets);
+    round = nearest bin; shift1 = primary + 1. Control pseudo-onsets are drawn from the SAME array (amendment A3, minor issue 5)."""
+    if variant == "round": return np.rint(of).astype(int)
+    if variant == "shift1": return ob + 1
+    return ob.copy()
+
+
+def build_groups(R0, R1, R2, on, variant, rng_ctrl):
+    """Window groups from stim_1 onsets `on` (length R1). Control (stim_0) windows: per-reach pseudo-onsets drawn from `on`."""
+    pulse = np.zeros((R1, 700), bool)
     for r in range(R1): pulse[r, on[r]:min(on[r] + W, 700)] = True
-    groups = [dict(block=1, mask=pulse, name="pulse")]
-    R0 = Xk[0].shape[0]; ctrl = np.zeros((R0, 700), bool)
+    ctrl = np.zeros((R0, 700), bool)
     if variant == "fixedctrl":
         ctrl[:, 401:401 + W] = True
     else:
-        pseudo = rng_ctrl.choice(np.floor(of).astype(int), R0, replace=True)
+        pseudo = rng_ctrl.choice(on, R0, replace=True)
         for r in range(R0): ctrl[r, pseudo[r]:min(pseudo[r] + W, 700)] = True
-    groups.append(dict(block=0, mask=ctrl, name="control"))
+    groups = [dict(block=1, mask=pulse, name="pulse"), dict(block=0, mask=ctrl, name="control")]
     if variant == "s3":
         half = R1 // 2
         early = pulse.copy(); early[half:] = False; late = pulse.copy(); late[:half] = False
-        R2 = Xk[2].shape[0]; wash = np.zeros((R2, 700), bool)
-        pseudo2 = rng_ctrl.choice(np.floor(of).astype(int), R2, replace=True)
+        wash = np.zeros((R2, 700), bool); pseudo2 = rng_ctrl.choice(on, R2, replace=True)
         for r in range(R2): wash[r, pseudo2[r]:min(pseudo2[r] + W, 700)] = True
         groups = [dict(block=1, mask=early, name="pulse_early"), dict(block=1, mask=late, name="pulse_late"),
                   dict(block=0, mask=ctrl, name="control"), dict(block=2, mask=wash, name="washout")]
-    return Xk, groups
+    return groups
+
+
+def make_design(Xs, ex, onsets, variant, rng_ctrl, use_excluded=False):
+    """Returns (Xs_kept, groups, on1). Reach rows kept: exclude==0 unless use_excluded; stim_1 reaches without a laser time are dropped."""
+    keep = [np.ones(len(e), bool) if use_excluded else (e == 0) for e in ex]
+    rows1 = np.array([r for r in np.nonzero(keep[1])[0] if r in onsets])
+    keep[1] = np.zeros(len(ex[1]), bool); keep[1][rows1] = True
+    Xk = [X[k] for X, k in zip(Xs, keep)]
+    of = np.array([onsets[r][0] for r in rows1]); ob = np.array([onsets[r][1] for r in rows1])
+    on = onsets_for_variant(of, ob, variant)
+    groups = build_groups(Xk[0].shape[0], len(on), Xk[2].shape[0], on, variant, rng_ctrl)
+    return Xk, groups, on
 
 
 def crop(Xs, groups):
@@ -88,11 +99,20 @@ def subsets_for(date, N):
     return [np.sort(rng.choice(N, NCAP, replace=False)) for _ in range(NSUB)]
 
 
-def shuffle_blocks(Xs, rng):
+def shuffle_blocks(Xs, rng, on1):
+    """Trial-shuffle null (amendment A3). Each neuron's reach order is permuted independently within each block. In stim_1 a neuron's data
+    from reach p placed in row r is shifted in time by (on1[r] - on1[p]) bins (circularly; the fitted range 300-559 is far from the wrap), so
+    its onset-locked response stays aligned with row r's pulse window. Run 1 permuted without the shift, which smeared the response across the window."""
     out = []
-    for X in Xs:
-        R, _, N = X.shape
-        out.append(np.stack([X[rng.permutation(R), :, i] for i in range(N)], 2))
+    for b, X in enumerate(Xs):
+        R, T, N = X.shape; Y = np.empty_like(X)
+        for i in range(N):
+            perm = rng.permutation(R)
+            if b == 1:
+                for r in range(R): Y[r, :, i] = np.roll(X[perm[r], :, i], int(on1[r] - on1[perm[r]]))
+            else:
+                Y[:, :, i] = X[perm, :, i]
+        out.append(Y)
     return out
 
 
@@ -107,12 +127,13 @@ def run_task(task):
     variant = {"primary": "primary"}.get(kind, kind.split("_")[0] if kind.startswith("shuf") else kind)
     design_variant = "primary" if variant.startswith("shuf") or variant == "exact" else variant
     rng_ctrl = np.random.default_rng([SEED0, int(date), 7])           # pseudo-onset seed, same draw for every fit of a session
-    Xk, groups = make_design(Xs, ex, on, design_variant, rng_ctrl, use_excluded=(kind == "allreach"))
+    assert (T_LO, T_HI) == PREREG_RANGE, "fitted range must equal the pre-registered range"
+    Xk, groups, on1 = make_design(Xs, ex, on, design_variant, rng_ctrl, use_excluded=(kind == "allreach"))
     Xk = [X[:, :, sub] for X in Xk]
     seed_shuf = None
     if kind.startswith("shuf"):
         k = int(kind.split("_")[1]); seed_shuf = [SEED0, int(date), sub_i, 100 + k]
-        Xk = shuffle_blocks(Xk, np.random.default_rng(seed_shuf))
+        Xk = shuffle_blocks(Xk, np.random.default_rng(seed_shuf), on1)
     Xk, groups, B = crop(Xk, groups)
     res = sm.fit_session(Xk, groups, B, maxiter=MAXITER, tol=TOL, **LAM)
     reran = False
@@ -121,7 +142,7 @@ def run_task(task):
     row = dict(session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
                groups=res["groups"], kappa=[float(k) for k in res["kappa"]], converged=res["converged"], nit=res["nit"],
                ll=res["ll"], seed_subset=[SEED0, int(date)], seed_shuffle=seed_shuf, seed_pseudo=[SEED0, int(date), 7],
-               t_range=[T_LO, T_HI], maxiter=MAXITER, tol=TOL, lam=LAM, reran=reran, secs=time.time() - t0)
+               t_range=[T_LO, T_HI], onset_convention="floor(onset_float+1e-6), t_k = bin start", shuffle="aligned (A3)", maxiter=MAXITER, tol=TOL, lam=LAM, reran=reran, secs=time.time() - t0)
     if kind == "primary" or kind == "exact":
         row.update(thermo_small.window_thermo(Xk, groups, B, res))
     os.makedirs(os.path.dirname(path), exist_ok=True)

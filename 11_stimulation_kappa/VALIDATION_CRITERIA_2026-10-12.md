@@ -100,3 +100,19 @@ changes the log-likelihood by 7 nats of 278,700 and κ by ≤ 0.02, and the shuf
 ## Result of run 5 (job 4363048, tol 1e-7; `assets/tables/validation_run5_*`): PASS
 Identical conclusions to run 4. R = 60: Δκ A 0.448, E 0.481, B 0.075, C −0.009, D 0.024; R = 18: A 0.463 (sd 0.12), E 0.484 (0.15), B −0.005 (0.13), C −0.007 (0.28), D −0.003 (0.14);
 120/120 converged (mean 171 iterations, 38 s per fit); median corr(Ĵ, J) 0.999 / 0.995. This is the final fit configuration.
+
+## Amendment 6 (2026-10-12, BEFORE run 6; from the independent code review, `REVIEW_2026-10-12.md`, and PREREGISTRATION amendment A3)
+Runs 1–5 validated a configuration that is easier than the real analysis: onsets only 400/401, identical fields in every reach and block, no shuffle null, and (found afterwards) a different fitted range from the real run.
+Run 6 validates the **actual real-data pipeline** (`run_stimfit.make_design / build_groups / shuffle_blocks / crop`, range 300–559, tol 1e-7) on synthetic sessions built to look like real ones:
+- **Structures** (3 real sessions, only their shape is used): 210421, 210511, 210514 → number of reaches per block (non-excluded) as in the real session, the **real stim_1 onset bins** (jitter 375–418), N = min(N, 12) neurons (fixed random subset). Block-specific fields h_b(t) = arctanh(clip(2p − 1)) from the real **smoothed PSTH** of each neuron in each block (Gaussian σ = 3 bins) — they contain the real reach-locked rate changes and the real stimulation rate response. J_ij ~ N(0.03, 0.10) symmetric.
+- **Per-reach common gain** g_r ~ N(0, 0.25) added to all fields of reach r (all blocks): a shared trial-to-trial rate fluctuation that creates cross-neuron covariance without coupling. This is the rate confound that the null correction is meant to remove.
+- **Scenarios** (all with the real PSTH fields and the gain): A κ_pulse = +0.5; B κ = 0 with an extra field ramp +0.5 (raised cosine over 30 bins from each reach's onset); C κ = 0 with +0.8 in the 6-bin window only; D κ = 0 (null, only the real rate structure); E κ = +0.5 with the ramp of B. κ_control = 0 in all.
+- **Fit:** exactly the real pipeline (primary design, pseudo-onset control from the replicate's own stim_1 onsets), plus **10 aligned shuffle refits** per dataset → null means → null-corrected Δκ_c = (κ_p − null κ_p) − (κ_c − null κ_c); raw Δκ_r = κ_p − κ_c. 3 structures × 5 scenarios × 8 replicates = 120 datasets.
+- **Pass criteria** (pooled over structures, 24 datasets per scenario; all must hold):
+  1. A and E: mean Δκ_c in [0.35, 0.65].
+  2. B, C, D: |mean Δκ_c| ≤ 0.10.
+  3. D: |mean raw κ_control| ≤ 0.10 (the real run had |κ_control| up to 1 under the wrong range; this checks the corrected range does not).
+  4. At least 95% of fits converge.
+  5. Null-correction check, reported and tested: in B, C and D pooled, |mean Δκ_c| ≤ |mean Δκ_r| + 0.02 (the aligned null must not make the bias worse).
+  - **Reported, not tested:** sd of Δκ_c and Δκ_r per scenario and structure; sd of the 10 null κ values per window (to compare with the real refit's shuffle spread, the Orchestrator's noise-match request); fraction of fits with κ < −1.
+- Failing any criterion is reported as a failure.
