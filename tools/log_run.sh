@@ -19,7 +19,7 @@ log="$exp/runs/RUN_LOG.md"
 
 commit=$(git -C "$exp" rev-parse --short HEAD)
 dirty=""
-git -C "$exp" diff --quiet HEAD -- . || dirty=" (+uncommitted changes in experiment)"
+git -C "$exp" diff --quiet HEAD -- . ":(exclude)runs/RUN_LOG.md" || dirty=" (+uncommitted changes in experiment)"
 printf '| %s | %s | %s | %s%s | %s | `%s` | %s |\n' \
   "$(date '+%Y-%m-%d %H:%M')" "$event" "$(hostname -s)" "$commit" "$dirty" "$job" "$out" "${text//|/\\|}" >> "$log"
 echo "logged $event in $log"

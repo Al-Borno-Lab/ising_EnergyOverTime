@@ -26,32 +26,36 @@ reveals that other methods cannot.
 | E09 | [Exact-ML thermodynamics, H0 validation, operating point H1](09_claude_science_handoff/README.md) · [results](09_claude_science_handoff/RESULTS.md) | **analysis** | claude-science | 2026-10-12 | H0 validation done (primary dI/N accurate). H1 goes AGAINST premise: p(1-p) falls in 17/21 sessions (p=0.018). Amendments 2-3 need synthetic check. |
 | E10 | [Operating point: amendment checks and H2-H4 on real data](10_operating_point_h2_h4/README.md) · [results](10_operating_point_h2_h4/RESULTS.md) | **planned** | grad-researcher | 2026-10-12 | Planned (design written, awaiting go-ahead). Step 1: synthetic check of amendments 2-3; step 2: H2-H4 on real data (cluster). |
 | E11 | [Stimulation model: does optogenetic perturbation change coupling (kappa)?](11_stimulation_kappa/README.md) · [results](11_stimulation_kappa/RESULTS.md) | **complete** | grad-researcher-2 | 2026-10-13 | Inconclusive. Null-corrected kappa_pulse - kappa_control = -0.24 (90% CI -0.44 to -0.03; Wilcoxon p=0.070, FDR 0.14; not equivalent to 0 within +-0.3, n=21). No change in multi-information (p=0.97). Depends on control window and cohort. |
+| E12 | [Field-term dip vs firing rate as a marker of peak acceleration](12_field_vs_rate_indicator/README.md) · [results](12_field_vs_rate_indicator/RESULTS.md) | **complete** | grad-researcher-3 | 2026-10-12 | Field-term dip locks to peak acceleration (65% vs 14% rest control; 50 ms vs 330 ms for mean rate) but is a population-polarization effect: no detectable advantage of coupling-corrected fields (FT vs FT0, CIs wide) and a model-free polarization index matches it. POOL and rest-control check NOT RUN (sbatch blocked). |
 <!-- STATUS-TABLE:END -->
 
 Status values: `planned` → `running` → `analysis` → `complete`. `superseded` means the experiment was
 replaced by a later one and its claims may be withdrawn. `archived` means it is kept for reference only.
 After changing an `experiment.json`, regenerate this table with `python3 tools/update_status.py`.
 
-## Ongoing analysis and next steps
+## Experiment queue
 
-Owners and dates go here when someone claims an item. Keep this list in priority order.
+Each experiment has its own branch and worktree (`../ising_wt_eNN`). Its design is in `NN_*/README.md` on that branch. Rows for
+experiments not yet merged appear in the status table above when their PR merges.
 
-1. **E10:** synthetic check of amendments 2–3 (κ coupling-scale test; ρ_real − ρ_null) with
-   `09_claude_science_handoff/code/thermo_model.py` and `run_h0.py`, scenarios A, C, D and E. Log the
-   outcome in the pre-registration.
-2. **E10:** H2–H4 on real data, as pre-registered. Exact fits for N ≤ 20; 10 random 16-neuron subsets
-   for N > 20. Reach window bins 380–420 vs baseline 300–360, with 20 trial-shuffle refits per condition.
-   This needs the cluster.
-3. Update `RESULTS_LOG_FOR_PAPER.md` and `09_.../reports/COLLABORATION_BRIEF.md` with the H2 outcome.
-4. Later:
-   - stimulation test with the true laser times (`ReachS.stimtime`); the `stimfit_*` code was lost and
-     must be rewritten;
-   - bin-size sweep (5 and 20 ms) against Nashef 2023;
-   - spatial structure from unit depth.
-5. Questions for the lab:
-   - how were the 2022 sessions (DJC000/DJC002) recorded and sorted?
-   - was the unit-stability filter applied?
-   - what exactly do `exclude` and `qm` mean?
+| Order | Experiment | Branch | Owner | State |
+|---|---|---|---|---|
+| running | E10 Operating point H2–H4 | `exp/10_operating_point_h2_h4` | Graduate researcher | full cluster run (job 4363115) |
+| running | E11 Stimulation κ model | `exp/11_stimulation_kappa` | Graduate researcher 2 | full cluster run (jobs 4363060–62) |
+| next 1 | E12 Field-term dip vs firing rate (+ decoder, Calame pooled-rate re-run) | `exp/12_field_vs_rate_indicator` | unassigned | designed; mostly local |
+| next 2 | E14 Bin-size sweep and 1-ms synchrony (Nashef reconciliation) | `exp/14_binsize_1ms_synchrony` | unassigned | designed; heavy at 1 ms |
+| next 3 | E13 Coupled-GLM benchmark | `exp/13_glm_benchmark` | unassigned | designed; light |
+
+When an agent finishes its experiment, it takes the next unassigned row: it sets `owner` in `experiment.json`, works in that
+worktree, and writes the pre-registration before touching real data.
+
+Not yet scoped: rewriting the stimulation-model figures for the paper; a shared-input simulation; J vs probe distance (partly in E14).
+Questions for the lab:
+- How were the 2022 sessions (DJC000/DJC002) recorded and sorted?
+- Was the unit-stability filter applied?
+- What do `exclude` and `qm` mean?
+- Are all mice opsin-positive?
+- Does Nashef et al. have a published journal version?
 
 ## Layout
 
