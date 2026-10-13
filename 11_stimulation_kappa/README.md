@@ -81,13 +81,17 @@ A joint model with **one fit per session across all three blocks**:
 
 ## How to reproduce
 ```bash
-# from the repo root, on the cluster (never run heavy work on the login node)
-bash 11_stimulation_kappa/code/run.sh
+# from the repo root on the cluster (campus VPN); heavy work only through sbatch. Stages: see the header of code/run.sh
+bash 11_stimulation_kappa/code/run.sh unit_tests | laser_times | validate | full | exact | analyse
 ```
-Scripts in `code/` (none written or run yet):
-- `code/run.sh`: entry point; runs steps 1, 3 and 5 in order.
-- `code/extract_laser_onsets.py`, `code/stimfit_model.py`, `code/validate_stimfit.py`, `code/run_stimfit.py` (planned).
+Scripts in `code/` (all run; commands, job IDs and code commits are in `runs/RUN_LOG.md`):
+- `run.sh`: entry point (stages above); `sbatch_validate.sh`, `sbatch_run.sh`: the sbatch wrappers.
+- `extract_laser_onsets.py`, `merge_laser_onsets.py`: step 1 (laser times → `assets/tables/laser_onsets.csv`).
+- `stimfit_model.py` (joint model, exact ML), `tvfield_model_basis.py` (B-spline bases), `thermo_small.py` (S2 window thermodynamics), `test_stimfit.py` (brute-force and gradient tests).
+- `validate_stimfit.py`, `score_validation.py`: synthetic validation (criteria in `VALIDATION_CRITERIA_2026-10-12.md`).
+- `run_stimfit.py`: the real-data run (primary, sensitivity variants, S3, 20 shuffles, exactness check).
+- `analyze_stimfit.py`, `make_figures.py`: pre-registered statistics and figures (`assets/`).
 
 ## Outputs
-- `results/` (cluster only, gitignored): raw outputs.
+- `results/` (cluster only, gitignored): raw per-fit JSON files. A compact copy of every fit is committed as `assets/tables/fits_all.csv`.
 - `assets/figures/`, `assets/tables/` (committed): every figure and table cited in `RESULTS.md`.

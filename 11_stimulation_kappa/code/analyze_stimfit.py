@@ -60,13 +60,13 @@ def session_values(by, kind="primary", corrected=True):
     return {s: float(np.median(v)) for s, v in out.items()}
 
 
-def test(vals, label):
+def test(vals, label, kappa_scale=True):
     x = np.array(list(vals.values())); n = len(x)
     if n < 6: return dict(label=label, n=n, note="too few sessions")
     w = stats.wilcoxon(x, alternative="two-sided")
     hl, lo, hi = hl_ci(x)
     return dict(label=label, n=n, median=float(np.median(x)), hl=hl, ci90=[lo, hi], p=float(w.pvalue),
-                equivalent=bool(lo > -EQ_BOUND and hi < EQ_BOUND))
+                equivalent=(bool(lo > -EQ_BOUND and hi < EQ_BOUND) if kappa_scale else None))
 
 
 def main(res_dir, out_dir):
@@ -76,6 +76,7 @@ def main(res_dir, out_dir):
     S["S1_raw"] = test(session_values(by, "primary", False), "S1 raw dkappa")
     for k, name in (("round", "round"), ("shift1", "floor+1"), ("fixedctrl", "fixed control 401-406"), ("allreach", "all reaches")):
         S["sens_" + k] = test(session_values(by, k, False), "sensitivity " + name + " (raw dkappa)")
+    S["sens_without_seen_sessions"] = test({s: v for s, v in prim.items() if s not in ("210511", "220519")}, "S1 without 210511 and 220519 (seen before the full run)")
     S["sens_N5"] = test({s: v for s, v in prim.items() if s not in ("210622", "210623")}, "S1 without N<5 sessions")
     for c, f in COHORT.items(): S["cohort_" + c] = test({s: v for s, v in prim.items() if f(s)}, "S1 cohort " + c)
     # S2: dI/N and dchi/N medians over subsets
@@ -83,7 +84,7 @@ def main(res_dir, out_dir):
         v = {}
         for (sess, sub), d in by.items():
             if "primary" in d and d["primary"]["converged"] and key in d["primary"]: v.setdefault(sess, []).append(d["primary"][key])
-        S["S2_" + key] = test({s: float(np.median(a)) for s, a in v.items()}, "S2 " + key)
+        S["S2_" + key] = test({s: float(np.median(a)) for s, a in v.items()}, "S2 " + key, kappa_scale=False)
     # S3
     for a, b, name in (("pulse_early", "pulse_late", "early-late"), ("washout", "control", "washout-control")):
         v = {}

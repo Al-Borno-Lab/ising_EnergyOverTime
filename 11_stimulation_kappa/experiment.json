@@ -1,12 +1,12 @@
 {
   "id": "E11",
   "title": "Stimulation model: does optogenetic perturbation change coupling (kappa)?",
-  "status": "planned",
+  "status": "complete",
   "owner": "grad-researcher-2",
   "started": "2026-10-12",
-  "updated": "2026-10-12",
+  "updated": "2026-10-13",
   "question": "Does closed-loop optogenetic stimulation change Purkinje-cell coupling (scalar kappa in the pulse window), or only firing rates?",
-  "headline": "Planned. Rebuild lost stimfit model, validate on synthetic data, then real data (cluster).",
+  "headline": "Inconclusive. Null-corrected kappa_pulse - kappa_control = -0.24 (90% CI -0.44 to -0.03; Wilcoxon p=0.070, FDR 0.14; not equivalent to 0 within +-0.3, n=21). No change in multi-information (p=0.97). Depends on control window and cohort.",
   "depends_on": [
     "E07",
     "E09"
@@ -14,6 +14,6 @@
   "results_log_ids": [
     "C"
   ],
-  "preregistration": null,
-  "cluster_results": "/home/enserrog/ising_EnergyOverTime/11_stimulation_kappa/results"
+  "preregistration": "11_stimulation_kappa/PREREGISTRATION_2026-10-12.md",
+  "cluster_results": "/home/enserrog/ising_wt/e11_repo/11_stimulation_kappa/results"
 }
