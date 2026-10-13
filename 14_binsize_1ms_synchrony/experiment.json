@@ -2,7 +2,7 @@
   "id": "E14",
   "title": "Bin-size sweep and 1-ms synchrony (Nashef reconciliation)",
   "status": "planned",
-  "owner": "unassigned",
+  "owner": "grad-researcher-2",
   "started": "2026-10-12",
   "updated": "2026-10-12",
   "question": "Is Nashef's 1-ms synchrony rise during reach compatible with fixed J at 10 ms: timescale, operating point, or cell selection?",

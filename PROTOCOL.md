@@ -59,6 +59,13 @@ Rules:
   never `git add -A`. Never commit someone else's uncommitted edits.
 - Never commit raw data (`.mat`, `.npz`, `.pkl`) or anything over 5 MB.
 - Merge into `main` through a PR whose description links `RESULTS.md`.
+- **One git worktree per experiment and per agent.** Never switch branches in a checkout another agent
+  is using. Create a separate working copy next to the repo:
+  `git worktree add ../ising_wt_eNN exp/NN_short_name` (or `-b exp/NN_short_name ../ising_wt_eNN origin/main` for a new
+  branch). Work, commit and push only from that worktree. After the PR is merged, clean up with
+  `git worktree remove ../ising_wt_eNN`. On the cluster, do the same under `~/ising_wt/`, and never use
+  `~/ising_EnergyOverTime` itself for experiment work.
+- Before starting, `git fetch` and branch from the latest `origin/main`. Before opening a PR, rebase onto `origin/main`.
 
 ## Cluster cheatsheet
 - Host `math-alderaan.ucdenver.pvt` (VPN). SLURM account `ceas-alborno`, partition `math-alderaan`.
