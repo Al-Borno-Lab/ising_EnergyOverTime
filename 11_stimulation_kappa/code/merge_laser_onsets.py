@@ -19,7 +19,8 @@ def main(raw_csv, npz, out_csv, dt=0.01):
             st = [float(x) for x in row["stimtime"].split(";") if x and float(x) != 0.0]   # [0 0] is the MATLAB empty placeholder
             out.append(dict(session=date, mouse=row["mouse"], block=stim, reach_row=r, reachnum=int(rn[r]), exclude=int(ex[r]),
                             stimtime=st[0] if len(st) == 1 else np.nan, n_stimtime=len(st), t0=float(t[r, 0]),
-                            onset_float=(st[0] - float(t[r, 0])) / dt if len(st) == 1 else np.nan))
+                            onset_float=(st[0] - float(t[r, 0])) / dt if len(st) == 1 else np.nan,
+                            onset_bin=int(np.floor((st[0] - float(t[r, 0])) / dt + 1e-6)) if len(st) == 1 else -1))   # bin containing the laser time (t_k = bin START, E14 gate G1); 1e-6 absorbs float error
     with open(out_csv, "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(out[0].keys())); w.writeheader(); w.writerows(out)
     on = np.array([o["onset_float"] for o in out if o["block"] == 1 and o["exclude"] == 0])
