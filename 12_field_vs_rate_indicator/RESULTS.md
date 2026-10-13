@@ -36,6 +36,8 @@ The field-term dip does line up with peak acceleration in real data (trough in t
 What is unique to the model is therefore not the dip's detection. The remaining candidate contributions (coupling-corrected fields in E10, the link of polarization to coupling influence P4, and the correct split of reach energy into h vs J in B2) are not tested by E12.
 
 ## Caveats and open issues
+- **Provenance of the synthetic validation (V, 2026-10-12 20:32).** It was logged at commit e5d0027 "+uncommitted changes in experiment"; the code it ran was committed in 781c187 three minutes later. The validation outputs in `assets/tables/synthetic_*.csv` come from that code.
+- **Preliminary figure.** `assets/figures/prelim_field_vs_rate_trough.*` (`code/make_pi_figure.py`) is superseded by `T1_T2_by_signal.png`; the prelim depth panel is basis-inflated (R7).
 - **POOL and the rest-control check are NOT RUN.** Both need unscaled per-reach kinematics, not in `spikes_v2.npz`. The extraction job (`code/extract_kinematics.py`, `code/sbatch_kin.sh`) was prepared; `sbatch` was denied in this session (shared-cluster mutation). Blocked, pending the user's decision. Until then the "rest" status of the control windows (−1.5/−2/−2.5 s) is assumed, not verified. The 16 GB raw-file copy in `~/ising_wt/e12/raw` is to be deleted after the job. If this step is completed, add it as a dated amendment and update this file.
 - U1 and U2 are **unresolved, not proven equal**. With 21 sessions the CIs are wider than the registered tie margins, so we report "no detectable advantage", never "identical".
 - The primary family has 12 tests. FT vs FR on T1 does not survive FDR (p_BH = 0.078) even though the CI excludes 0; T2 does (p_BH = 0.024). Do not state the T1 difference as significant.
