@@ -53,4 +53,4 @@ POLa and dFR differ only by a factor N and are the same test. dFR is reported on
 Synthetic spike data with a planted field dip, and with J = 0, confirm that the extremum search and tests recover the dip and that FT vs FT0 shows no difference. This is method validation and is not evidence about the brain.
 
 ## Amendments
-(none yet)
+- **A1 (2026-10-12, before any real-data computation).** Smoothing is applied once per signal: FT, FT0 and FR are smoothed at the output (they are linear in the reach-averaged spins). The nonlinear PSTH indices (dFR/POLa, POLb, TRAJ) are computed from the PSTH smoothed with the same Gaussian (sigma = 3 bins) and are not smoothed again. The decoder's standardisation (per-cell mean/SD) uses training reaches only. For N < 4 conditions TRAJ uses k = min(3, N).
