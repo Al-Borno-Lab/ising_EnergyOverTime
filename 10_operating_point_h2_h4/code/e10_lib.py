@@ -200,3 +200,46 @@ def merge_foldk(parts, task):
     task["pred_dchiJ_folds"] = float(np.mean([p["pred_dchiJ"] for p in parts]))
     task["foldk_all_converged"] = all(p["fit_converged"] and p["kappa_converged"] for p in parts)
     return task
+
+
+# ---- intra-task parallel version of analyze(): identical results, ncpu worker processes ----
+_G = {}
+def _pool_job(job):
+    """job = ('real',) | ('shuf', b) | ('fold', f). Uses fork-inherited _G (X, shuffles, S)."""
+    X, S = _G["X"], _G["S"]; R, _, N = X.shape
+    if job[0] == "real":
+        F = fit(X); th = window_thermo(F, S); out = {"real": {k: v for k, v in summarize(th, N).items()}, "converged": F["converged"]}
+        tc = tm.timelocked_cov(X); out["emp_dcov"] = (tc[380:420].mean() - tc[300:360].mean()) / N
+        p = X.mean(0); v = (p * (1 - p)).mean(1); out["emp_dv"] = v[380:420].mean() - v[300:360].mean()
+        K1 = fit_kappa(X, F["W"], F["J"]); out["kappa_hat"], out["kappa_converged"] = K1["kappa"], K1["converged"]
+        return job, out
+    if job[0] == "shuf":
+        Fs = fit(_G["shufs"][job[1]]); sm = summarize(window_thermo(Fs, S), N); return job, (sm["dI"], sm["rho"], sm["dchiJ"])
+    f = job[1]; fold = np.arange(R) % 5; tr, te = fold != f, fold == f
+    if tr.sum() < 2 or te.sum() < 1: return job, None
+    F0 = fit(X[tr]); Kf = fit_kappa(X[tr], F0["W"], F0["J"])
+    gain = tm.loglik_bins(X[te], Kf["h"], Kf["J"], Kf["kappa"] * Kf["J"], EM) - tm.loglik_bins(X[te], F0["h"], F0["J"])
+    return job, (te, gain, summarize(window_thermo(F0, S), N)["dchiJ"])
+
+
+def analyze_pool(Z, key, sub, ncpu, nshuf=20):
+    import multiprocessing as mp
+    t0 = time.time(); X, N_full, R_all, shufs = _prep(Z, key, sub, nshuf); R, _, N = X.shape
+    _G.update(X=X, S=tm.states(N), shufs=shufs)
+    jobs = [("real",)] + [("fold", f) for f in range(5)] + [("shuf", b) for b in range(nshuf)]     # costliest first
+    with mp.get_context("fork").Pool(min(ncpu, len(jobs))) as pool: res = dict(pool.imap_unordered(_pool_job, jobs))
+    rec = dict(key=key, sub=-1 if sub is None else sub[0], N_full=N_full, N=N, R=R, R_all=R_all)
+    core = res[("real",)]; rec["converged"] = core["converged"]; rec.update({"real_" + k: v for k, v in core["real"].items()})
+    rec["emp_dcov"], rec["emp_dv"] = core["emp_dcov"], core["emp_dv"]
+    nul = np.array([res[("shuf", b)] for b in range(nshuf)])
+    rec["null_dI_mean"], rec["null_dI_p95"], rec["null_dI_max"] = nul[:, 0].mean(), np.percentile(nul[:, 0], 95), nul[:, 0].max()
+    rec["null_rho_mean"] = float(np.nanmean(nul[:, 1])); rec["null_dchiJ_mean"] = nul[:, 2].mean()
+    rec["kappa_hat"], rec["kappa_converged"] = core["kappa_hat"], core["kappa_converged"]
+    gain = np.zeros((R, T)); pred = []
+    for f in range(5):
+        r = res[("fold", f)]
+        if r is None: continue
+        te, g, pc = r; gain[te] = g; pred.append(pc)
+    rec["kappa_gain_reach"] = float(gain[:, EM].mean()); rec["pred_dchiJ_folds"] = float(np.mean(pred)) if pred else np.nan
+    rec["secs"] = time.time() - t0
+    return rec
