@@ -9,9 +9,9 @@ S = json.load(open(os.path.join(A, "tables", "stats_summary.json")))
 os.makedirs(os.path.join(A, "figures"), exist_ok=True)
 col = {"2021": "#1b6ca8", "2022": "#c4561a"}
 # Figure 1: per-session null-corrected dkappa
-rows.sort(key=lambda r: float(r["dkappa_null_corrected"]))
+rows.sort(key=lambda r: float(r["dkappa_raw_primary"]))
 fig, ax = plt.subplots(figsize=(6.4, 5.6))
-y = np.arange(len(rows)); v = np.array([float(r["dkappa_null_corrected"]) for r in rows])
+y = np.arange(len(rows)); v = np.array([float(r["dkappa_raw_primary"]) for r in rows])
 ax.axvspan(-0.3, 0.3, color="0.93", zorder=0); ax.axvline(0, color="0.4", lw=0.8)
 ax.scatter(v, y, c=[col[r["cohort"]] for r in rows], zorder=3, s=36)
 ax.set_yticks(y); ax.set_yticklabels(["%s %s" % (r["session"], r["mouse"]) for r in rows], fontsize=7)
@@ -22,7 +22,7 @@ ax.set_title("S1: pulse minus control coupling scale, 21 sessions\nline = Hodges
 ax.scatter([], [], c=col["2021"], label="2021 cohort"); ax.scatter([], [], c=col["2022"], label="2022 cohort"); ax.legend(fontsize=8, loc="lower right")
 plt.tight_layout(); plt.savefig(os.path.join(A, "figures", "fig1_S1_dkappa_per_session.png"), dpi=150); plt.close()
 # Figure 2: S1 and its sensitivity variants (HL with 90% CI)
-keys = [("S1", "primary (pseudo-onset control, null-corrected)"), ("S1_raw", "primary, not null-corrected"), ("sens_round", "onset rounded"), ("sens_shift1", "onset floor + 1"),
+keys = [("S1", "primary: raw (pseudo-onset control)"), ("diag_null_corrected", "diagnostic: null-corrected"), ("sens_round", "onset rounded"), ("sens_shift1", "onset floor + 1"),
         ("sens_fixedctrl", "fixed control 401–406"), ("sens_allreach", "all reaches"), ("sens_N5", "without 210622, 210623 (N<5)"),
         ("sens_without_seen_sessions", "without 210511, 220519"), ("cohort_2021", "2021 cohort only"), ("cohort_2022", "2022 cohort only")]
 fig, ax = plt.subplots(figsize=(6.6, 4.2))

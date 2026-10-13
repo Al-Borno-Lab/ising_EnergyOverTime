@@ -20,7 +20,7 @@ import stimfit_model as sm
 from tvfield_model_basis import bspline_basis_crop
 import thermo_small
 
-NCAP = 16; NSUB = 10; NSHUF = 20; W = 6; SEED0 = 20261012
+NCAP = 16; NSUB = 10; NSHUF = 10; W = 6; SEED0 = 20261012      # A4: 10 diagnostic shuffles per (session, subset)
 PREREG_RANGE = (300, 560)               # PREREGISTRATION section 3: fitted bins 300-559. Run 1 wrongly used (0, 700); the run now refuses to start otherwise.
 T_LO, T_HI = PREREG_RANGE
 EXACT_SESSION = None                    # set from the command line (--exact <session>)
@@ -139,7 +139,7 @@ def run_task(task):
     reran = False
     if not res["converged"]:                                            # pre-registered: rerun once from the last iterate, 2000 iterations
         res = sm.fit_session(Xk, groups, B, p0=res["p"], maxiter=2000, tol=TOL, **LAM); reran = True
-    row = dict(session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
+    row = dict(role=("diagnostic" if kind.startswith("shuf") else "analysis"), session=date, subset=sub_i, neurons=[int(i) for i in sub], kind=kind, N=int(N), n_used=len(sub),
                groups=res["groups"], kappa=[float(k) for k in res["kappa"]], converged=res["converged"], nit=res["nit"],
                ll=res["ll"], seed_subset=[SEED0, int(date)], seed_shuffle=seed_shuf, seed_pseudo=[SEED0, int(date), 7],
                t_range=[T_LO, T_HI], onset_convention="floor(onset_float+1e-6), t_k = bin start", shuffle="aligned (A3)", maxiter=MAXITER, tol=TOL, lam=LAM, reran=reran, secs=time.time() - t0)

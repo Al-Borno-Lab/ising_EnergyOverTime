@@ -1,4 +1,5 @@
-"""Statistics for E11 as pre-registered (PREREGISTRATION_2026-10-12.md section 6-7).
+"""Statistics for E11 as pre-registered (PREREGISTRATION_2026-10-12.md sections 6-7, amendments A3 and A4).
+PRIMARY statistic (A4) = RAW kappa_pulse - kappa_control, session median over subsets. The shuffle null is a labelled DIAGNOSTIC only (10 shuffles/subset), never used in a test.
 usage: python analyze_stimfit.py <results_dir> <assets_tables_dir> [--selftest]
 Reads <results_dir>/tasks/*.json. Writes session_table.csv and stats_summary.json (+ variant tables) into <assets_tables_dir>.
 Unit = session. Wilcoxon signed-rank (two-sided), Hodges-Lehmann estimate with exact 90% CI, BH over {S1, S2}."""
@@ -45,8 +46,8 @@ def load(res_dir):
     return by
 
 
-def session_values(by, kind="primary", corrected=True):
-    """Per session: median over subsets of Dkappa (null-corrected if requested)."""
+def session_values(by, kind="primary", corrected=False, min_shuf=7):
+    """Per session: median over subsets of Dkappa. corrected=True is the DIAGNOSTIC null-corrected value (needs >= min_shuf converged shuffles)."""
     out = {}
     for (sess, sub), d in sorted(by.items()):
         if kind not in d or not d[kind]["converged"]: continue
@@ -54,7 +55,7 @@ def session_values(by, kind="primary", corrected=True):
         if d[kind]["groups"][:2] == ["pulse_early", "pulse_late"]: continue
         sh = [v for k, v in d.items() if k.startswith("shuf_") and v["converged"]]
         if corrected:
-            if len(sh) < 10: continue
+            if len(sh) < min_shuf: continue
             kp -= np.mean([s["kappa"][0] for s in sh]); kc -= np.mean([s["kappa"][1] for s in sh])
         out.setdefault(sess, []).append(kp - kc)
     return {s: float(np.median(v)) for s, v in out.items()}
@@ -69,14 +70,31 @@ def test(vals, label, kappa_scale=True):
                 equivalent=(bool(lo > -EQ_BOUND and hi < EQ_BOUND) if kappa_scale else None))
 
 
+def below_m1(by, kinds=("primary",)):
+    """Count of converged fits with kappa_pulse or kappa_control < -1 (J_eff sign flip), and the sessions involved (reported, not excluded)."""
+    n = 0; tot = 0; sess = set()
+    for (sess_id, sub), d in by.items():
+        for k in kinds:
+            if k in d:
+                tot += 1
+                if min(d[k]["kappa"][:2]) < -1: n += 1; sess.add(sess_id)
+    return dict(fits_below_minus1=n, fits=tot, sessions=sorted(sess))
+
+
 def main(res_dir, out_dir):
     by = load(res_dir); os.makedirs(out_dir, exist_ok=True); S = {}
-    prim = session_values(by, "primary", True)
-    S["S1"] = test(prim, "S1 null-corrected dkappa")
-    S["S1_raw"] = test(session_values(by, "primary", False), "S1 raw dkappa")
+    bad = [(k, v["t_range"]) for k, d in by.items() for v in d.values() if v.get("t_range") != [300, 560]]
+    assert not bad, "fits outside the pre-registered range 300-559: %s" % bad[:3]                 # amendment A3
+    nsh = sorted({sum(1 for k in d if k.startswith("shuf_")) for d in by.values()})
+    S["integrity"] = dict(t_range="all rows [300, 560]", n_designs=len(by), shuffles_per_design=nsh, fits=sum(len(d) for d in by.values()),
+                          not_converged=sum(1 for d in by.values() for v in d.values() if not v["converged"]), reran=sum(1 for d in by.values() for v in d.values() if v.get("reran")))
+    prim = session_values(by, "primary", False)
+    S["S1"] = test(prim, "S1 RAW dkappa = kappa_pulse - kappa_control (primary, A4)")
+    diag = session_values(by, "primary", True)
+    S["diag_null_corrected"] = test(diag, "DIAGNOSTIC null-corrected dkappa (aligned shuffle, 10/subset); not a test of record")
     for k, name in (("round", "round"), ("shift1", "floor+1"), ("fixedctrl", "fixed control 401-406"), ("allreach", "all reaches")):
         S["sens_" + k] = test(session_values(by, k, False), "sensitivity " + name + " (raw dkappa)")
-    S["sens_without_seen_sessions"] = test({s: v for s, v in prim.items() if s not in ("210511", "220519")}, "S1 without 210511 and 220519 (seen before the full run)")
+    S["sens_without_seen_sessions"] = test({s: v for s, v in prim.items() if s not in ("210511", "220519")}, "S1 without 210511 and 220519 (seen before run 1)")
     S["sens_N5"] = test({s: v for s, v in prim.items() if s not in ("210622", "210623")}, "S1 without N<5 sessions")
     for c, f in COHORT.items(): S["cohort_" + c] = test({s: v for s, v in prim.items() if f(s)}, "S1 cohort " + c)
     # S2: dI/N and dchi/N medians over subsets
@@ -104,9 +122,18 @@ def main(res_dir, out_dir):
         S["mixed_mouse"] = dict(intercept=float(m.params["Intercept"]), ci95=[float(v) for v in m.conf_int().loc["Intercept"]], n_mice=int(df.mouse.nunique()))
     except Exception as e:
         S["mixed_mouse"] = dict(error=str(e))
+    S["kappa_below_minus1"] = {k: below_m1(by, (k,)) for k in ("primary", "round", "shift1", "fixedctrl", "allreach")}
+    # shuffle diagnostic detail
+    nd = {}
+    for (sess, sub), d in by.items():
+        sh = [v for k, v in d.items() if k.startswith("shuf_")]
+        if sh: nd.setdefault(sess, []).append((np.std([x["kappa"][0] for x in sh], ddof=1), np.std([x["kappa"][1] for x in sh], ddof=1),
+                                               np.mean([x["kappa"][0] - x["kappa"][1] for x in sh])))
     with open(os.path.join(out_dir, "session_table.csv"), "w", newline="") as fh:
-        w = csv.writer(fh); w.writerow(["session", "mouse", "cohort", "dkappa_null_corrected"])
-        for s, v in sorted(prim.items()): w.writerow([s, MOUSE.get(s, "?"), "2021" if s.startswith("21") else "2022", v])
+        w = csv.writer(fh); w.writerow(["session", "mouse", "cohort", "dkappa_raw_primary", "dkappa_null_corrected_diagnostic", "null_sd_kappa_pulse", "null_sd_kappa_control", "null_mean_diff"])
+        for s, v in sorted(prim.items()):
+            a = np.array(nd.get(s, [(np.nan,) * 3]))
+            w.writerow([s, MOUSE.get(s, "?"), "2021" if s.startswith("21") else "2022", v, diag.get(s, ""), float(np.nanmedian(a[:, 0])), float(np.nanmedian(a[:, 1])), float(np.nanmedian(a[:, 2]))])
     json.dump(S, open(os.path.join(out_dir, "stats_summary.json"), "w"), indent=1)
     print(json.dumps(S, indent=1))
 
