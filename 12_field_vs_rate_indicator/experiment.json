@@ -1,12 +1,12 @@
 {
   "id": "E12",
   "title": "Field-term dip vs firing rate as a marker of peak acceleration",
-  "status": "planned",
+  "status": "complete",
   "owner": "grad-researcher-3",
   "started": "2026-10-12",
   "updated": "2026-10-12",
   "question": "Does the field-term dip mark peak acceleration better than firing rate, polarization indices, PCA/GPFA trajectories and decoders, and does the coupled model (M1) add anything over the independent model (M0)? How does our method deviate from standard methods?",
-  "headline": "Planned. Prior look (exploratory): field trough in 200 ms pre-peak 60% vs 14% control; average rate 32% vs 12% (n.s.).",
+  "headline": "Field-term dip locks to peak acceleration (65% vs 14% rest control; 50 ms vs 330 ms for mean rate) but is a population-polarization effect: no detectable advantage of coupling-corrected fields (FT vs FT0, CIs wide) and a model-free polarization index matches it. POOL and rest-control check NOT RUN (sbatch blocked).",
   "depends_on": [
     "E07",
     "E09"
