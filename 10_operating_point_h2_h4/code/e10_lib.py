@@ -147,3 +147,26 @@ def merge_parts(parts):
     rec["null_rho_mean"] = float(np.nanmean(nul[:, 1])); rec["null_dchiJ_mean"] = nul[:, 2].mean()
     rec["secs"] = sum(p["secs"] for p in parts)
     return rec
+
+
+# ---- sensitivity analyses (amendment 7): real fits only, no shuffles; late window included ----
+LATE_HI = 550
+def analyze_real(Z, key, sub, exclude=True, subset16=False):
+    """Real-fit quantities in three windows. exclude=False keeps all reaches; subset16 draws a random 16-neuron subset of an N<=20 condition
+    (sub = (index, seed)); N > 20 conditions always use sub as in the main run."""
+    t0 = time.time()
+    X = Z["X_" + key]
+    if exclude: X = X[Z["exclude_" + key] == 0]
+    N_full = X.shape[2]
+    if sub is not None:
+        idx = np.sort(np.random.default_rng(sub[1]).choice(N_full, 16, replace=False)); X = X[:, :, idx]
+    R, _, N = X.shape; F = fit(X); S = tm.states(N)
+    th = tm.thermo(F["h"][LO:LATE_HI], F["J"], S=S)
+    win = lambda x, a, b: x[a:b].mean(0)
+    rec = dict(key=key, sub=-1 if sub is None else sub[0], N_full=N_full, N=N, R=R, exclude=exclude, converged=F["converged"], nit=F["nit"])
+    for q in ("I", "chiJ", "C"):
+        rec["dI" if q == "I" else "d" + q] = (win(th[q], 80, 120) - win(th[q], 0, 60)) / N
+        rec["late_dI" if q == "I" else "late_d" + q] = (win(th[q], 150, 250) - win(th[q], 0, 60)) / N
+    rec["dv"] = win(th["v"], 80, 120) - win(th["v"], 0, 60); rec["late_dv"] = win(th["v"], 150, 250) - win(th["v"], 0, 60)
+    rec["secs"] = time.time() - t0
+    return rec
