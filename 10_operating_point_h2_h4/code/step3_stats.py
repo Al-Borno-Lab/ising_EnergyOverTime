@@ -7,7 +7,7 @@ import sys, glob, pickle, os, warnings, numpy as np, pandas as pd
 from scipy import stats
 import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 import statsmodels.formula.api as smf
-res, out = sys.argv[1], sys.argv[2]
+res, out = sys.argv[1], sys.argv[2]; PARTDIR = sys.argv[3] if len(sys.argv) > 3 else None
 os.makedirs(f"{out}/tables", exist_ok=True); os.makedirs(f"{out}/figures", exist_ok=True)
 EXP = pd.read_csv(f"{out}/tables/expected_conditions.csv", dtype={"key": str, "session": str})
 WARN = []
@@ -88,7 +88,7 @@ def analyse(cd, tag):
     # A7 primary bound: mean over a session's conditions (and subsets) of the per-task 95th percentile (conservative; ~4-5x too strict for N > 20)
     bound = cd.groupby("session").null_dI_p95.mean()
     # sensitivity: Gaussian approximation of the session-averaged null (sd of the mean = sqrt(sum sd_task^2)/n)
-    sd_t = (cd.null_dI_p95 - cd.null_dI_mean) / 1.645; g = cd.assign(sd2=sd_t ** 2).groupby("session")
+    sd_t = (cd.null_dI_p95 - cd.null_dI_mean) / 1.645; g = cd.assign(sd2=sd_t ** 2 / cd.n_tasks).groupby("session")
     bound_g = g.null_dI_mean.mean() + 1.645 * np.sqrt(g.sd2.sum()) / g.size()
     sidx = sess.set_index("session"); above = (sidx.real_dI > bound); above_g = (sidx.real_dI > bound_g)
     sess["null_bound"] = sess.session.map(bound); sess["above_null"] = sess.session.map(above); sess["null_bound_gauss"] = sess.session.map(bound_g); sess["above_null_gauss"] = sess.session.map(above_g)
@@ -120,16 +120,20 @@ def analyse(cd, tag):
     h2_ok = q[0] < .05 and R["H2"]["median"] > 0 and R["H2"]["gate_majority_above_null"]
     h3a_ok = R["H3a"]["rho"] > 0 and q[1] < .05 and R["H3a"]["p_sign"] < .05 and R["H3a"]["sessions_sign_agree"] > n_s / 2
     # H3b (A7 addendum): kappa-hat two-sided (a change in either direction refutes fixed J); held-out gain one-sided (only an IMPROVEMENT refutes)
-    h3b_ok = bool(R["H3b_kappa"]["p"] > .05 and not (R["H3b_gain"]["p_greater"] < .05))
+    h3b_eval = not (np.isnan(R["H3b_kappa"]["p"]) or np.isnan(R["H3b_gain"]["p_greater"]))
+    if not h3b_eval: warn(f"{tag}: H3b not evaluable (NaN p for kappa-hat or held-out gain)")
+    h3b_ok = bool(h3b_eval and R["H3b_kappa"]["p"] > .05 and not (R["H3b_gain"]["p_greater"] < .05))
     h3_ok = bool(h3a_ok and h3b_ok); h4a_ok = q[2] < .05 and R["H4a"]["rho"] > 0
-    V = dict(n_sessions=n_s, n_conditions_complete=int(cd.complete.sum()), n_warnings=len(WARN), q_H2=q[0], q_H3a=q[1], q_H4a=q[2], H2_supported=bool(h2_ok), H3a_supported=bool(h3a_ok), H3b_no_change=bool(h3b_ok),
+    V = dict(H3b_evaluable=bool(h3b_eval), n_sessions=n_s, n_conditions_complete=int(cd.complete.sum()), n_warnings=len(WARN), q_H2=q[0], q_H3a=q[1], q_H4a=q[2], H2_supported=bool(h2_ok), H3a_supported=bool(h3a_ok), H3b_no_change=bool(h3b_ok),
              H3_holds=h3_ok, H4a_supported=bool(h4a_ok), OVERALL_SUPPORTED=bool(h2_ok and h3_ok and h4a_ok))
     if not V["OVERALL_SUPPORTED"]:
         why = []
         if R["H2"]["median"] <= 0: why.append("dI <= 0")
-        elif not h2_ok: why.append("H2 not significant/above null")
+        elif q[0] < .05 and not R["H2"]["gate_majority_above_null"]: why.append("dI > 0 but not above null in a majority of sessions")
+        elif not h2_ok: why.append("H2 not significant")
         if not h3a_ok: why.append("H3a not supported (empirical covariance does not change as fixed-J predicts)")
-        if not h3b_ok: why.append("H3b: kappa-hat or held-out gain shows a coupling change (fixed J refuted)")
+        if not h3b_eval: why.append("H3b not evaluable (NaN p)")
+        elif not h3b_ok: why.append("H3b: kappa-hat or held-out gain shows a coupling change (fixed J refuted)")
         if not h4a_ok: why.append("H4a not supported (dI unrelated to dv or wrong sign)")
         V["refuted_because"] = "; ".join(why)
     rows = []
@@ -138,21 +142,40 @@ def analyse(cd, tag):
     return rows, V, sess
 
 rows, V, sess = analyse(cond, "primary")
-# cohort rule (section 6; A7 addendum): "present" = cohort-level H2 Wilcoxon median > 0 and p < 0.05; refuted if present in 2022 and absent in 2021.
-# NB the 2022 cohort has 6 sessions: its two-sided Wilcoxon reaches p < 0.05 only if all 6 session differences share a sign (min p = 0.031).
-cohort_V, present = {}, {}
+if PARTDIR:   # exact session-level null for sessions whose conditions all have per-shuffle values (the six N = 19 conditions: 220515, 220516)
+    ex = []
+    for s_id, g in cond.groupby("session"):
+        nul = []
+        for k in g.key:
+            parts = [pickle.load(open(f, "rb")) for f in sorted(glob.glob(f"{PARTDIR}/part_{k}_-1_[0-3].pkl"))]
+            if len(parts) != 4: nul = None; break
+            nul.append({b: dI for p in parts for (b, dI, _, _) in p["null"]})
+        if nul and all(len(n) == 20 for n in nul):
+            m = np.mean([[n[b] for b in range(20)] for n in nul], axis=0); real = sess.set_index("session").real_dI[s_id]
+            ex.append(dict(session=s_id, real_dI=real, exact_null_p95=float(np.percentile(m, 95)), exact_above_null=bool(real > np.percentile(m, 95)), n_shuffles=20))
+    pd.DataFrame(ex).to_csv(f"{out}/tables/e10_exact_null_n19.csv", index=False); print("exact N=19 session nulls:", ex)
+# cohort rule (section 6; A7 second addendum): based on the cohort that has power.
+#   absent in 2021 = 2021-only H2 Wilcoxon median <= 0 OR p >= 0.05;  present in 2022 = 2022 median dI/N > 0 (direction only; n = 6).
+#   If 2021 is absent and 2022 present, the claim is "not established outside 2022" -> REFUTED. Conservative: an effect present in both cohorts
+#   whose 2021 part alone misses p < 0.05 is also refuted. 2021-only and 2022-only statistics are always reported.
+cohort_V, coh = {}, {}
 for co in ("2021", "2022"):
     cc = cond[cond.cohort == co]
     if cc.session.nunique() >= 6:
         r, Vc, _ = analyse(cc, f"cohort_{co}"); rows += r; cohort_V[co] = Vc
-        h = [x for x in r if x["test"] == "H2"][0]; present[co] = bool(h["median"] > 0 and h["p"] < .05)
+        h = [x for x in r if x["test"] == "H2"][0]; coh[co] = h
     else:
-        warn(f"cohort {co}: fewer than 6 sessions, cohort rule cannot be evaluated"); present[co] = None
-V["H2_present_2021"], V["H2_present_2022"] = present["2021"], present["2022"]
-V["rule_2022_only_triggered"] = bool(present["2022"] and present["2021"] is False)
+        warn(f"cohort {co}: fewer than 6 sessions, cohort rule cannot be evaluated"); coh[co] = None
+present = {co: (None if h is None else bool(h["median"] > 0 and h["p"] < .05)) for co, h in coh.items()}
+absent_2021 = None if coh["2021"] is None else bool(coh["2021"]["median"] <= 0 or not (coh["2021"]["p"] < .05))
+present_2022 = None if coh["2022"] is None else bool(coh["2022"]["median"] > 0)
+V["H2_2021_median"] = None if coh["2021"] is None else coh["2021"]["median"]; V["H2_2021_p"] = None if coh["2021"] is None else coh["2021"]["p"]
+V["H2_2022_median"] = None if coh["2022"] is None else coh["2022"]["median"]; V["H2_2022_p"] = None if coh["2022"] is None else coh["2022"]["p"]
+V["H2_absent_2021"], V["H2_present_2022_direction"] = absent_2021, present_2022
+V["rule_2022_only_triggered"] = bool(absent_2021 and present_2022)
 if V["rule_2022_only_triggered"]:
-    V["OVERALL_SUPPORTED"] = False; V["refuted_because"] = (V.get("refuted_because", "") + "; " if V.get("refuted_because") else "") + "effect present only in the 2022 cohort (section 6)"
-V["incomplete"] = bool(V["n_sessions"] < N_SESS_EXPECTED or V["n_conditions_complete"] < len(EXP) or any(v is None for v in present.values()))
+    V["OVERALL_SUPPORTED"] = False; V["refuted_because"] = (V.get("refuted_because", "") + "; " if V.get("refuted_because") else "") + "not established outside the 2022 cohort (section 6): 2021 alone absent, 2022 median > 0"
+V["incomplete"] = bool(V["n_sessions"] < N_SESS_EXPECTED or V["n_conditions_complete"] < len(EXP) or coh["2021"] is None or coh["2022"] is None)
 V["VERDICT_STATUS"] = "INCOMPLETE (do not interpret)" if V["incomplete"] else ("SUPPORTED" if V["OVERALL_SUPPORTED"] else "REFUTED/NOT SUPPORTED")
 for row in rows:
     if row["set"] == "primary" and row["test"] == "VERDICT": row.update(V)
@@ -164,7 +187,7 @@ sess.to_csv(f"{out}/tables/e10_sessions.csv", index=False)
 open(f"{out}/tables/e10_warnings.txt", "w").write("\n".join(WARN) + "\n")
 pd.set_option("display.width", 250); pd.set_option("display.max_columns", 30)
 print(T[T.set == "primary"].round(4).to_string()); print("\nVERDICT:", V)
-print("per-cohort H2 present:", present, "| cohort verdicts H2_supported:", {co: (v and v["H2_supported"]) for co, v in cohort_V.items()})
+print("cohort H2: 2021 median/p", V["H2_2021_median"], V["H2_2021_p"], "| 2022 median/p", V["H2_2022_median"], V["H2_2022_p"], "| cohort verdicts H2_supported:", {co: (v and v["H2_supported"]) for co, v in cohort_V.items()})
 print(f"\n{len(WARN)} warnings (see e10_warnings.txt)")
 fig, ax = plt.subplots(1, 3, figsize=(13, 4))
 ax[0].scatter(sess.real_dv, sess.real_dI, c=(sess.cohort == "2022"), cmap="coolwarm"); ax[0].axhline(0, c="gray", lw=.5); ax[0].axvline(0, c="gray", lw=.5)

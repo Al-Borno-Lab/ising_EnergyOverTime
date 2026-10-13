@@ -14,6 +14,11 @@ def make(scen, seed):
             c22 = r.session.startswith("22")
             dvm = {"refuted_h1": -0.02, "cohort2022only": (0.03 if c22 else 0.0)}.get(scen, 0.02)
             dvs = 0.005 if (scen == "cohort2022only" and c22) else 0.02
+            if scen == "c22_5of6_c21_neg":      # reviewer's dodge case: 2022 5/6 positive; 2021 median negative but 6 strongly positive sessions
+                i21 = sorted(E.session[E.session.str.startswith("21")].unique()).index(r.session) if not c22 else None
+                dvm = (0.03 if r.session != "220520" else -0.02) if c22 else (0.04 if i21 < 6 else -0.01); dvs = 0.003
+            if scen == "both_pos_c21_sig": dvm, dvs = (0.03, 0.005) if c22 else (0.02, 0.01)
+            if scen == "c21_only": dvm, dvs = (0.0, 0.003) if c22 else (0.02, 0.01)
             dv = rng.normal(dvm, dvs); dI = 0.8 * dv + rng.normal(0, 0.003)
             chi = rng.normal(0, .1); emp = chi + rng.normal(0, .03)
             kap = rng.normal(0.4 if scen == "kappa_change" else 0, 0.1)
@@ -38,6 +43,9 @@ CASES = [  # scenario, seed, assertions on (verdict row v, warnings w)
     ("kappa_change", 2, lambda v, w: not bool(v.H3b_no_change) and v.VERDICT_STATUS.startswith("REFUTED")),
     ("refuted_h1", 2, lambda v, w: "dI <= 0" in str(v.refuted_because) and v.VERDICT_STATUS.startswith("REFUTED")),
     ("cohort2022only", 3, lambda v, w: bool(v.rule_2022_only_triggered) and v.VERDICT_STATUS.startswith("REFUTED") and "2022 cohort" in str(v.refuted_because)),  # R1
+    ("c22_5of6_c21_neg", 2, lambda v, w: bool(v.H2_supported) and bool(v.rule_2022_only_triggered) and v.VERDICT_STATUS.startswith("REFUTED") and v.H2_2021_median <= 0),   # F1 (a)
+    ("both_pos_c21_sig", 2, lambda v, w: (not bool(v.rule_2022_only_triggered)) and v.VERDICT_STATUS == "SUPPORTED" and v.H2_2021_p < .05),                      # F1 (b)
+    ("c21_only", 2, lambda v, w: (not bool(v.rule_2022_only_triggered)) and v.H2_2022_median is not None),                                                      # F1 (c): no cohort refutation
     ("weak_gate", 2, lambda v, w: not bool(v.H2_supported) and v.VERDICT_STATUS.startswith("REFUTED")),   # significant dI but few sessions above null (R4)
     ("partial", 2, lambda v, w: v.VERDICT_STATUS.startswith("INCOMPLETE") and "210606_0" in w and "non-converged" in w),
     ("nan", 2, lambda v, w: v.VERDICT_STATUS.startswith("INCOMPLETE") and "NaN in" in w),
