@@ -170,3 +170,33 @@ def analyze_real(Z, key, sub, exclude=True, subset16=False):
     rec["dv"] = win(th["v"], 80, 120) - win(th["v"], 0, 60); rec["late_dv"] = win(th["v"], 150, 250) - win(th["v"], 0, 60)
     rec["secs"] = time.time() - t0
     return rec
+
+
+# ---- fold_k re-check of the kappa / cross-validation part (amendment 7 deviation (a)) ----
+def analyze_foldk(Z, key, sub, f, folds="fold_k"):
+    """One CV fold f of the kappa held-out gain and the fold-fit prediction, with the stored fold_k assignment of the kept reaches
+    (folds='mod5' reproduces the main run's np.arange(R) % 5, for testing). Same reaches, subset and basis as analyze()."""
+    t0 = time.time(); X = Z["X_" + key]; keep = Z["exclude_" + key] == 0; X = X[keep]
+    fk = (Z["fold_" + key][keep] if folds == "fold_k" else np.arange(len(X)) % 5)
+    N_full = X.shape[2]
+    if sub is not None:
+        idx = np.sort(np.random.default_rng(sub[1]).choice(N_full, 16, replace=False)); X = X[:, :, idx]
+    R, _, N = X.shape; S = tm.states(N); tr, te = fk != f, fk == f
+    rec = dict(key=key, sub=-1 if sub is None else sub[0], fold=f, n_test=int(te.sum()), n_train=int(tr.sum()), folds=folds)
+    if tr.sum() < 2 or te.sum() < 1: rec["skipped"] = True; rec["secs"] = time.time() - t0; return rec
+    F0 = fit(X[tr]); Kf = fit_kappa(X[tr], F0["W"], F0["J"])
+    gain = tm.loglik_bins(X[te], Kf["h"], Kf["J"], Kf["kappa"] * Kf["J"], EM) - tm.loglik_bins(X[te], F0["h"], F0["J"])
+    rec.update(skipped=False, gain_by_reach=gain[:, EM].mean(1).tolist(), pred_dchiJ=float(summarize(window_thermo(F0, S), N)["dchiJ"]),
+               fit_converged=F0["converged"], kappa_converged=Kf["converged"], secs=time.time() - t0)
+    return rec
+
+
+def merge_foldk(parts, task):
+    """Replace kappa_gain_reach and pred_dchiJ_folds in a main-run task record by the fold_k versions (same definitions as analyze())."""
+    parts = [p for p in parts if not p["skipped"]]
+    task = dict(task); R = sum(p["n_test"] for p in parts)
+    task["kappa_gain_reach_modfold"], task["pred_dchiJ_folds_modfold"] = task["kappa_gain_reach"], task["pred_dchiJ_folds"]
+    task["kappa_gain_reach"] = float(np.sum([g for p in parts for g in p["gain_by_reach"]]) / task["R"])    # analyze(): mean over all R reaches (zero rows if skipped)
+    task["pred_dchiJ_folds"] = float(np.mean([p["pred_dchiJ"] for p in parts]))
+    task["foldk_all_converged"] = all(p["fit_converged"] and p["kappa_converged"] for p in parts)
+    return task
