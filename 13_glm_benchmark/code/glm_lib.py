@@ -7,12 +7,30 @@ LAMB, LAMJ = 1e-5, 1e-3
 MODELS_ALL = ["M0", "M1", "SYNC", "LAG1", "LAG1H", "SYNC_LAG1", "SYNC_H", "LAG2", "MLAG20", "SYNC_E"]
 MODELS_NULL = ["M0", "SYNC", "LAG1H"]
 PHASES = ["baseline", "acceleration", "deceleration", "post"]
+# Pre-registered constants (PREREGISTRATION_2026-10-12.md sections 1-4 and amendment A1); asserted below and stored in every output.
+PREREG = dict(T=700, lamb=1e-5, lamj=1e-3, n_folds=5, baseline=(-100, -40), post_len=50, reach_epoch=(-50, 50), late_epoch=(50, 150),
+              hist_lags=(1, 2, 3), n_null_shuffles=20, n_ref_reps=5, ref_sweeps=40, bspline="tvfield_model.bspline_basis(zc) fine=(-60,160) fine_step=5 coarse_step=25")
+assert T == PREREG["T"] and LAMB == PREREG["lamb"] and LAMJ == PREREG["lamj"]
+
+
+def assert_design(X, fold, B, zc, lamj=LAMJ, lamb=LAMB, lm=None):
+    """Assert the pre-registered fitted ranges, folds and basis (protocol: Review before merge)."""
+    assert X.ndim == 3 and X.shape[1] == T, X.shape
+    assert fold.shape == (X.shape[0],) and set(np.unique(fold)) <= set(range(PREREG["n_folds"])), "folds must be fold_k values 0..4"
+    assert np.array_equal(B, tv.bspline_basis(zc)) and B.shape[0] == T
+    assert lamb == PREREG["lamb"]
+    if lm is not None:
+        assert lm["onset"] < zc < lm["decel_end"] and lm["decel_end"] + PREREG["post_len"] <= T
+        assert zc + PREREG["baseline"][0] >= 0 and zc + PREREG["late_epoch"][1] <= T
 
 
 def phase_slices(lm):
     zc = int(lm["zero_cross"])
-    return {"baseline": slice(zc - 100, zc - 40), "acceleration": slice(int(lm["onset"]), zc),
-            "deceleration": slice(zc, int(lm["decel_end"])), "post": slice(int(lm["decel_end"]), int(lm["decel_end"]) + 50)}
+    sl = {"baseline": slice(zc + PREREG["baseline"][0], zc + PREREG["baseline"][1]), "acceleration": slice(int(lm["onset"]), zc),
+          "deceleration": slice(zc, int(lm["decel_end"])), "post": slice(int(lm["decel_end"]), int(lm["decel_end"]) + PREREG["post_len"])}
+    assert sl["baseline"].stop - sl["baseline"].start == 60 and sl["post"].stop - sl["post"].start == 50
+    assert sl["acceleration"].stop > sl["acceleration"].start and sl["deceleration"].stop > sl["deceleration"].start
+    return sl
 
 
 def _shift(a, k):
@@ -27,9 +45,9 @@ def feature_blocks(S, i, zc):
     N = S.shape[2]
     oth = np.delete(np.arange(N), i)
     So = S[:, :, oth]
-    ir = np.zeros(T); ir[zc - 50:zc + 50] = 1
-    il = np.zeros(T); il[zc + 50:zc + 150] = 1
-    hist = np.stack([_shift(S[:, :, i:i + 1], k)[:, :, 0] for k in (1, 2, 3)], 2)
+    ir = np.zeros(T); ir[zc + PREREG["reach_epoch"][0]:zc + PREREG["reach_epoch"][1]] = 1
+    il = np.zeros(T); il[zc + PREREG["late_epoch"][0]:zc + PREREG["late_epoch"][1]] = 1
+    hist = np.stack([_shift(S[:, :, i:i + 1], k)[:, :, 0] for k in PREREG["hist_lags"]], 2)
     return dict(sync=So, lag1=_shift(So, 1), lag2=_shift(So, 2), hist=hist,
                 sync_r=So * ir[None, :, None], sync_l=So * il[None, :, None])
 
@@ -46,6 +64,7 @@ def cond_ll(F, y, w):
 def cv_models(X, fold, B, zc, models, lamj=LAMJ, lamb=LAMB):
     """5-fold CV (given folds) held-out conditional LL per bin summed over neurons: dict model -> (R,T) (nan if fold empty)."""
     R, _, N = X.shape
+    assert_design(X, fold, B, zc, lamj, lamb)
     S = 2.0 * X - 1
     K = B.shape[1]
     res = {m: np.full((R, T), np.nan) for m in models}

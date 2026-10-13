@@ -1,6 +1,6 @@
 """E13: per-condition CV fits of all GLMs and the trial-shuffle null from spikes_v2.npz (exclude_k == 0 unless --keep-all).
 Writes <out>/ll_<cond>.npz: ll_<model> (R,T) held-out LL; null_<model> (nshuf,T) mean-over-reaches LL of the model minus M0 on shuffled data."""
-import argparse, os, time, warnings
+import argparse, os, time, warnings, json
 warnings.filterwarnings("ignore")
 os.environ.setdefault("OMP_NUM_THREADS", "1"); os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 from multiprocessing import Pool
@@ -22,6 +22,8 @@ def work(a):
             r = G.cv_models(tv.trial_shuffle(X, rng), fold, B, zc, G.MODELS_NULL, lamj=lamj)
             for m in nul: nul[m].append(np.nanmean(r[m] - r["M0"], 0))
         d.update({f"null_{m}": np.array(v, np.float32) for m, v in nul.items()})
+    d["meta"] = np.array(json.dumps(dict(cond=key, R=int(X.shape[0]), N=int(X.shape[2]), zc=int(zc), folds=sorted(set(map(int, fold))), nshuf=nshuf,
+                                          lamj=lamj, models=models, prereg=G.PREREG, kept_reaches=int(X.shape[0]))))
     np.savez_compressed(f"{out}/ll_{key}.npz", **d)
     return key, X.shape, time.time() - t0
 
@@ -71,6 +73,7 @@ if __name__ == "__main__":
         X = z["X_" + key]; fold = z["fold_" + key]; ex = z["exclude_" + key]
         keep = np.ones(len(ex), bool) if a.keep_all else ex == 0
         X, fold = X[keep].astype(np.uint8), fold[keep]
+        assert X.shape[0] == (len(ex) if a.keep_all else int((ex == 0).sum())), "exclusion filter must keep exactly exclude_k == 0"
         if X.shape[2] < a.min_n: continue
         jobs.append((key, X, fold, int(r.zero_cross), a.nshuf, a.out, a.models.split(","), a.lamj))
     if a.ref:

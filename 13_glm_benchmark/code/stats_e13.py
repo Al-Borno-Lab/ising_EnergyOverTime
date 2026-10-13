@@ -1,5 +1,5 @@
 """E13 statistics from <dir>/ll_<cond>.npz and the landmarks table. Session-level (n = 21) tests G1, G2, G3a, G3b; BH over {G2, G3a x3, G3b}."""
-import argparse, glob, os, warnings
+import argparse, glob, json, os, warnings
 import numpy as np, pandas as pd
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
@@ -20,9 +20,13 @@ def cond_table(d, lm):
         r = lm[(lm.session == int(s)) & (lm.stim == int(st))].iloc[0]
         sl = G.phase_slices(r); sl["all"] = slice(0, G.T)
         z = np.load(f)
+        meta = json.loads(str(z["meta"]))
+        assert meta["prereg"] == json.loads(json.dumps(G.PREREG)), f"{key}: constants differ from the pre-registration"
+        assert meta["cond"] == key and set(meta["folds"]) <= set(range(5))
         ll0 = z["ll_M0"]
         for p, sli in sl.items():
-            row = dict(cond=key, session=int(s), stim=int(st), phase=p, ll_M0=np.nanmean(ll0[:, sli]))
+            row = dict(cond=key, session=int(s), stim=int(st), phase=p, ll_M0=np.nanmean(ll0[:, sli]), R=meta['R'], N=meta['N'], zc=meta['zc'],
+                       phase_start=sli.start, phase_stop=sli.stop, lamj=meta['lamj'], nshuf=meta['nshuf'])
             for m in GAIN_MODELS:
                 if f"ll_{m}" in z: row[f"gain_{m}"] = np.nanmean(z[f"ll_{m}"][:, sli] - ll0[:, sli])
             for m in ("SYNC", "LAG1H"):
