@@ -29,7 +29,8 @@ Signals compared (all from the same reaches, 10-ms bins, exclusions applied):
 2. **FR**: the population-average spike probability;
 3. **|ΔFR|**: the mean absolute single-neuron rate change, a rate-only measure that doesn't cancel opposite changes;
 4. **DEC**: a cross-validated linear decoder of "time to peak acceleration" (or a peak-acceleration classifier) from single-neuron rates, trained on held-out reaches;
-5. *(optional)* **PC1**: the leading principal component of single-neuron rate trajectories.
+5. **POOL**: Calame et al. 2023's pooled, velocity-binned population rate, re-run on our sessions. Calame report a sharp pooled-rate drop at peak acceleration that scales with velocity, so our wording must not claim the mean rate is flat (see `docs/literature/LITERATURE_NOVELTY_REPORT.md`, P3).
+6. *(optional)* **PC1**: the leading principal component of single-neuron rate trajectories.
 
 Primary tests (session-level, n = 21, two-sided Wilcoxon, BH-FDR across the family):
 - **T1, timing:** the fraction of troughs/extrema in [−200, 0] ms before peak velocity minus the same in rest control windows (−1.5/−2/−2.5 s), compared FT vs FR and FT vs |ΔFR|.
