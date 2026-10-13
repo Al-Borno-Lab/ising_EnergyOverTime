@@ -50,6 +50,19 @@ Rules:
    [RESULTS_LOG_FOR_PAPER.md](RESULTS_LOG_FOR_PAPER.md), the single paper-facing log: add to it, never
    replace it. Commit only this experiment's paths (plus README/log), then open a PR into `main`.
 
+## Review before merge (required for every experiment PR)
+The orchestrator does three checks, and records them in `NN_*/REVIEW_<date>.md`, before recommending a merge:
+1. **Independent code review** of the analysis code (by a separate reviewing agent). It checks every constant against the pre-registration (windows, bin ranges, bases, seeds, folds, exclusions), window indexing, null construction, statistics logic (direction of each test and its decision rule), and silent drops. **Run this while long cluster jobs are still running**, so bugs are caught before results are read.
+2. **Spot-check:** recompute the headline numbers independently from the committed tables or raw outputs.
+3. **Reproduce:** re-run `code/run.sh` (local experiments) or a single condition (cluster experiments) from a clean worktree and compare against the committed assets.
+
+Agents must also:
+- **assert** in code that fitted ranges, windows and fold assignments equal the pre-registered values, and store them in every output row;
+- make synthetic validation **as hard as the real data**: real reach counts, real timing jitter, block- or condition-specific rates, the same null procedure, and noise matched to the real data;
+- **write the statistics script and have it reviewed before reading results.**
+
+Bugs found after results are seen are fixed with a dated amendment that discloses what was seen. Superseded outputs are kept, renamed `*_runN_*`.
+
 ## Status values
 `planned` → `running` → `analysis` → `complete`. `superseded` means a newer experiment replaces it
 (say which in `headline`). `archived` means a legacy folder kept for reference.
