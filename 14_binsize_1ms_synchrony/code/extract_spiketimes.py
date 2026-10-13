@@ -2,7 +2,7 @@
 usage: python extract_spiketimes.py <raw_dir> <spikes_v2.npz> <out_dir> [sessions=all]
 
 Our PCs = units with a non-empty cellID (as in 08_exclusion_applied/code/reextract.py, which maps raw -> bin10 exactly), in file order.
-Gates (written to <out_dir>/gates.csv; a session that fails G1-G3 is NOT used downstream):
+Gates (written to <out_dir>/gates_<sessions>.csv; a session that fails G1-G3 is NOT used downstream):
   G1  re-binning cellData/spikeTimes on the Bin10 grid reproduces Bin10 counts exactly (every PC unit, every bin)
   G2  1-ms bins built from spikeTimes on edges nested in the 10-ms grid sum to Bin10 exactly. (Bin1 in the files is NOT nested: it is 3 samples
       shorter and disagrees with Bin10 in about 0.05% of 10-ms bins on 210421, so it is not used; the mismatch is recorded as info_*.)
@@ -93,5 +93,5 @@ if __name__ == "__main__":
         date = re.match(r"Dylan_(\d{6})", os.path.basename(p)).group(1)
         if sel is not None and date not in sel: continue
         g = process(p, z, out); rows.append(g); print(g, flush=True)
-    with open(os.path.join(out, "gates.csv"), "w", newline="") as fh:
+    with open(os.path.join(out, "gates_%s.csv" % ("all" if sel is None else "_".join(sel))), "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
