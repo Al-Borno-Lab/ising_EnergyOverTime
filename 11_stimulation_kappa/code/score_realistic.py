@@ -1,6 +1,9 @@
-"""Score validate_realistic output against VALIDATION_CRITERIA amendment 6. usage: python score_realistic.py <rows.json> <out_csv>"""
+"""Score validate_realistic output against VALIDATION_CRITERIA amendments 6 and 6b. usage: python score_realistic.py <rows.json> <out_csv> [high|low]
+low = structures 210421, 210511, 210514 (mild onset jitter); high = 220519, 210608, 220520 (jitter up to 20 bins)."""
 import sys, json, csv, numpy as np
-rows = json.load(open(sys.argv[1])); out = []; ok = True
+HIGH = {"220519", "210608", "220520"}
+grp = sys.argv[3] if len(sys.argv) > 3 else None
+rows = [x for x in json.load(open(sys.argv[1])) if grp is None or (x["date"] in HIGH) == (grp == "high")]; out = []; ok = True
 bias = {}
 for sc in "ABCDE":
     r = [x for x in rows if x["scen"] == sc]; dc = np.array([x["d_corr"] for x in r]); dr = np.array([x["d_raw"] for x in r]); kc = np.array([x["kappa_control"] for x in r])

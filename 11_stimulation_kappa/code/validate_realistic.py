@@ -13,7 +13,7 @@ import stimfit_model as sm
 import run_stimfit as rs
 import validate_stimfit as v1
 
-STRUCT = ["210421", "210511", "210514"]; SCEN = "ABCDE"; NNULL = 10; GAIN_SD = 0.25; T = 700
+STRUCT = os.environ.get("E11_STRUCT", "210421,210511,210514").split(","); SCEN = "ABCDE"; NNULL = 10; GAIN_SD = 0.25; T = 700
 
 
 def structure(npz, laser, date):

@@ -116,3 +116,13 @@ Run 6 validates the **actual real-data pipeline** (`run_stimfit.make_design / bu
   5. Null-correction check, reported and tested: in B, C and D pooled, |mean Δκ_c| ≤ |mean Δκ_r| + 0.02 (the aligned null must not make the bias worse).
   - **Reported, not tested:** sd of Δκ_c and Δκ_r per scenario and structure; sd of the 10 null κ values per window (to compare with the real refit's shuffle spread, the Orchestrator's noise-match request); fraction of fits with κ < −1.
 - Failing any criterion is reported as a failure.
+
+## Amendment 6b (2026-10-12, written BEFORE run 6 has reported, in response to the Orchestrator's question about the aligned null)
+The aligned shuffle shifts each donor reach by (receiving onset − donor onset) bins. This aligns the laser-locked response and misaligns the reach-locked one by the same shift.
+Shift sizes on the real data (`assets/tables/shuffle_shift_sizes.csv`, all donor–receiver pairs of non-excluded stim_1 reaches): mean 1.8 bins, median 1, 95th percentile 5, maximum 20;
+81% of pairs shift by ≤ 2 bins, 96% by ≤ 5. The wrap of the circular shift touches only the first and last 20 bins of the 700-bin array (the fit range starts at bin 300), so no wrapped data enter the fit;
+the shift does bring contiguous data from up to 20 bins outside 300–559 into the range (by design).
+The three structures of run 6 (210421, 210511, 210514) have mild onset jitter (ranges 398–406, 399–402, 400–406; mean shift 0.7–1.9 bins). The trade-off only matters in high-jitter sessions, so:
+- **Run 6b** repeats run 6 (same code, same scenarios, 8 replicates) on three **high-jitter structures**: 220519 (onsets 374–394, 25 reaches), 210608 (399–417, 10 reaches), 220520 (378–396, 9 reaches).
+- **Criteria 1–5 of amendment 6 apply separately to the low-jitter group (run 6) and the high-jitter group (run 6b).** The null scenario D in the high-jitter group is the direct test of whether the reach-locked misalignment hurts (|mean raw κ_control| ≤ 0.10; |mean Δκ_c| ≤ 0.10; correction not adding bias).
+- If the high-jitter group fails and the low-jitter group passes, the failure is reported and the fallback (shuffle only within reaches whose onsets lie within ±2 bins) is **proposed to the Orchestrator, not applied** until agreed.
