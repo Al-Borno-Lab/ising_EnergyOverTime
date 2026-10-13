@@ -4,7 +4,8 @@ usage: python extract_spiketimes.py <raw_dir> <spikes_v2.npz> <out_dir> [session
 Our PCs = units with a non-empty cellID (as in 08_exclusion_applied/code/reextract.py, which maps raw -> bin10 exactly), in file order.
 Gates (written to <out_dir>/gates.csv; a session that fails G1-G3 is NOT used downstream):
   G1  re-binning cellData/spikeTimes on the Bin10 grid reproduces Bin10 counts exactly (every PC unit, every bin)
-  G2  Bin1 summed over 10 consecutive bins reproduces Bin10 exactly (so the 1-ms grid is nested in the 10-ms grid)
+  G2  1-ms bins built from spikeTimes on edges nested in the 10-ms grid sum to Bin10 exactly. (Bin1 in the files is NOT nested: it is 3 samples
+      shorter and disagrees with Bin10 in about 0.05% of 10-ms bins on 210421, so it is not used; the mismatch is recorded as info_*.)
   G3  per-reach 10-ms counts cut exactly as reextract.py (rows 100:800) equal C_k in spikes_v2.npz (same units, same reaches)
 Output <out_dir>/<date>.npz:  c1 (R,7000,N) uint8 1-ms counts for ALL reaches in the file, rows 100:800 of the reach segment,
   stim, exclude, reachnum (1-based), idx_cross (bin of 1-cm crossing in the 700-bin window, 10-ms units, NaN if none), idx_end (bin of max x after crossing),
@@ -36,14 +37,18 @@ def process(path, z, out_dir):
         h, _ = np.histogram(st, bins=edges)                                  # left-closed [t, t+dt)
         bad1 += int((h != counts10[:, j]).sum()); n1 += len(h)
     g.update(G1_bins=n1, G1_mismatch=bad1)
-    b1 = []
-    bad2 = 0; n2 = 0; max1 = 0
+    # 1-ms bins from spikeTimes on edges nested in the (verified) 10-ms grid: sums to Bin10 by construction, checked as G2
+    edges1 = (t[0] + np.arange(len(t) * 10 + 1) * (dt / 10.0)); b1 = []
+    bad2 = 0; n2 = 0; max1 = 0; binfo = 0
     for j, k in enumerate(pcs):
-        a = np.asarray(deref(f, ref(cd, "Bin1")[k]))[1]
-        max1 = max(max1, a.max()); b1.append(a.astype(np.uint8))
-        T10 = min(len(a) // 10, counts10.shape[0]); s10 = a[:T10 * 10].reshape(T10, 10).sum(1)
-        bad2 += int((s10 != counts10[:T10, j]).sum()); n2 += T10
-    g.update(G2_bins=n2, G2_mismatch=bad2, Bin1_len=len(b1[0]), Bin10_len=counts10.shape[0], max_count_1ms=int(max1))
+        st = np.asarray(deref(f, ref(cd, "spikeTimes")[k])).ravel()
+        h1, _ = np.histogram(st, bins=edges1); h1 = h1.astype(np.uint8)
+        max1 = max(max1, int(h1.max())); b1.append(h1)
+        s10 = h1.reshape(len(t), 10).sum(1)
+        bad2 += int((s10 != counts10[:, j]).sum()); n2 += len(s10)
+        a = np.asarray(deref(f, ref(cd, "Bin1")[k]))[1]; L = min(len(a), len(h1)); binfo += int((a[:L].astype(int) != h1[:L]).sum())
+    g.update(G2_bins=n2, G2_mismatch=bad2, Bin1_len=int(len(a)), Bin10_len=counts10.shape[0], max_count_1ms=max1,
+             info_Bin1_vs_spikeTimes_1ms_mismatch=binfo, info_Bin1_total=int(L) * len(pcs))
     # --- reaches, cut as reextract.py
     stim = [None if (v := deref(f, r)) is None else int(np.asarray(v).ravel()[0]) for r in ref(rs, "stim")]
     excl = [None if (v := deref(f, r)) is None else int(np.asarray(v).ravel()[0]) for r in ref(rs, "exclude")]
