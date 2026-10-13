@@ -3,7 +3,7 @@ usage: python extract_spiketimes.py <raw_dir> <spikes_v2.npz> <out_dir> [session
 
 Our PCs = units with a non-empty cellID (as in 08_exclusion_applied/code/reextract.py, which maps raw -> bin10 exactly), in file order.
 Gates (written to <out_dir>/gates_<sessions>.csv; a session that fails G1-G3 is NOT used downstream):
-  G1  re-binning cellData/spikeTimes on the Bin10 grid reproduces Bin10 counts exactly (every PC unit, every bin)
+  G1  re-binning cellData/spikeTimes at 10 ms (integer 30 kHz sample arithmetic, bin = sample // 300) reproduces Bin10 counts exactly (every PC unit, every bin)
   G2  1-ms bins built from spikeTimes on edges nested in the 10-ms grid sum to Bin10 exactly. (Bin1 in the files is NOT nested: it is 3 samples
       shorter and disagrees with Bin10 in about 0.05% of 10-ms bins on 210421, so it is not used; the mismatch is recorded as info_*.)
   G3  per-reach 10-ms counts cut exactly as reextract.py (rows 100:800) equal C_k in spikes_v2.npz (same units, same reaches)
@@ -26,28 +26,28 @@ def process(path, z, out_dir):
     is_pc = np.array([deref(f, r) is not None for r in ref(cd, "cellID")])
     pcs = np.nonzero(is_pc)[0]
     g = dict(session=date, mouse=mouse, n_units=nunit, n_pc=len(pcs))
-    # --- gates G1, G2 on the full recording
+    # --- gates G1, G2 on the full recording. Binning rule (diagnose_ties.py): spike times lie on a 30 kHz sample grid; bin = sample // 300 (10 ms),
+    # sample // 30 (1 ms). This reproduces Bin10 exactly in every session; using the file's own time vector t as bin edges does NOT (t carries
+    # accumulated float error that flips ties for spikes exactly on a 10-ms boundary in 6/21 sessions). Integer arithmetic also nests 1 ms in 10 ms exactly.
     b10 = [np.asarray(deref(f, r)) for r in ref(cd, "Bin10")]
-    t = b10[pcs[0]][0]; dt = 0.01
+    t = b10[pcs[0]][0]; dt = 0.01; n = len(t)
     counts10 = np.stack([b10[k][1] for k in pcs], 1)                       # (T10, N)
-    bad1 = 0; n1 = 0
-    edges = np.concatenate([t, [t[-1] + dt]])
+    edges_file = np.concatenate([t, [t[-1] + dt]]); b1 = []
+    bad1 = 0; n1 = 0; bad2 = 0; n2 = 0; max1 = 0; legacy = 0; binfo = 0; grid_err = 0.0; outside = 0
     for j, k in enumerate(pcs):
         st = np.asarray(deref(f, ref(cd, "spikeTimes")[k])).ravel()
-        h, _ = np.histogram(st, bins=edges)                                  # left-closed [t, t+dt)
-        bad1 += int((h != counts10[:, j]).sum()); n1 += len(h)
-    g.update(G1_bins=n1, G1_mismatch=bad1)
-    # 1-ms bins from spikeTimes on edges nested in the (verified) 10-ms grid: sums to Bin10 by construction, checked as G2
-    edges1 = (t[0] + np.arange(len(t) * 10 + 1) * (dt / 10.0)); b1 = []
-    bad2 = 0; n2 = 0; max1 = 0; binfo = 0
-    for j, k in enumerate(pcs):
-        st = np.asarray(deref(f, ref(cd, "spikeTimes")[k])).ravel()
-        h1, _ = np.histogram(st, bins=edges1); h1 = h1.astype(np.uint8)
-        max1 = max(max1, int(h1.max())); b1.append(h1)
-        s10 = h1.reshape(len(t), 10).sum(1)
-        bad2 += int((s10 != counts10[:, j]).sum()); n2 += len(s10)
-        a = np.asarray(deref(f, ref(cd, "Bin1")[k]))[1]; L = min(len(a), len(h1)); binfo += int((a[:L].astype(int) != h1[:L]).sum())
-    g.update(G2_bins=n2, G2_mismatch=bad2, Bin1_len=int(len(a)), Bin10_len=counts10.shape[0], max_count_1ms=max1,
+        q = np.rint(st * 30000.0); grid_err = max(grid_err, float(np.abs(st * 30000.0 - q).max())); sm = q.astype(np.int64)
+        i10 = sm // 300; i1 = sm // 30
+        outside += int(((i10 < 0) | (i10 >= n)).sum())
+        h10 = np.bincount(i10[(i10 >= 0) & (i10 < n)], minlength=n)[:n]
+        h1 = np.bincount(i1[(i1 >= 0) & (i1 < n * 10)], minlength=n * 10)[:n * 10]
+        max1 = max(max1, int(h1.max())); b1.append(h1.astype(np.uint8))
+        bad1 += int((h10 != counts10[:, j]).sum()); n1 += n                    # G1
+        bad2 += int((h1.reshape(n, 10).sum(1) != h10).sum()); n2 += n          # G2 (nesting)
+        hl, _ = np.histogram(st, bins=edges_file); legacy += int((hl != counts10[:, j]).sum())   # info: the file-edge rule that failed in 6 sessions
+        a1 = np.asarray(deref(f, ref(cd, "Bin1")[k]))[1]; L = min(len(a1), len(h1)); binfo += int((a1[:L].astype(int) != h1[:L]).sum())
+    g.update(G1_bins=n1, G1_mismatch=bad1, G2_bins=n2, G2_mismatch=bad2, Bin10_len=n, max_count_1ms=max1, spikes_outside_grid=outside,
+             info_spiketimes_max_off_30kHz_grid=grid_err, info_legacy_fileedge_G1_mismatch=legacy, info_Bin1_len=int(len(a1)),
              info_Bin1_vs_spikeTimes_1ms_mismatch=binfo, info_Bin1_total=int(L) * len(pcs))
     # --- reaches, cut as reextract.py
     stim = [None if (v := deref(f, r)) is None else int(np.asarray(v).ravel()[0]) for r in ref(rs, "stim")]
