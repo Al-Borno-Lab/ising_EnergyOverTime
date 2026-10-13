@@ -13,6 +13,7 @@ MOUSE = {**{s: "fChR2" for s in (210421, 210422, 210423, 210425, 210514)},
 TOL = dict(T1=0.10, T2=15.0)      # equivalence margins: d1 fraction; T2 in ms (1 bin = 10 ms)
 PRIMARY = [("T1", "FR"), ("T1", "dFR"), ("T1", "FT0"), ("T1", "POLb"), ("T1", "TRAJ"),
            ("T2", "FR"), ("T2", "dFR"), ("T2", "DEC"), ("T2", "FT0"), ("T2", "POLb"), ("T2", "TRAJ"), ("T3", "FR")]
+ANCHOR3 = "FTu"      # amendment A3: T3 primary uses the uniform-knot field term
 rng = np.random.RandomState(12)
 
 
@@ -106,7 +107,7 @@ def run(rows_csv, out, anchor="FT"):
         summ = summ.merge(h, on="signal", how="left")
     summ.to_csv(f"{out}/signal_summary.csv", index=False)
     # primary family
-    prim = pd.DataFrame([compare(s, t, anchor, b) for t, b in PRIMARY if b in set(s.signal)])
+    prim = pd.DataFrame([compare(s, t, ANCHOR3 if t == "T3" else anchor, b) for t, b in PRIMARY if b in set(s.signal)])
     prim["p_bh"] = multipletests(prim.p.fillna(1), method="fdr_bh")[1]
     prim.to_csv(f"{out}/primary_family.csv", index=False)
     # secondary family
@@ -114,7 +115,7 @@ def run(rows_csv, out, anchor="FT"):
     sec["p_bh"] = multipletests(sec.p.fillna(1), method="fdr_bh")[1]
     sec.to_csv(f"{out}/secondary_vs_control.csv", index=False)
     # extra descriptive contrasts (not in the family)
-    extra = pd.DataFrame([compare(s, t, anchor, b) for t, b in (("T1", "FR_abs"), ("T2", "FR_abs"), ("T3", "dFR"), ("T3", "FT0"), ("T3", "POLb"), ("T3", "TRAJ"), ("T1", "FTu"), ("T2", "FTu"), ("T3", "FTu"), ("T1", "TRAJd"), ("T2", "TRAJd")) if b in set(s.signal)])
+    extra = pd.DataFrame([compare(s, ("FT" if (t, b) == ("T3", "FR") or b == "FTu" else ANCHOR3) if t == "T3" else anchor, t, b) if False else compare(s, t, ("FT" if ((t, b) == ("T3", "FR") or b == "FTu") else (ANCHOR3 if t == "T3" else anchor)), b) for t, b in (("T1", "FR_abs"), ("T2", "FR_abs"), ("T3", "FR"), ("T3", "dFR"), ("T3", "FT0"), ("T3", "POLb"), ("T3", "TRAJ"), ("T1", "FTu"), ("T2", "FTu"), ("T3", "FTu"), ("T1", "TRAJd"), ("T2", "TRAJd")) if b in set(s.signal)])
     extra.to_csv(f"{out}/descriptive_contrasts.csv", index=False)
     return s, summ, prim, sec
 
