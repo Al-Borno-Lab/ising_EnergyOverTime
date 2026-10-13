@@ -44,6 +44,7 @@ Interpretation:
 Report per cohort (2021 vs 2022), and treat mouse as a random effect.
 
 ## Data
+- Note: the script that produced `field_term_trough_timing.csv` was not preserved in the handoff, and whether it used exclusion-applied fits is unknown. E12 recomputes everything from spikes.
 - Primary: E08 exclusion-applied spikes, `spikes_v2.npz` with `exclude_k == 0` (cluster path in the E10/E11 READMEs), and phase landmarks `09_.../assets/tables/phase_landmarks.csv`.
 - Fields hᵢ(t) from the time-varying-field model, M1 in `09_.../code/tvfield_model.py`. Refit if the stored fits aren't the exclusion-applied ones.
 - Sensitivity: all reaches; sessions with N ≥ 5.

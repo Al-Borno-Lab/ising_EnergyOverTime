@@ -84,10 +84,10 @@ def main(csv, out):
     c.set_title("c  How deep, relative to its own noise?", loc="left", fontweight="bold")
 
     fig.text(0.01, -0.04,
-             "21 sessions x 3 blocks = 63 conditions, 10-ms bins, exclusions applied. Field term = time-varying-field part of the "
-             "Ising energy, -sum_i h_i(t) s_i; firing rate = population-average spike probability. Rest controls = the same "
+             "21 sessions x 3 blocks = 63 conditions, 10-ms bins. Field term = -sum_i h_i(t) s_i from the time-varying-field Ising model (fields h_i(t) follow the reach, J fixed; pseudo-likelihood fit, tvfield_model.py). "
+             "Firing rate = population-average spike probability. Rest controls = the same "
              "search in windows shifted -1.5/-2/-2.5 s.\nStatistics are session-level (n = 21) two-sided Wilcoxon tests. "
-             "EXPLORATORY: computed post hoc from the E09 table, not pre-registered, no FDR correction. Formal test planned as E12.",
+             "EXPLORATORY: post hoc from the E09 table (its generating script and exclusion status were not preserved), not pre-registered, no FDR. Formal test: E12.",
              fontsize=7.5, color="#555", va="top")
     fig.tight_layout()
     for ext in ("png", "pdf"):
