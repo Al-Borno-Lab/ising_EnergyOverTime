@@ -99,3 +99,51 @@ def analyze(Z, key, sub, nshuf=20, S_cache=None, log=print):
     rec["kappa_gain_reach"] = float(gain[:, EM].mean()); rec["pred_dchiJ_folds"] = float(np.mean(pred)) if pred else np.nan
     rec["secs"] = time.time() - t0
     return rec
+
+
+# ---- split version of analyze() for the contingency resubmission (identical seeds, subsets and statistics) ----
+def _prep(Z, key, sub, nshuf):
+    X = Z["X_" + key]; keep = Z["exclude_" + key] == 0; X = X[keep]
+    N_full = X.shape[2]
+    if sub is not None:
+        rng = np.random.default_rng(sub[1]); idx = np.sort(rng.choice(N_full, 16, replace=False)); X = X[:, :, idx]
+    rng = np.random.default_rng(zlib.crc32(f"{key}-{sub}".encode()))
+    shufs = [tv.trial_shuffle(X, rng) for _ in range(nshuf)]        # same draw order as in analyze()
+    return X, N_full, len(keep), shufs
+
+
+def analyze_part(Z, key, sub, part, nshuf=20, nchunk=4):
+    """part = 'core' (real fit, empirical, kappa, CV) or an int chunk c in range(nchunk) (shuffles c::nchunk)."""
+    t0 = time.time(); X, N_full, R_all, shufs = _prep(Z, key, sub, nshuf); R, _, N = X.shape; S = tm.states(N)
+    rec = dict(key=key, sub=-1 if sub is None else sub[0], N_full=N_full, N=N, R=R, R_all=R_all, part=part)
+    if part == "core":
+        F = fit(X); rec["converged"] = F["converged"]; th = window_thermo(F, S)
+        rec.update({"real_" + k: v for k, v in summarize(th, N).items()})
+        tc = tm.timelocked_cov(X); rec["emp_dcov"] = (tc[380:420].mean() - tc[300:360].mean()) / N
+        p = X.mean(0); v = (p * (1 - p)).mean(1); rec["emp_dv"] = v[380:420].mean() - v[300:360].mean()
+        K1 = fit_kappa(X, F["W"], F["J"]); rec["kappa_hat"] = K1["kappa"]; rec["kappa_converged"] = K1["converged"]
+        fold = np.arange(R) % 5; gain = np.zeros((R, T)); pred = []
+        for f in range(5):
+            tr, te = fold != f, fold == f
+            if tr.sum() < 2 or te.sum() < 1: continue
+            F0 = fit(X[tr]); Kf = fit_kappa(X[tr], F0["W"], F0["J"])
+            gain[te] = tm.loglik_bins(X[te], Kf["h"], Kf["J"], Kf["kappa"] * Kf["J"], EM) - tm.loglik_bins(X[te], F0["h"], F0["J"])
+            pred.append(summarize(window_thermo(F0, S), N)["dchiJ"])
+        rec["kappa_gain_reach"] = float(gain[:, EM].mean()); rec["pred_dchiJ_folds"] = float(np.mean(pred)) if pred else np.nan
+    else:
+        nul = []
+        for b in range(part, nshuf, nchunk):
+            Fs = fit(shufs[b]); sm = summarize(window_thermo(Fs, S), N); nul.append((b, sm["dI"], sm["rho"], sm["dchiJ"]))
+        rec["null"] = nul
+    rec["secs"] = time.time() - t0
+    return rec
+
+
+def merge_parts(parts):
+    core = [p for p in parts if p["part"] == "core"][0]
+    nul = np.array(sorted([x for p in parts if p["part"] != "core" for x in p["null"]]))[:, 1:]
+    rec = {k: v for k, v in core.items() if k != "part"}
+    rec["null_dI_mean"], rec["null_dI_p95"], rec["null_dI_max"] = nul[:, 0].mean(), np.percentile(nul[:, 0], 95), nul[:, 0].max()
+    rec["null_rho_mean"] = float(np.nanmean(nul[:, 1])); rec["null_dchiJ_mean"] = nul[:, 2].mean()
+    rec["secs"] = sum(p["secs"] for p in parts)
+    return rec
