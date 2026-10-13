@@ -1,0 +1,20 @@
+{
+  "id": "E13",
+  "title": "Coupled-GLM benchmark against the time-varying-field Ising model",
+  "status": "planned",
+  "owner": "unassigned",
+  "started": "2026-10-12",
+  "updated": "2026-10-12",
+  "question": "On the same folds, does a coupled GLM (same-bin vs lagged) reproduce the coupling-beyond-rates and no-change-during-reach results, and what does the Ising model add?",
+  "headline": "Queued. Benchmark requested by methods review (PR #5).",
+  "depends_on": [
+    "E07",
+    "E09"
+  ],
+  "results_log_ids": [
+    "A7",
+    "A8"
+  ],
+  "preregistration": null,
+  "cluster_results": "/home/enserrog/ising_EnergyOverTime/13_glm_benchmark/results"
+}
