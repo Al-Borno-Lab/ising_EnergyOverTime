@@ -31,7 +31,7 @@ def ref_work(a):
     fields and J (constant), run M0 and SYNC CV on each, return the mean per-bin gain (T,)."""
     key, X, fold, zc, nrep, out = a
     t0 = time.time(); B = tv.bspline_basis(zc)
-    P = tv.fit(X, B, "M1"); rng = np.random.default_rng(777 + int(key.split("_")[0]) % 997 + int(key.split("_")[1]))
+    P = tv.fit(X, B, "M1"); rng = np.random.RandomState(777 + int(key.split("_")[0]) % 997 + int(key.split("_")[1]))
     gains = []
     for _ in range(nrep):
         Xs = G.sample_m1(P["h"], P["J"], X.shape[0], rng)

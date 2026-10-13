@@ -65,7 +65,7 @@ def sim_lag1h(W, B, N, zc, rng, nch=300):
 
 def work(a):
     key, X, zc = a
-    rng = np.random.default_rng(int(key.split("_")[0]) * 10 + int(key.split("_")[1]))
+    rng = np.random.RandomState((int(key.split("_")[0]) * 10 + int(key.split("_")[1])) % 2**31)
     B = tv.bspline_basis(zc); N = X.shape[2]; wins = WINDOWS(zc); allbins = sorted({t for w in wins.values() for t in w})
     d = {}
     for wn, w in wins.items():
