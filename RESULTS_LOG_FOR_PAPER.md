@@ -1,4 +1,4 @@
-# Results log for manuscript (updated 2026-09-30: bounded A8 wording; preliminary stimulation-block look in C)
+# Results log for manuscript (updated 2026-10-13: E12 field-term dip added as B13, depth and 'flat mean rate' claims withdrawn; previous update 2026-09-30)
 
 This log sorts the results of the Purkinje-cell pairwise maximum-entropy (Ising) analysis into established (A), robust (B), suggestive (C) and withdrawn (D). Every number comes from a saved artifact. Details of the pre-submission checks are in OPEN_ITEMS_RESOLUTION.md. Cluster tree: `math-alderaan.ucdenver.pvt:/home/enserrog/ising_EnergyOverTime/energy_over_time_organized/` (new checks are in `07_presubmission_checks/`).
 
@@ -35,6 +35,7 @@ A2 and A3 use shuffles that also remove reach-locked rate modulation. They there
 | B10 | The movement-time Ising advantage comes from reach-locked rate modulation | Against a time-varying-rate independent model, Ising is **worse** during acceleration (2/21 sessions, p_FDR = 0.004) and not different during deceleration or post. Against a constant-rate model its advantage rises in 20/21 sessions | timeresolved_llr_summary.csv, coupling_source_checks.png |
 | B11 | The J-term rise is partly rate-predicted, with a mix that varies by session | Only a median 36% comes from across-reach covariance. The covariance part carries the rise in sessions where FR falls (ρ = −0.66), the rate part where FR rises (ρ = +0.64). Neither part alone is consistent (p_FDR > 0.16) | j_rate_vs_cov_summary.csv |
 | B12 | Timing of J, h and firing-rate maxima matches chance | Real vs control-window lag not different in any of 6 window/exclusion variants | peak_timing_vs_control_all_variants.csv |
+| B13 | **Population polarization marks peak acceleration; the mean rate does so poorly** (E12, pre-registered, exclusions applied) | Time-varying field term troughs in the 200 ms before peak velocity in 65% of conditions vs 14% of rest controls; median distance from peak acceleration 50 ms vs 330 ms for the population-average rate (p_BH = 0.024; the hit-rate difference is not FDR-significant, p_BH = 0.078). **Not unique to the Ising model:** the uncoupled-model field term (70 ms) and a model-free polarization index (70 ms) time it equally well (no detectable difference; equivalence not shown). The mean rate does dip (consistent with Calame et al. 2023), but imprecisely. Rest-control windows are not yet verified as at rest (kinematics step pending) | 12_field_vs_rate_indicator/RESULTS.md R1–R4, R8 |
 
 **Model dependence of B2 (new).** With time-varying fields, the energy drop is carried by the field term (≈ −0.17 vs −0.01 per neuron at peak; field 20/21, p_FDR = 2e-5). The coupling term still falls (18/21) but is about 20 times smaller. B2 therefore describes how a stationary model absorbs rate changes, not a coupling change in the population.
 
@@ -58,6 +59,9 @@ A2 and A3 use shuffles that also remove reach-locked rate modulation. They there
 | Pooled Cohen's d = −0.114, p = 0.003 | Replaced | See C: stim 0 only, d = −0.103 |
 | "Neurons coordinate more during the reach, beyond firing rate" | Not supported | B10, B11, A8 |
 | "The energy drop during the reach is carried by coupling" (as a statement about the population) | Model-dependent | Holds only for the stationary model. With time-varying fields, the field term carries it (see B2 note) |
+| "The field-energy dip is 15 vs 3.6 baseline-SD deep" / "4.7x deeper than control" (E09) | Withdrawn | The registered spline basis has finer knots near the reach and inflates field-term depth under the null (1.7x with no dip). With uniform knots the field term is not deeper than the mean rate (p_BH = 0.47). E12 R6–R7 |
+| "The population-average firing rate barely moves at peak acceleration" | Withdrawn | The mean rate dips (4.9x its rest noise) but its trough is poorly timed (330 ms from peak acceleration); consistent with Calame et al. 2023. E12 R8 |
+| "The field-term dip is something only the Ising model can extract" | Not supported | A model-free polarization index and the uncoupled field term match it (E12 R3–R4). The model's contribution is elsewhere (operating point, P4/E10; field vs coupling energy split, B2) |
 | "Most J peaks fall after the movement" / "in the deceleration phase" | Not supported | Window-length artefact; deceleration phase is only 120 ms |
 | Collective state locked to arm acceleration (PMC10370034 framing) | Not reproduced | B4, B12 |
 | Criticality proxy: Var(J) peaks +210 ms | Did not replicate | +90 / +110 / +20 ms at W = 15/25/40, none significant after FDR |
