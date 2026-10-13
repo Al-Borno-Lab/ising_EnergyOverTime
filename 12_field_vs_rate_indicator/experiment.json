@@ -2,7 +2,7 @@
   "id": "E12",
   "title": "Field-term dip vs firing rate as a marker of peak acceleration",
   "status": "planned",
-  "owner": "unassigned",
+  "owner": "grad-researcher-3",
   "started": "2026-10-12",
   "updated": "2026-10-12",
   "question": "Does the field-term dip mark peak acceleration better than firing rate, polarization indices, PCA/GPFA trajectories and decoders, and does the coupled model (M1) add anything over the independent model (M0)? How does our method deviate from standard methods?",
@@ -15,6 +15,6 @@
     "F1",
     "B6"
   ],
-  "preregistration": null,
+  "preregistration": "12_field_vs_rate_indicator/PREREGISTRATION_2026-10-12.md",
   "cluster_results": "/home/enserrog/ising_EnergyOverTime/12_field_vs_rate_indicator/results"
 }
