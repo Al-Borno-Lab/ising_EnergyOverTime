@@ -19,10 +19,10 @@ case "${1:?stage}" in
     mkdir -p "$RAW"; for f in $(ls "$RAW_SRC" | grep -v 'WT2\|220519_DJC000\|220520_DJC002'); do cp -n "$RAW_SRC/$f" "$RAW/"; done
     srun -A ceas-alborno -p math-alderaan -c 4 $PY $EXP/code/extract_laser_onsets.py "$RAW" $EXP/results/reachs_raw.csv
     srun -A ceas-alborno -p math-alderaan -c 2 $PY $EXP/code/merge_laser_onsets.py $EXP/results/reachs_raw.csv "$SPIKES" $EXP/assets/tables/laser_onsets.csv ;;
-  validate)    sbatch --cpus-per-task=60 $EXP/code/sbatch_validate.sh results/validation ;;   # SYNTHETIC, criteria in VALIDATION_CRITERIA_2026-10-12.md
+  validate)    sbatch --cpus-per-task=60 $EXP/code/sbatch_validate_realistic.sh results/validation_run6 ;;   # SYNTHETIC (runs 1-5: sbatch_validate.sh), criteria in VALIDATION_CRITERIA_2026-10-12.md
   full)                                                                                  # step 5: 3 jobs x 64 CPUs, ~590 CPU-h
-    cd $EXP; for S in "$A" "$B" "$C"; do sbatch --cpus-per-task=64 --mem=160G --time=08:00:00 --job-name=e11_full code/sbatch_run.sh results/full "$S"; done ;;
-  exact)       cd $EXP; sbatch --cpus-per-task=2 --mem=16G --time=08:00:00 --job-name=e11_exact18 code/sbatch_run.sh results/exact 210515 --tasks=exactcheck --exact=210515 ;;
-  analyse)     python3 $EXP/code/analyze_stimfit.py $EXP/results/full $EXP/assets/tables && python3 $EXP/code/make_figures.py $EXP/assets $EXP/results/full ;;   # needs numpy/scipy/pandas/statsmodels/matplotlib; run locally on copied results/
+    cd $EXP; for S in "$A" "$B" "$C"; do sbatch --cpus-per-task=64 --mem=160G --time=06:00:00 --job-name=e11_a4 code/sbatch_run.sh results/full_a4 "$S"; done ;;
+  exact)       cd $EXP; sbatch --cpus-per-task=2 --mem=16G --time=06:00:00 --job-name=e11_a4x18 code/sbatch_run.sh results/exact_a4 210515 --tasks=exactcheck --exact=210515 ;;
+  analyse)     python3 $EXP/code/analyze_stimfit.py $EXP/results/full_a4 $EXP/assets/tables --exact $EXP/results/exact_a4 && python3 $EXP/code/make_figures.py $EXP/assets $EXP/results/full_a4 ;;   # needs numpy/scipy/pandas/statsmodels/matplotlib; run locally on copied results/
   *) echo "unknown stage" >&2; exit 1 ;;
 esac
