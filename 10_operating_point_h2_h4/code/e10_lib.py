@@ -243,3 +243,24 @@ def analyze_pool(Z, key, sub, ncpu, nshuf=20):
     rec["kappa_gain_reach"] = float(gain[:, EM].mean()); rec["pred_dchiJ_folds"] = float(np.mean(pred)) if pred else np.nan
     rec["secs"] = time.time() - t0
     return rec
+
+
+def analyze_core_pool(Z, key, sub, ncpu):
+    """The 'core' part of analyze_part (real fit, empirical, kappa, 5-fold CV) with the 6 independent pieces run in parallel.
+    Returns a dict in the analyze_part(part='core') format, to be merged with shuffle chunks by merge_parts."""
+    import multiprocessing as mp
+    t0 = time.time(); X, N_full, R_all, _ = _prep(Z, key, sub, 0); R, _, N = X.shape
+    _G.update(X=X, S=tm.states(N), shufs=[])
+    jobs = [("real",)] + [("fold", f) for f in range(5)]
+    with mp.get_context("fork").Pool(min(ncpu, len(jobs))) as pool: res = dict(pool.imap_unordered(_pool_job, jobs))
+    rec = dict(key=key, sub=-1 if sub is None else sub[0], N_full=N_full, N=N, R=R, R_all=R_all, part="core")
+    core = res[("real",)]; rec["converged"] = core["converged"]; rec.update({"real_" + k: v for k, v in core["real"].items()})
+    rec["emp_dcov"], rec["emp_dv"] = core["emp_dcov"], core["emp_dv"]; rec["kappa_hat"], rec["kappa_converged"] = core["kappa_hat"], core["kappa_converged"]
+    gain = np.zeros((R, T)); pred = []
+    for f in range(5):
+        r = res[("fold", f)]
+        if r is None: continue
+        te, g, pc = r; gain[te] = g; pred.append(pc)
+    rec["kappa_gain_reach"] = float(gain[:, EM].mean()); rec["pred_dchiJ_folds"] = float(np.mean(pred)) if pred else np.nan
+    rec["secs"] = time.time() - t0
+    return rec
