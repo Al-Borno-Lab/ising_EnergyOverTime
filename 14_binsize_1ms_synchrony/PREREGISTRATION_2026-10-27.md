@@ -96,3 +96,8 @@ For a pair (i, j), window X and 1-ms binary states:
 
 ## Review
 `code/stats_e14.py` and the estimator code are reviewed by an independent agent before real results are read (PROTOCOL.md).
+
+## Clarifications (2026-10-27, written while building the code, before any E14 analysis touched the data)
+- **T2 "gain":** each reach r gets a field offset δ_r ~ N(0, 0.3), added to every cell's field inside E. This multiplies each cell's firing odds by exp(2δ_r) in that reach, i.e. a log-normal, shared, trial-to-trial gain.
+- **Basis centre:** the 1-cm crossing, fixed at 4000 ms of the 7000-ms window (bin 400 at 10 ms = row 500 of the raw reach segment). This replaces the per-condition `zero_cross` used in E10 to E15, which lies within 2 to 8 bins of 4000 ms in every condition (392 to 403). With 50-ms knots everywhere in −600 … +1600 ms, the difference is immaterial.
+- **Reaches in the SI analysis:** only reaches with valid B and E windows; this gives fixed window lengths at 1 ms (600 and 100 bins).
