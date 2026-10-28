@@ -87,3 +87,6 @@ Results are labelled synthetic and never pooled with real data.
 
 ## Review
 `code/stats_e15.py` is written and reviewed by an independent agent before real results are read, as PROTOCOL.md requires.
+
+## Amendment A1 (2026-10-27, before any result was read)
+After exclusions, two conditions (210512 stim 2, 9 reaches; 210608 stim 1, 10 reaches) have no reaches in one of the five stored folds. The first submission (array 4588234) stopped on the code's fold assertion for those two sessions. No statistic was looked at. Change: cross-validation loops over the folds present after exclusions, using the stored `fold_k`, so every reach is still held out exactly once; the number of folds is written into each row (`n_folds`). Conditions with all five folds are computed exactly as before. Only the two affected session tasks (210512, 210608) are rerun.

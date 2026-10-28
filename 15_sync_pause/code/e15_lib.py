@@ -82,7 +82,8 @@ def analyse_condition(X, fold, zc, rng, fits=None):
     """Held-out event rates for one condition. X (R, 700, N) uint8, fold (R,) in 0..4, zc = zero_cross bin.
     Returns dict with time courses (over tb_bins) and per-fold thresholds. `fits` (optional) caches per-fold fits."""
     R, T, N = X.shape
-    assert T == 700 and sorted(np.unique(fold)) == list(range(NFOLD)), (T, np.unique(fold))
+    folds = np.unique(fold)                                    # amendment A1: folds present after exclusions
+    assert T == 700 and set(folds) <= set(range(NFOLD)) and len(folds) >= 2, (T, folds)
     tb = tb_bins(zc); assert tb[0] >= 0 and tb[-1] < T
     for w in WINDOWS: assert np.all(np.isin(win_bins(zc, w), tb))
     B = tv.bspline_basis(zc); assert B.shape == (700, NBASIS), B.shape
@@ -90,7 +91,7 @@ def analyse_condition(X, fold, zc, rng, fits=None):
     out = {ev: dict(o=np.zeros((R, len(tb))), q0=np.zeros((R, len(tb))), q1=np.zeros((R, len(tb))), k=[]) for ev in EVENTS}
     mK = dict(o=K[:, tb].astype(float), m0=np.zeros((R, len(tb))), m1=np.zeros((R, len(tb))))
     methods = set(); ks = np.arange(N + 1)
-    for f in range(NFOLD):
+    for f in folds:
         tr, te = fold != f, fold == f
         m0 = tv.fit(X[tr], B, "M0"); m1 = tv.fit(X[tr], B, "M1")
         P0 = pk_indep(m0["h"][tb]); P1, meth = pk_model(m1["h"][tb], m1["J"], rng); methods.add(meth)
@@ -100,7 +101,7 @@ def analyse_condition(X, fold, zc, rng, fits=None):
             out[ev]["o"][te] = (K[te][:, tb] <= k) if kind == "lo" else (K[te][:, tb] >= k)
             out[ev]["q0"][te] = _evprob(P0, kind, k)[None]; out[ev]["q1"][te] = _evprob(P1, kind, k)[None]
         mK["m0"][te] = (P0 @ ks)[None]; mK["m1"][te] = (P1 @ ks)[None]
-    return dict(events=out, meanK=mK, tb=tb, zc=zc, R=R, N=N, method="+".join(sorted(methods)))
+    return dict(events=out, meanK=mK, tb=tb, zc=zc, R=R, N=N, method="+".join(sorted(methods)), n_folds=len(folds))
 
 def window_stats(res):
     """Per-event, per-test-window statistics (pre-registered definitions). Returns list of dict rows."""
@@ -124,7 +125,7 @@ def window_stats(res):
                 meanK_obs_X=res["meanK"]["o"][:, col[X]].mean(), meanK_m0_X=res["meanK"]["m0"][:, col[X]].mean(),
                 meanK_m1_X=res["meanK"]["m1"][:, col[X]].mean(), meanK_obs_B=res["meanK"]["o"][:, col["B"]].mean(),
                 meanK_m0_B=res["meanK"]["m0"][:, col["B"]].mean(), meanK_m1_B=res["meanK"]["m1"][:, col["B"]].mean(),
-                k_per_fold=";".join(map(str, d["k"])), N=res["N"], R=R, zc=zc, method=res["method"],
+                k_per_fold=";".join(map(str, d["k"])), n_folds=res["n_folds"], N=res["N"], R=R, zc=zc, method=res["method"],
                 windows=str(WINDOWS), quantile=EVENTS[ev][1]))
     return rows
 
