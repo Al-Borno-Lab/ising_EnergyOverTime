@@ -13,3 +13,4 @@ Never edit past rows; failed runs stay in the log.
 | 2026-10-27 23:09 | finished | MacBook-Pro-140 | f3d98ae | 4590157 | `-` | synthetic gate: T0 FAIL (median \|kappa_s\| 0.22 > 0.15; \|N3 resid\| 0.12 > m 0.088; only 3/4 conditions have suppressed pairs, 210421 has 3 pairs), T1 PASS (kappa_s 0.47), T2 reported. Real results NOT read. |
 | 2026-10-27 23:09 | finished | MacBook-Pro-140 | f3d98ae | 4590158 | `-` | real: 21/21 completed (1-4 min each); outputs pulled, NOT read pending synthetic gate |
 | 2026-10-27 23:20 | submitted | MacBook-Pro-140 | 687c818 | 4590182 | `14_binsize_1ms_synchrony/results/null` | amendment A2 null test T0x, 17 stim-0 conditions x 3 reps |
+| 2026-10-27 23:26 | finished | MacBook-Pro-140 | c6b7c9c | 4590182 | `-` | A2 null test T0x: FAIL for kappa_s (mean +0.19, FPR 1.00) and N3 residual (mean 0.04 > bound 0.0095, FPR 0.12). Per A2: N2 and N3 unvalidated; N1 read. |
