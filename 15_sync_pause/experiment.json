@@ -1,0 +1,18 @@
+{
+  "id": "E15",
+  "title": "Synchronous pauses: shared drive vs fixed coupling",
+  "status": "planned",
+  "owner": "orchestrator",
+  "started": "2026-10-27",
+  "updated": "2026-10-27",
+  "question": "When Purkinje cells pause together during the reach, is it shared drive only, shared drive amplified by fixed couplings, or beyond the fixed pairwise model?",
+  "headline": "Not run yet.",
+  "depends_on": [
+    "E07",
+    "E09",
+    "E12"
+  ],
+  "results_log_ids": [],
+  "preregistration": "15_sync_pause/PREREGISTRATION_2026-10-27.md",
+  "cluster_results": "/home/enserrog/ising_wt/e15/15_sync_pause/results"
+}
