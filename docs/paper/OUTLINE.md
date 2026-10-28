@@ -39,7 +39,12 @@
 
 ## Discussion points
 1. **Relation to Calame et al. 2023 (same recordings).** They first reported the population event at peak acceleration, from pooled rates. We reproduce the pooled step. We add a per-session, pattern-level signal (who goes up and who goes down) that the rate does not explain (Fig 4).
-2. **Relation to Nashef et al. (same recordings).** They report rising 1-ms synchrony, while we find no detectable 10-ms coupling change. Reconcile by timescale and cell selection (E14). Synthetic note from E14: shared trial-to-trial gain inflates shuffle-corrected synchrony indices strongly while the model's coupling scale is barely affected. Wording: "compatible with", never "contradicts".
+2. **Relation to Nashef et al. (same recordings).**
+   - **Their result:** rising 1-ms synchrony, mostly in rate-suppressed cells before endpoint.
+   - **Ours:** no detectable 10-ms coupling change (A8, CI −28 to +93%).
+   - **E14 (PR #13), pre-registered:** a 1-ms synchrony change in suppressed pairs before endpoint leans positive in every block but is not significant in the baseline block (13/21, p = 0.29). Our model-based tests of a 1-ms coupling change could not be validated (the estimator is biased under the null), so the question stays open.
+   - **Synthetic point:** shared trial-to-trial gain alone strongly inflates shuffle-corrected synchrony indices, so a synchrony rise and fixed couplings need not conflict.
+   - **Wording:** "compatible with, not resolved at 1 ms". Never "contradicts".
 3. **Methodological point.** A stationary Ising model on these data would report coupling rising during the reach (B2). Separating drive from coupling removes that artefact (cf. Tyrcha 2013; Ferrari 2018).
 4. **Biological reading.** Effective couplings most likely reflect shared input, not PC–PC synapses. Joint silences matter for the cerebellar nuclei (Person & Raman 2012).
 5. **Limitations.**
@@ -59,7 +64,7 @@
 7. Statistics: session as the unit, Wilcoxon, BH-FDR, Hodges–Lehmann with bootstrap CIs, cohort reporting, pre-registrations and amendments.
 
 ## Before submission (short list)
-- [ ] E14: read or write as a limitation (null test running, job 4590182).
+- [x] E14 done (PR #13): Nashef rise not reproduced in the pre-registered test (leans positive, 13/21, p = 0.29); κ and operating-point tests unvalidated. Write as a limitation (Discussion point 2).
 - [ ] Sensitivity without 210511 unit 11 (duplicated unit) for the Fig 2–4 numbers.
 - [ ] Ask Abigail Person: which Nashef version to cite (2023 bioRxiv vs 2026 *Nat Commun*, unverified); co-authorship and data statement.
 - [ ] Merge PRs #11 (evidence) and #12 (E15) after spot-check and reproduction.
