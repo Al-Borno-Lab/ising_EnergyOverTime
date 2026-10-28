@@ -2,11 +2,11 @@
   "id": "E14",
   "title": "Bin-size sweep and 1-ms synchrony (Nashef reconciliation)",
   "status": "planned",
-  "owner": "grad-researcher-2",
+  "owner": "orchestrator",
   "started": "2026-10-12",
-  "updated": "2026-10-12",
+  "updated": "2026-10-27",
   "question": "Is Nashef's 1-ms synchrony rise during reach compatible with fixed J at 10 ms: timescale, operating point, or cell selection?",
-  "headline": "Queued. Raw spikeTimes/Bin1 located in Dylan's files.",
+  "headline": "Pre-registered 2026-10-27 (N1 SI replication, N2 epoch kappa at 1/5/10/20 ms, N3 fixed-J operating point). Extraction gates G1-G3 pass 21/21.",
   "depends_on": [
     "E08",
     "E10"
@@ -14,6 +14,6 @@
   "results_log_ids": [
     "A8"
   ],
-  "preregistration": null,
-  "cluster_results": "/home/enserrog/ising_EnergyOverTime/14_binsize_1ms_synchrony/results"
+  "preregistration": "14_binsize_1ms_synchrony/PREREGISTRATION_2026-10-27.md",
+  "cluster_results": "/home/enserrog/ising_wt/e14/14_binsize_1ms_synchrony/results"
 }
