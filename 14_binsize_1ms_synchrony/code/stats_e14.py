@@ -51,7 +51,7 @@ def real():
     # ---- outcome (pre-registered decision table)
     n1_sig = T["N1"]["q_bh"] < 0.05 and T["N1"]["hl"] > 0
     k10 = n2[(n2.bin_ms == 10) & (n2.window == "E")].kappa_supp.dropna()
-    k10_sig = wil(k10.values) < 0.05
+    k10_sig = wil(k10.values) < 0.05                       # unadjusted Wilcoxon (amendment A1)
     if not (T["N1"]["q_bh"] < 0.05): outcome = "N1 not significant: Nashef rise not reproduced with this window/class proxy"
     elif not n1_sig: outcome = "N1 significant with D < 0 (synchrony falls): report"
     elif r3["equiv"]: outcome = "(b) operating point: fixed J with moving fields reproduces the synchrony rise"
@@ -72,6 +72,8 @@ def real():
     kk = n2[n2.window == "E"].pivot(index="session", columns="bin_ms", values="kappa_supp")
     sec.append(row(kk[1] - kk[10], test="N2", stat="kappa_supp(1 ms) - kappa_supp(10 ms)", window="E"))
     sec.append(row(n3.D_all_obs - n3.D_all_pred, test="N3", stat="D_all_obs - D_all_pred"))
+    sec.append(row(n1.D_supp - n1.D_other, test="selection", stat="D_supp - D_other (stim0, E, 1 ms)"))          # (c), amendment A1
+    sec.append(row(k1.kappa_supp - k1.kappa_other, test="selection", stat="kappa_supp - kappa_other (1 ms, E)"))
     frac = (n3.D_supp_pred / n3.D_supp_obs).replace([np.inf, -np.inf], np.nan)
     for name, keep in (("cohort2021", lambda s: s < 220000), ("cohort2022", lambda s: s >= 220000), ("without_210511", lambda s: s != 210511)):
         for r_, (t, x) in zip(prim, (("N1", n1.D_supp), ("N2", k1.kappa_supp), ("N3", resid))):
@@ -112,7 +114,7 @@ def synth():
         r = dict(scenario=sc, n=len(g), kappa_supp_median=float(g.kappa_supp.median()), kappa_supp_n_pos=int((g.kappa_supp > 0).sum()),
                  N3_resid_median=float(g.N3_resid.median()), N3_resid_n_pos=int((g.N3_resid > 0).sum()), D_supp_obs_median=float(g.D_supp_obs.median()),
                  class_agreement_median=float(g.class_agreement.median()), margin_m=m)
-        if sc == "T0": r["pass"] = bool(abs(r["kappa_supp_median"]) < 0.15 and abs(r["N3_resid_median"]) < m)
+        if sc == "T0": r["pass"] = bool(g.kappa_supp.abs().median() < 0.15 and g.N3_resid.abs().median() < m)   # median of |.| (prereg)
         elif sc == "T1": r["pass"] = bool(abs(r["kappa_supp_median"] - 0.5) <= 0.25 and r["kappa_supp_n_pos"] >= 3 and r["N3_resid_n_pos"] >= 3)
         else: r["pass"] = "report (false-positive check)"
         out.append(r)

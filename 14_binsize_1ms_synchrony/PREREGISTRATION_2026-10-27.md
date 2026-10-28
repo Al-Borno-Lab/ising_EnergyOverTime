@@ -101,3 +101,22 @@ For a pair (i, j), window X and 1-ms binary states:
 - **T2 "gain":** each reach r gets a field offset δ_r ~ N(0, 0.3), added to every cell's field inside E. This multiplies each cell's firing odds by exp(2δ_r) in that reach, i.e. a log-normal, shared, trial-to-trial gain.
 - **Basis centre:** the 1-cm crossing, fixed at 4000 ms of the 7000-ms window (bin 400 at 10 ms = row 500 of the raw reach segment). This replaces the per-condition `zero_cross` used in E10 to E15, which lies within 2 to 8 bins of 4000 ms in every condition (392 to 403). With 50-ms knots everywhere in −600 … +1600 ms, the difference is immaterial.
 - **Reaches in the SI analysis:** only reaches with valid B and E windows; this gives fixed window lengths at 1 ms (600 and 100 bins).
+
+## Amendment A1 (2026-10-27, after independent code review, before any real-data result was read)
+The review found the estimator correct:
+- the κ gradient matches finite differences;
+- the PL loss equals a brute-force J_eff loss;
+- the SI, basis and window rules check out.
+
+Changes and clarifications:
+1. **Synthetic T0 pass rule:** fixed to the registered "median of |κ_s|" and "median of |residual|". The code had taken |median|.
+2. **SI shuffle:** each of the 20 draws applies one random derangement of reaches to all pairs at once, not a separate derangement per pair. The two are statistically equivalent.
+3. **Reaches whose `idx_end` is the last bin (699):** three such reaches exist in stim 0 (210514, 220518, 220520; 220520's B window is invalid). They are **kept**, as the window rule specifies. Their E window lies at 6890–6990 ms, and the true endpoint may be later. This is disclosed; it affects at most two reaches out of about 380.
+4. **Window A classes:** suppressed classes are computed from the E-window analysis and reused for A. The code compares B from the A-valid reaches with E from the E-valid reaches; the two reach sets are identical in these data, so outputs are unchanged. The running code is left as is, for reproducibility.
+5. **Timescale rule (a):** "κ_s(10 ms) not significant" uses an unadjusted Wilcoxon p ≥ 0.05.
+6. **Selection (c):** paired rows added, D_supp − D_other and κ_s − κ_o. These are descriptive.
+7. **Not changed:**
+   - **Thread oversubscription in sbatch:** a runtime issue only.
+   - **`class_agreement` in the synthetic table includes the diagonal:** descriptive only.
+   - **Synthetic margin m taken from T0's observed D:** a stand-in for the real margin.
+8. **Python start method:** `fit_M1` passes data to workers through a module global, which requires fork. The cluster container is checked before results are used; this was verified to work in the S3 1-ms runs.
