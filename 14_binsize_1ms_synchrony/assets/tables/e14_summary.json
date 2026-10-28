@@ -1,0 +1,55 @@
+{
+ "outcome": "N1 not significant: Nashef rise not reproduced with this window/class proxy",
+ "n_sessions": 21,
+ "n1_sessions_with_supp_pairs": 21,
+ "fraction_explained_median": 0.14158314538970077,
+ "convergence": {
+  "kappa_not_converged": 0,
+  "m1_not_converged": 0,
+  "n2_rows": 168
+ },
+ "primary": {
+  "N1": {
+   "stat": "D_supp (SI change, suppressed pairs, stim0, E, 1 ms)",
+   "n": 21,
+   "median": 0.056967718912675956,
+   "hl": 0.06213853812440859,
+   "ci95_lo": -0.055452080887675434,
+   "ci95_hi": 0.2743701275266842,
+   "ci90_lo": -0.03567637220810769,
+   "ci90_hi": 0.22850823719033558,
+   "n_pos": 13,
+   "p": 0.2877340316772461,
+   "q_bh": 0.43160104751586914
+  },
+  "N2": {
+   "stat": "kappa_supp (1 ms, E)",
+   "n": 21,
+   "median": 0.1520650331553486,
+   "hl": 0.25246551869871287,
+   "ci95_lo": 0.11911089363101206,
+   "ci95_hi": 0.42548814628049947,
+   "ci90_lo": 0.130658029083336,
+   "ci90_hi": 0.4033924539496994,
+   "n_pos": 20,
+   "p": 1.9073486328125e-06,
+   "q_bh": 5.7220458984375e-06
+  },
+  "N3": {
+   "stat": "D_supp_obs - D_supp_pred (1 ms)",
+   "n": 21,
+   "median": 0.020654796031055474,
+   "hl": 0.026502429671338503,
+   "ci95_lo": -0.0821591943475295,
+   "ci95_hi": 0.1866730160861351,
+   "ci90_lo": -0.06611125145502661,
+   "ci90_hi": 0.14025950946578924,
+   "n_pos": 12,
+   "p": 0.7592878341674805,
+   "q_bh": 0.7592878341674805,
+   "equiv_margin": 0.07587929675756734,
+   "equiv": false
+  }
+ },
+ "kappa10_supp_p": 0.1789875030517578
+}

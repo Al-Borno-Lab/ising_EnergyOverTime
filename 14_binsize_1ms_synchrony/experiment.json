@@ -1,12 +1,12 @@
 {
   "id": "E14",
   "title": "Bin-size sweep and 1-ms synchrony (Nashef reconciliation)",
-  "status": "running",
+  "status": "analysis",
   "owner": "orchestrator",
   "started": "2026-10-12",
   "updated": "2026-10-27",
   "question": "Is Nashef's 1-ms synchrony rise during reach compatible with fixed J at 10 ms: timescale, operating point, or cell selection?",
-  "headline": "Pre-registered 2026-10-27 (N1 SI replication, N2 epoch kappa at 1/5/10/20 ms, N3 fixed-J operating point). Extraction gates G1-G3 pass 21/21.",
+  "headline": "N1 (pre-registered) not significant: 1-ms SI rise before endpoint in suppressed pairs +0.06, 13/21, p=0.29; positive lean in all blocks (washout p=0.014 uncorrected). N2 kappa and N3 operating-point UNVALIDATED (null test: kappa biased +0.19; N3 FPR 12%). Synthetic: shared gain inflates SI strongly.",
   "depends_on": [
     "E08",
     "E10"
