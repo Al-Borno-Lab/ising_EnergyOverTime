@@ -1,0 +1,10 @@
+stat,cohort,n,median,n_pos,p
+A_obs0 (W minus C),all,21,-0.003,9,0.3737
+A_obs0 (W minus C),2021,15,0.006,8,0.7615
+A_obs0 (W minus C),2022,6,-0.184,1,0.3125
+A_10 (W minus C),all,21,-0.147,8,0.029
+A_10 (W minus C),2021,15,-0.04,7,0.1688
+A_10 (W minus C),2022,6,-0.427,1,0.2188
+A_obs1 (W minus C),all,21,0.083,15,0.0071
+A_obs1 (W minus C),2021,15,0.063,11,0.0215
+A_obs1 (W minus C),2022,6,0.244,4,0.1562
