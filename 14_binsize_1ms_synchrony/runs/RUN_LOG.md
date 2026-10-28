@@ -10,3 +10,5 @@ Never edit past rows; failed runs stay in the log.
 | 2026-10-27 22:39 | finished | MacBook-Pro-140 | db8a430 (+uncommitted changes in experiment) | 4363528 | `-` | gates read 2026-10-27: G1-G3 pass 21/21 sessions (orchestrator took over E14) |
 | 2026-10-27 23:03 | submitted | MacBook-Pro-140 | c485d77 | 4590157 | `14_binsize_1ms_synchrony/results/synth` | synthetic validation T0-T2, 4 conditions (code/run.sh submit) |
 | 2026-10-27 23:03 | submitted | MacBook-Pro-140 | c485d77 | 4590158 | `14_binsize_1ms_synchrony/results/real` | real: N1/N2/N3, one task per session, 16 CPUs |
+| 2026-10-27 23:09 | finished | MacBook-Pro-140 | f3d98ae | 4590157 | `-` | synthetic gate: T0 FAIL (median \|kappa_s\| 0.22 > 0.15; \|N3 resid\| 0.12 > m 0.088; only 3/4 conditions have suppressed pairs, 210421 has 3 pairs), T1 PASS (kappa_s 0.47), T2 reported. Real results NOT read. |
+| 2026-10-27 23:09 | finished | MacBook-Pro-140 | f3d98ae | 4590158 | `-` | real: 21/21 completed (1-4 min each); outputs pulled, NOT read pending synthetic gate |
