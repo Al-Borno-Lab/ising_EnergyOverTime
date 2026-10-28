@@ -120,3 +120,23 @@ Changes and clarifications:
    - **`class_agreement` in the synthetic table includes the diagonal:** descriptive only.
    - **Synthetic margin m taken from T0's observed D:** a stand-in for the real margin.
 8. **Python start method:** `fit_M1` passes data to workers through a module global, which requires fork. The cluster container is checked before results are used; this was verified to work in the S3 1-ms runs.
+
+## Amendment A2 (2026-10-27): extended null test after T0 failed; real results still unread
+**Seen:** T1 passed (κ_s recovered: 0.37, 0.47, 0.47 vs 0.5 planted). T0 failed: median |κ_s| = 0.22 (0.54, 0.22, 0.04), and |N3 residual| = 0.12 against m = 0.088. Only 3 of the 4 conditions had suppressed pairs; the 0.54 came from a condition with 3 pairs.
+
+**Decision (Gunnar, 2026-10-27):** measure the estimator's null behaviour properly instead of reading the real data or stopping.
+
+**Test T0x:**
+- **Truth:** the 1-ms M1 fit of every stim 0 condition with N ≥ 8 (17 sessions), J fixed, no coupling change, no gain. 3 replicates each (seeds 14, session, rep).
+- **Pipeline:** identical to the real data; classes re-derived from the simulated data.
+
+**Pass rule** (both conditions, for κ_s and for the N3 residual):
+- **(i) Bias:** |mean over all usable null runs| ≤ 0.1. For the N3 residual, the bound is 0.1 × the median |D_obs| of T0x.
+- **(ii) Session-level false-positive rate ≤ 5%:**
+  - draw 10,000 pseudo-studies, each 21 values sampled with replacement from the null runs, seed 14;
+  - count the fraction with Wilcoxon p < 0.05.
+  - A two-sided 5% test has a nominal rate of 5%; resampling from a finite pool adds a little, so the threshold allows up to 7%.
+
+**If T0x fails for κ_s:** N2 is reported as unvalidated, and N1 (model-free) is still read. **If it fails for the N3 residual:** N3 is reported as unvalidated.
+
+The original T0 result stays in the record.

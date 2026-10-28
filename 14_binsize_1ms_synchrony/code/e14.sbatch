@@ -16,4 +16,5 @@ cd $C
 case "$1" in
   real)  $PY run_session.py ../results/spk ../results/real ${SESS[$SLURM_ARRAY_TASK_ID]} $SLURM_CPUS_PER_TASK ;;
   synth) $PY synth_e14.py   ../results/spk ../results/synth $SLURM_ARRAY_TASK_ID $SLURM_CPUS_PER_TASK ;;
+  null)  $PY synth_null_e14.py ../results/spk ../results/null $SLURM_ARRAY_TASK_ID $SLURM_CPUS_PER_TASK ;;   # amendment A2, --array=0-16
 esac

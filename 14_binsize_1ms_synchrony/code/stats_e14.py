@@ -120,4 +120,17 @@ def synth():
         out.append(r)
     T = pd.DataFrame(out); T.to_csv(os.path.join(TAB, "e14_synthetic_validation.csv"), index=False); print(T.to_string(index=False)); print(d.round(4).to_string(index=False))
 
-{"real": real, "synth": synth}[MODE]()
+def null():
+    """Amendment A2: T0x bias and session-level false-positive rate for kappa_supp and the N3 residual."""
+    d = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(SRC, "null_*.csv")))], ignore_index=True)
+    d.to_csv(os.path.join(TAB, "e14_null_rows.csv"), index=False); rng = np.random.default_rng(SEED); out = []
+    scale = float(d.D_supp_obs.abs().median())
+    for c, bound in (("kappa_supp", 0.1), ("N3_resid", 0.1 * scale)):
+        v = d[c].dropna().values; fp = 0
+        for _ in range(10_000):
+            s = rng.choice(v, 21, replace=True); fp += wil(s) < 0.05
+        out.append(dict(stat=c, n_runs=len(v), n_sessions=int(d.loc[d[c].notna(), "session"].nunique()), mean=float(v.mean()), sd=float(v.std(ddof=1)),
+                        bias_bound=bound, fpr=fp / 10_000, pass_=bool(abs(v.mean()) <= bound and fp / 10_000 <= 0.07)))
+    T = pd.DataFrame(out); T.to_csv(os.path.join(TAB, "e14_null_validation.csv"), index=False); print(T.to_string(index=False))
+
+{"real": real, "synth": synth, "null": null}[MODE]()
