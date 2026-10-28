@@ -269,6 +269,15 @@ Figures marked "regenerated" were redrawn by new code, not copied from the lost 
 - **PDF:** vector (copied from source)
 
 
+### 07_calame_reconciliation.png / .pdf
+- **Source:** evidence/figures/4_polarization_at_peak_acceleration/calame_reconciliation (evidence/src/calame_check.py); PDF: ising_wt_evidence/evidence/src/package/../../figures/4_polarization_at_peak_acceleration/calame_reconciliation.pdf
+- **Axes:** (a) Rate change (spikes/s) pooled over all 1,092 cell x condition PSTHs (Calame-style), vs ms from peak acceleration, session-bootstrap band. (b) Per session: change in the [-100, +50] ms window (baseline z) for the field term, the mean rate, and the field term with the rate regressed out. (c) Mean traces of the three signals.
+- **Pattern:** Pooled rate steps down sharply at peak acceleration (Calame et al. reproduced) inside a broader decline that bottoms ~450 ms later. Per session the field-term dip is consistent; the rate change is not; regressing out the rate leaves the dip intact.
+- **Why it supports the claim:** Reconciles P3 with Calame et al. 2023: the timing of a population event at peak acceleration is theirs; the per-session, pattern-level signal not explained by the rate is ours.
+- **Key numbers:** Field term dips 20/21 sessions (p = 2e-6); mean rate 13/21 (p = 0.055); field term with rate regressed out 20/21 (p = 2e-6). Pooled rate -4.2 Hz in the window, trough -10.3 Hz at +460 ms. Not velocity-binned. Use counts, not z depths (depth is basis-inflated, withdrawn). EXPLORATORY.
+- **PDF:** vector (copied from source)
+
+
 ## 5_fixed_coupling_influence_E10
 
 **Claim.** Preregistered E10: with J fixed, coupling influence (multi-information per neuron) does NOT rise when cells polarize during the reach; the overall hypothesis is not supported.
