@@ -90,3 +90,14 @@ Results are labelled synthetic and never pooled with real data.
 
 ## Amendment A1 (2026-10-27, before any result was read)
 After exclusions, two conditions (210512 stim 2, 9 reaches; 210608 stim 1, 10 reaches) have no reaches in one of the five stored folds. The first submission (array 4588234) stopped on the code's fold assertion for those two sessions. No statistic was looked at. Change: cross-validation loops over the folds present after exclusions, using the stored `fold_k`, so every reach is still held out exactly once; the number of folds is written into each row (`n_folds`). Conditions with all five folds are computed exactly as before. Only the two affected session tasks (210512, 210608) are rerun.
+
+## Amendment A2 (2026-10-27, after independent code review, before any real-data result was read)
+The review found no blockers. The changes below clarify the decision rule or fix deviations from the text above.
+1. **Direction.** Rule (a) needs only R_obs > 0 (HL > 0), as written; the code had also required p < 0.05. If R_obs < 0, the A_obs0 and A_10 conditions in (b), and R_obs in (a), are applied with the sign flipped. The sign is written to `e15_summary.json`.
+2. **Precedence.** The rules can overlap: A_obs1 can be FDR-significant while its CI is inside the equivalence margin. Precedence is (c), then (b), then (a).
+3. **Synthetic sampling.** Synthetic data are sampled with a 300-sweep Gibbs sampler for every N, not by exact enumeration for N ≤ 20. The synthetic jobs had already run this way. The sampler's accuracy is covered by the Gibbs-vs-exact check in point 4.
+4. **Library-check tolerance.** Gibbs vs exact must have max |ΔP(K)| < 0.01 and |Δ pause probability| < 0.005. The run on job 4588232 gave max 0.0053 and 0.0005, so it passes.
+5. **Safeguards.**
+   - All six synthetic conditions must be present.
+   - Primary p-values must be finite.
+   - Rows whose threshold sits at the floor (event = every bin, all A statistics exactly 0) are counted and listed as degenerate in the summary.

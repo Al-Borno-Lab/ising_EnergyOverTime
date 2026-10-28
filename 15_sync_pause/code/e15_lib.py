@@ -78,9 +78,9 @@ def _threshold(Kb, kind, q):
 def _evprob(P, kind, k):
     return P[:, :k + 1].sum(1) if kind == "lo" else P[:, k:].sum(1)
 
-def analyse_condition(X, fold, zc, rng, fits=None):
+def analyse_condition(X, fold, zc, rng):
     """Held-out event rates for one condition. X (R, 700, N) uint8, fold (R,) in 0..4, zc = zero_cross bin.
-    Returns dict with time courses (over tb_bins) and per-fold thresholds. `fits` (optional) caches per-fold fits."""
+    Returns dict with time courses (over tb_bins) and per-fold thresholds."""
     R, T, N = X.shape
     folds = np.unique(fold)                                    # amendment A1: folds present after exclusions
     assert T == 700 and set(folds) <= set(range(NFOLD)) and len(folds) >= 2, (T, folds)

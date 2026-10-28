@@ -53,14 +53,18 @@ def real():
     # ---- primary family: pause, window W
     P = S[(S.event == "pause") & (S.test_window == "W")]
     prim = [test_row(P[s], family="primary", event="pause", test_window="W", stat=s, subset="all") for s in PRIMARY]
+    assert all(np.isfinite(r["p"]) for r in prim), "non-finite primary p-value"
     for r, q in zip(prim, bh([r["p"] for r in prim])): r["q_bh"] = q
     desc = [test_row(P[s], family="descriptive", event="pause", test_window="W", stat=s, subset="all") for s in ("R_obs", "L_obs0", "L_obs1")]
     # ---- outcome (pre-registered rule)
     T = {r["stat"]: r for r in prim + desc}
-    R_up = T["R_obs"]["hl"] > 0 and T["R_obs"]["p"] < 0.05
+    # sign convention (pre-registration: if pauses do not rise, "the same rules apply with signs read accordingly")
+    sgn = 1.0 if T["R_obs"]["hl"] > 0 else -1.0
+    R_up = sgn * T["R_obs"]["hl"] > 0                                   # rule (a): R_obs > 0 (direction of change)
     sig = lambda s: T[s]["q_bh"] < 0.05
+    # precedence (amendment A2): (c) before (b) before (a)
     if sig("A_obs1"): outcome = "(c) beyond the fixed pairwise model"
-    elif sig("A_obs0") and T["A_obs0"]["hl"] > 0 and sig("A_10") and T["A_10"]["hl"] > 0 and T["A_obs1"]["equiv_125"]:
+    elif sig("A_obs0") and sgn * T["A_obs0"]["hl"] > 0 and sig("A_10") and sgn * T["A_10"]["hl"] > 0 and T["A_obs1"]["equiv_125"]:
         outcome = "(b) fixed coupling amplifies shared drive"
     elif R_up and not sig("A_obs0") and T["A_obs0"]["equiv_125"]: outcome = "(a) shared drive only"
     else: outcome = "inconclusive"
@@ -82,7 +86,9 @@ def real():
     # ---- calibration: predicted vs observed mean K
     c = d[(d.event == "pause")].groupby(["session", "test_window"])[["meanK_obs_X", "meanK_m0_X", "meanK_m1_X", "meanK_obs_B", "meanK_m0_B", "meanK_m1_B"]].mean().reset_index()
     cal = c.groupby("test_window").median(numeric_only=True).drop(columns="session"); cal.to_csv(os.path.join(TAB, "e15_calibration.csv"))
-    summ = dict(outcome=outcome, R_obs_up=R_up, n_sessions=int(P.session.nunique()), n_conditions=int(len(d.key.unique())),
+    deg = d[(d.e_obs_B > 0.999) & (d.e0_B > 0.999) & (d.e1_B > 0.999)]   # threshold at floor: event = every bin
+    summ = dict(outcome=outcome, sign_of_R_obs=sgn, direction_ok=bool(R_up), degenerate_rows=int(len(deg)),
+                degenerate_keys=sorted(set(deg.key + ":" + deg.event)), n_sessions=int(P.session.nunique()), n_conditions=int(len(d.key.unique())),
                 gibbs_conditions=int((d.groupby("key").method.first() == "gibbs").sum()),
                 primary={r["stat"]: {k: r[k] for k in ("hl", "ci95_lo", "ci95_hi", "ci90_lo", "ci90_hi", "n_pos", "p", "q_bh", "equiv_125")} for r in prim},
                 descriptive={r["stat"]: {k: r[k] for k in ("hl", "ci95_lo", "ci95_hi", "n_pos", "p")} for r in desc})
@@ -124,6 +130,7 @@ def synth():
     d = load("synth_*.csv"); d.to_csv(os.path.join(TAB, "e15_synthetic_conditions.csv"), index=False)
     x = d[(d.event == "pause") & (d.test_window == "W")]; rows = []
     for sc, g in x.groupby("scenario"):
+        assert len(g) == 6, (sc, len(g))
         r = dict(scenario=sc, n=len(g), **{f"median_{s}": float(g[s].median()) for s in ("R_obs", "A_obs0", "A_10", "A_obs1")},
                  **{f"median_abs_{s}": float(g[s].abs().median()) for s in ("A_obs0", "A_10", "A_obs1")}, n_A_obs1_pos=int((g.A_obs1 > 0).sum()))
         if sc == "S0": r["pass"] = all(r[f"median_abs_{s}"] < 0.1 for s in ("A_obs0", "A_10", "A_obs1"))
