@@ -1,0 +1,19 @@
+{
+ "per_condition_hit_reach": 0.3492063492063492,
+ "per_condition_hit_rest": 0.06349206349206349,
+ "sessions_reach_gt_rest": 9,
+ "sessions_tied": 10,
+ "p_wilcoxon": 0.01563303130654431,
+ "median_trough_ms_reach": -13.0,
+ "group_median_min_ms": -18,
+ "loo_range_ms": [
+  -25,
+  -12
+ ],
+ "boot_within30_of_pv": 0.502,
+ "boot_ci95_ms": [
+  -172.0,
+  96.0
+ ],
+ "rest_boot_within30": 0.042
+}
