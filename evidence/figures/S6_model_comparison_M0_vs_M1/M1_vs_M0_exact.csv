@@ -1,0 +1,4 @@
+window,sessions_M1_better,conditions_M1_better,median_gain_bits_per_neuron_per_bin,relative_gain,p_wilcoxon_sessions
+trial,21/21,63/63,0.0115,1.6%,9.5367431640625e-07
+rest,19/21,51/63,0.0035,0.5%,1.811981201171875e-05
+reach,20/21,59/63,0.0064,0.7%,1.9073486328125e-06
