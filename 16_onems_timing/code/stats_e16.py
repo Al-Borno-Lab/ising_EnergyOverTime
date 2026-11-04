@@ -25,9 +25,17 @@ def session_D(d, basis, col, subset=None):
     rest = x[x.window.str.startswith("rest")].groupby("session")[col].mean()
     return (reach - rest).dropna(), reach, rest
 
+def signed_ranks(x):
+    """W+ and W- of the nonzero values (Wilcoxon signed-rank sums)."""
+    from scipy.stats import rankdata
+    x = np.asarray(x, float); x = x[x != 0]
+    if len(x) == 0: return 0.0, 0.0
+    r = rankdata(np.abs(x)); return float(r[x > 0].sum()), float(r[x < 0].sum())
+
 def row(D, **lab):
-    lo, hi = boot(D.values) if len(D) > 1 else (np.nan, np.nan)
-    return dict(**lab, n=len(D), hl=hl(D.values), ci95_lo=lo, ci95_hi=hi, n_pos=int((D > 0).sum()), n_neg=int((D < 0).sum()), p=wil(D.values))
+    lo, hi = boot(D.values) if len(D) > 1 else (np.nan, np.nan); wp, wm = signed_ranks(D.values)
+    return dict(**lab, n=len(D), hl=hl(D.values), ci95_lo=lo, ci95_hi=hi, n_pos=int((D > 0).sum()), n_neg=int((D < 0).sum()), p=wil(D.values),
+                W_plus=wp, W_minus=wm, positive=bool(hl(D.values) > 0 and wp > wm))     # one direction rule for all bases (amendment A1)
 
 def real():
     d = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(os.path.join(SRC, "e16_[0-9]*.csv")))], ignore_index=True)
@@ -35,9 +43,14 @@ def real():
     assert (d.search == "(-200, 100)").all() and (d.hit_ms == 30).all() and (d.smooth_ms == 5).all()
     d.to_csv(os.path.join(TAB, "e16_rows.csv"), index=False)
     prim = [row(session_D(d, "U0", c)[0], family="primary", basis="U0", stat=c) for c in ("hit_peak", "hit_trough")]
-    for r, q in zip(prim, bh([r["p"] for r in prim])): r["q_bh"] = q
+    pv = np.array([r["p"] for r in prim]); qv = np.full(len(pv), np.nan); fin = np.isfinite(pv)
+    if fin.any():                                     # BH over finite p only, family size stays 2 (amendment A1)
+        o = np.argsort(np.where(fin, pv, np.inf)); qs = np.full(len(pv), np.nan)
+        ranked = pv[o]; adj = ranked * len(pv) / np.arange(1, len(pv) + 1); adj = np.minimum.accumulate(np.where(np.isfinite(adj), adj, np.inf)[::-1])[::-1]
+        qs[o] = np.minimum(adj, 1); qv = np.where(fin, qs, np.nan)
+    for r, q in zip(prim, qv): r["q_bh"] = float(q)
     u25 = {c: row(session_D(d, "U25", c)[0], family="replication", basis="U25", stat=c) for c in ("hit_peak", "hit_trough")}
-    ok = {c: (prim[i]["hl"] > 0 or prim[i]["n_pos"] > prim[i]["n_neg"]) and prim[i]["q_bh"] < 0.05 and u25[c]["p"] < 0.05 and u25[c]["n_pos"] > u25[c]["n_neg"]
+    ok = {c: bool(prim[i]["positive"] and prim[i]["q_bh"] < 0.05 and u25[c]["positive"] and u25[c]["p"] < 0.05)
           for i, c in enumerate(("hit_peak", "hit_trough"))}
     verdict = "supported" if all(ok.values()) else ("partly supported (" + ", ".join(k for k, v in ok.items() if v) + ")" if any(ok.values()) else "not supported")
     sec = []
@@ -45,7 +58,8 @@ def real():
         for c in ("hit_peak", "hit_trough"): sec.append(row(session_D(d, b, c)[0], family="secondary", basis=b, stat=c))
     for b in ("U0", "U25", "STD"):
         for c in ("err_peak", "err_trough"):
-            D = -session_D(d, b, c)[0]; sec.append(row(D, family="secondary", basis=b, stat=f"-{c} (rest minus reach error, ms)"))
+            D, reach, rest = session_D(d, b, c); D = -D
+            sec.append(dict(row(D, family="secondary", basis=b, stat=f"-{c} (rest minus reach error, ms)"), median_reach_ms=float(reach.median()), median_rest_ms=float(rest.median())))
         x = d[(d.basis == b) & (d.window == "reach")].groupby("session").peak_first.mean()
         sec.append(dict(family="secondary", basis=b, stat="peak precedes trough (session fraction > 0.5)", n=len(x), n_pos=int((x > 0.5).sum()), hl=float(x.median())))
     for name, sub in (("cohort2021", lambda x: x.session < 220000), ("cohort2022", lambda x: x.session >= 220000), ("stim0", lambda x: x.stim == 0)):
@@ -53,8 +67,8 @@ def real():
     tests = pd.DataFrame(prim + list(u25.values()) + sec); tests.to_csv(os.path.join(TAB, "e16_tests.csv"), index=False)
     hits = d.groupby(["basis", "window"])[["hit_peak", "hit_trough"]].mean().round(3); hits.to_csv(os.path.join(TAB, "e16_hit_rates.csv"))
     summ = dict(verdict=verdict, criteria_met=ok, n_conditions=int(d.key.nunique()), not_converged=int((~d.converged.astype(bool)).sum() // 3),
-                primary={r["stat"]: {k: r[k] for k in ("hl", "ci95_lo", "ci95_hi", "n_pos", "n_neg", "p", "q_bh")} for r in prim},
-                u25={c: {k: u25[c][k] for k in ("hl", "n_pos", "n_neg", "p")} for c in u25}, hit_rates=hits.reset_index().to_dict("records"))
+                primary={r["stat"]: {k: r[k] for k in ("hl", "ci95_lo", "ci95_hi", "n_pos", "n_neg", "W_plus", "W_minus", "positive", "p", "q_bh")} for r in prim},
+                u25={c: {k: u25[c][k] for k in ("hl", "n_pos", "n_neg", "W_plus", "W_minus", "positive", "p")} for c in u25}, hit_rates=hits.reset_index().to_dict("records"))
     json.dump(summ, open(os.path.join(TAB, "e16_summary.json"), "w"), indent=1, default=float); print(json.dumps(summ, indent=1, default=float))
     figure(d)
 

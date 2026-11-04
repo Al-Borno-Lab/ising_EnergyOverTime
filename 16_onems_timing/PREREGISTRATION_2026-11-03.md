@@ -67,3 +67,14 @@ Z0 is also analysed under STD and reported. This shows whether the standard basi
 
 ## Review
 The analysis code and `stats_e16.py` are reviewed by an independent agent before real results are read.
+
+## Amendment A1 (2026-11-03, after independent code review, before any real-data result was read)
+The review found no blockers. Changes:
+1. **"Positive" has one definition everywhere:** Hodges–Lehmann > 0 **and** W+ > W− (Wilcoxon signed-rank sums of the nonzero session differences), for both U0 and U25.
+2. **BH-FDR is computed over the finite primary p-values,** with the family size kept at 2. Before, one undefined p-value (all differences zero) would have blanked both q-values.
+3. **Timing-error rows** now also report the reach and rest median errors.
+4. **Booleans** are written as true/false in the summary.
+
+Noted, no change:
+- the multiprocessing start method relies on fork, which is the default in the container's Python 3.10;
+- the pv landmark is the start of its 10-ms bin (a fixed −5 ms offset for trough errors), as pre-registered.
