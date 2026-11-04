@@ -78,3 +78,11 @@ The review found no blockers. Changes:
 Noted, no change:
 - the multiprocessing start method relies on fork, which is the default in the container's Python 3.10;
 - the pv landmark is the start of its 10-ms bin (a fixed −5 ms offset for trough errors), as pre-registered.
+
+## Amendment A2 (2026-11-03): decision after the synthetic gate; real results unread at the time of writing
+**Synthetic result.** Z1 passed: 5/6 peak hits and 5/6 trough hits, median errors 8.5 and 9.5 ms. Z0 failed for peaks: D_peak = −0.33, outside ±0.2; for troughs D_trough = +0.08, within. Cause: with no planted peak, the broad reach-locked dip pushes the reach-window maximum to the window edge. The rest comparison is therefore biased **against** peak hits; it is conservative for the peak test. The trough test passes.
+
+**Decision (Gunnar, 2026-11-03).** E16 is read internally with this bias stated, and **is not reported in the paper**:
+- a positive D_peak would be conservative evidence;
+- a null or negative D_peak is uninterpretable;
+- D_trough is interpretable as registered.
