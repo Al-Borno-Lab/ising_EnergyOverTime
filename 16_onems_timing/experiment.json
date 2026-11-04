@@ -1,0 +1,17 @@
+{
+  "id": "E16",
+  "title": "1-ms field-term peak and trough timing vs peak acceleration and peak velocity",
+  "status": "complete",
+  "owner": "orchestrator",
+  "started": "2026-11-03",
+  "updated": "2026-11-03",
+  "question": "Does the 1-ms field term peak at peak acceleration and trough at peak velocity per condition, with an equally flexible spline basis?",
+  "headline": "NOT SUPPORTED (internal; not in paper). 1-ms field-term trough is not at peak velocity per condition (reach 0.21 vs rest ~0.21, p=0.61); peak test biased by null (Z0 D_peak -0.33), peak hits 3%. Median-curve pattern is a group-average feature.",
+  "depends_on": [
+    "E12",
+    "E14"
+  ],
+  "results_log_ids": [],
+  "preregistration": "16_onems_timing/PREREGISTRATION_2026-11-03.md",
+  "cluster_results": "/home/enserrog/ising_wt/e16/16_onems_timing/results"
+}

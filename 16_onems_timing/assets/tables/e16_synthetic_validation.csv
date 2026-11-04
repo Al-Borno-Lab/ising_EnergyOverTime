@@ -1,0 +1,4 @@
+scenario,basis,peak_hits,trough_hits,D_peak,D_trough,med_err_peak,med_err_trough,pass
+Z0,STD,0,2,-0.08333333333333333,0.25,119.0,100.0,
+Z0,U0,0,2,-0.3333333333333333,0.08333333333333333,122.5,100.0,False
+Z1,U0,5,5,0.6666666666666666,0.75,8.5,9.5,True
