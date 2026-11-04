@@ -1,0 +1,111 @@
+{
+ "verdict": "not supported",
+ "criteria_met": {
+  "hit_peak": false,
+  "hit_trough": false
+ },
+ "n_conditions": 63,
+ "not_converged": 0,
+ "primary": {
+  "hit_peak": {
+   "hl": -0.08333333333333333,
+   "ci95_lo": -0.16666666666666666,
+   "ci95_hi": -0.08333333333333333,
+   "n_pos": 0,
+   "n_neg": 12,
+   "W_plus": 0.0,
+   "W_minus": 78.0,
+   "positive": false,
+   "p": 0.0014911233442756228,
+   "q_bh": 0.0029822466885512456
+  },
+  "hit_trough": {
+   "hl": 0.0,
+   "ci95_lo": -0.16666666666666666,
+   "ci95_hi": 0.16666666666666666,
+   "n_pos": 7,
+   "n_neg": 8,
+   "W_plus": 69.0,
+   "W_minus": 51.0,
+   "positive": false,
+   "p": 0.6051306860284573,
+   "q_bh": 0.6051306860284573
+  }
+ },
+ "u25": {
+  "hit_peak": {
+   "hl": -0.08333333333333333,
+   "n_pos": 0,
+   "n_neg": 10,
+   "W_plus": 0.0,
+   "W_minus": 55.0,
+   "positive": false,
+   "p": 0.00399151441432802
+  },
+  "hit_trough": {
+   "hl": 0.08333333333333333,
+   "n_pos": 7,
+   "n_neg": 8,
+   "W_plus": 82.0,
+   "W_minus": 38.0,
+   "positive": true,
+   "p": 0.20693222383426368
+  }
+ },
+ "hit_rates": [
+  {
+   "basis": "STD",
+   "window": "reach",
+   "hit_peak": 0.032,
+   "hit_trough": 0.222
+  },
+  {
+   "basis": "STD",
+   "window": "rest-2000",
+   "hit_peak": 0.079,
+   "hit_trough": 0.238
+  },
+  {
+   "basis": "STD",
+   "window": "rest-2500",
+   "hit_peak": 0.079,
+   "hit_trough": 0.222
+  },
+  {
+   "basis": "U0",
+   "window": "reach",
+   "hit_peak": 0.032,
+   "hit_trough": 0.206
+  },
+  {
+   "basis": "U0",
+   "window": "rest-2000",
+   "hit_peak": 0.159,
+   "hit_trough": 0.175
+  },
+  {
+   "basis": "U0",
+   "window": "rest-2500",
+   "hit_peak": 0.159,
+   "hit_trough": 0.159
+  },
+  {
+   "basis": "U25",
+   "window": "reach",
+   "hit_peak": 0.032,
+   "hit_trough": 0.238
+  },
+  {
+   "basis": "U25",
+   "window": "rest-2000",
+   "hit_peak": 0.159,
+   "hit_trough": 0.127
+  },
+  {
+   "basis": "U25",
+   "window": "rest-2500",
+   "hit_peak": 0.143,
+   "hit_trough": 0.127
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+basis,window,hit_peak,hit_trough
+STD,reach,0.032,0.222
+STD,rest-2000,0.079,0.238
+STD,rest-2500,0.079,0.222
+U0,reach,0.032,0.206
+U0,rest-2000,0.159,0.175
+U0,rest-2500,0.159,0.159
+U25,reach,0.032,0.238
+U25,rest-2000,0.159,0.127
+U25,rest-2500,0.143,0.127
