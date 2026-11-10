@@ -224,6 +224,36 @@ def fig5():
     d.set_ylabel("data / model at rest (log ratio)"); d.set_title("Excess joint events at rest")
     save(fig, "Fig5_fixed_couplings")
 
+
+# ============================================================== Figure: stationary vs time-varying fields
+def fig_stationary():
+    A, keys = [], []
+    for f in sorted(glob.glob(os.path.join(D, "regen/regen_*.npz"))):
+        z = np.load(f); A.append(z["abs"]); keys += [int(str(k)[:6]) for k in z["keys"]]
+    A = np.concatenate(A); keys = np.array(keys); t = (np.arange(700) - 400) * 10.0
+    base = (t >= -1000) & (t <= -400); acc = (t >= -90) & (t <= 0); w = (t >= -1000) & (t <= 1500)
+    dA = A - A[:, :, base].mean(2, keepdims=True)                       # change from baseline; channels f1, c1, fs, cs, fr
+    ses = np.unique(keys); S = np.array([dA[keys == s].mean(0) for s in ses])
+    fig = plt.figure(figsize=(7.2, 2.6)); gs = GridSpec(1, 3, figure=fig, width_ratios=[1, 1, .9], wspace=.42)
+    lim = None; axs = []
+    for k, (fi, ci, title, L) in enumerate(((0, 1, "Time-varying fields", "A"), (2, 3, "Constant (stationary) fields", "B"))):
+        a = fig.add_subplot(gs[0, k], sharey=axs[0] if axs else None); axs.append(a); letter(a, L); bands(a); zero(a)
+        for arr, cl, lw in ((S[:, fi] + S[:, ci], INK, 1.2), (S[:, fi], FIELD, 1.4), (S[:, ci], COUP, 1.4)):
+            a.plot(t[w], np.median(arr, 0)[w], color=cl, lw=lw)
+        a.set_title(title); a.set_xlabel("time from peak velocity (ms)")
+    axs[0].set_ylabel("change in energy per neuron\n(from baseline; median, 21 sessions)")
+    c = fig.add_subplot(gs[0, 2]); letter(c, "C"); zero(c)
+    vals = [S[:, ch][:, acc].mean(1) for ch in (0, 1, 2, 3)]
+    for i, (v, cl, hol) in enumerate(zip(vals, (FIELD, COUP, FIELD, COUP), (False, False, True, True))):
+        dots(c, i, v, cl, hollow=hol, seed=i)
+    c.set_xticks(range(4), ["field", "coupling", "field", "coupling"], fontsize=6.5)
+    c.text(.5, -.2, "time-varying", transform=c.get_xaxis_transform(), ha="center", fontsize=7, color=INK2)
+    c.text(2.5, -.2, "stationary", transform=c.get_xaxis_transform(), ha="center", fontsize=7, color=INK2)
+    c.set_ylabel("change during acceleration\n(per session)"); c.set_title("Where the drop is attributed")
+    save(fig, "FigX_stationary_vs_timevarying")
+    out = {n: (float(np.median(v)), int((v < 0).sum())) for n, v in zip(("tv_field", "tv_coupling", "st_field", "st_coupling"), vals)}
+    print("acceleration change (median, sessions<0):", out)
+
 # ============================================================== Supplementary
 def figS1():
     """Small multiples: rows = shuffle type, columns = quantity; each panel = data (black) vs that shuffle (grey)."""
@@ -250,4 +280,4 @@ def figS2():
     a.set_title("Millisecond synchrony (21 sessions)"); save(fig, "FigS2_ms_synchrony")
 
 if __name__ == "__main__":
-    for f in (fig1, fig2, fig3, fig4, fig5, figS1, figS2): f()
+    for f in (fig1, fig2, fig3, fig4, fig5, figS1, figS2, fig_stationary): f()
