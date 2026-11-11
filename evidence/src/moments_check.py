@@ -2,7 +2,10 @@
     python moments_check.py CODE_DIR spikes_v2.npz phase_landmarks.csv OUT_DIR SESSION
 Per condition (exclusions applied), both models fitted to all reaches:
   - synchrony ratio per 10-ms bin: Var(K)/sum_i var_i, K = number of spiking cells (data: across reaches; models: from the model at that bin);
-  - pooled (over all bins and reaches) connected pairwise and triplet correlations of spike indicators (0/1).
+  - pooled (over all bins and reaches) connected pairwise and triplet correlations of spike indicators (0/1);
+  - NOISE correlations: moments of the fluctuations around each cell's time-varying mean (data: PSTH over reaches, with the
+    small-sample corrections R/(R-1) and R^2/((R-1)(R-2)); model: per-bin model mean), pooled over bins. The independent
+    model predicts zero for these, so they isolate what the couplings must explain.
 M1 moments from parallel Gibbs sampling per bin (spins +-1, P ~ exp(h.s + 1/2 s.J.s))."""
 import sys, os
 import numpy as np, pandas as pd
@@ -45,8 +48,21 @@ def one(key):
     Y = np.concatenate(snaps, 1)                                   # (T, CHAINS*KEEP, N)
     Ky = Y.sum(2); sync_1 = Ky.var(1) / np.maximum(Y.var(1).sum(1), 1e-12)
     M1 = connected(*pooled_from_samples((Y[t] for t in range(T)), N))
+    # noise (fluctuation) correlations, pooled over bins
+    iu = np.triu_indices(N, 1); tri = np.array([(a, b, c) for a in range(N) for b in range(a + 1, N) for c in range(b + 1, N)]).reshape(-1, 3)
+    def noise_mom(dev_iter, n):
+        c2 = np.zeros((N, N)); c3 = np.zeros(len(tri))
+        for dv in dev_iter:
+            c2 += dv.T @ dv
+            if len(tri): c3 += (dv[:, tri[:, 0]] * dv[:, tri[:, 1]] * dv[:, tri[:, 2]]).sum(0)
+        return c2[iu] / n, c3 / n
+    dd = x - x.mean(0, keepdims=True)
+    N2d, N3d = noise_mom((dd[:, t] for t in range(T)), R * T)
+    N2d = N2d * R / (R - 1); N3d = N3d * R ** 2 / ((R - 1) * (R - 2))
+    dy = Y - Y.mean(1, keepdims=True)
+    N2m, N3m = noise_mom((dy[t] for t in range(T)), Y.shape[1] * T)
     sh = lambda a: np.roll(a, 400 - zc)                            # peak velocity at index 400
-    return key, dict(sync_d=sh(sync_d), sync_0=sh(sync_0), sync_1=sh(sync_1), C2_d=D[0], C2_0=M0[0], C2_1=M1[0], C3_d=D[1], C3_0=M0[1], C3_1=M1[1])
+    return key, dict(sync_d=sh(sync_d), sync_0=sh(sync_0), sync_1=sh(sync_1), C2_d=D[0], C2_0=M0[0], C2_1=M1[0], C3_d=D[1], C3_0=M0[1], C3_1=M1[1], N2_d=N2d, N2_1=N2m, N3_d=N3d, N3_1=N3m)
 
 if __name__ == "__main__":
     out = {}
