@@ -60,20 +60,24 @@ def fig1():
     c.set_title("Couplings J (fixed)"); cb = fig.colorbar(im, ax=c, fraction=.046, pad=.04); cb.outline.set_visible(False); cb.ax.tick_params(labelsize=6)
     for sp in c.spines.values(): sp.set_visible(False)
     v = pd.read_csv(os.path.join(REPO, "07_presubmission_checks/timevarying_field/tvfield_validation.csv")).set_index("case")
-    d = fig.add_subplot(gs[1, 0:2]); letter(d, "D", x=-.09); zero(d)
+    d = fig.add_subplot(gs[1, 0:3]); letter(d, "D", x=-.06); zero(d)
     cases = [("J true", "simulated with\ncouplings"), ("J=0", "simulated without\ncouplings"), ("J=0 + per-reach gain", "without couplings,\nshared reach-to-reach gain")]
     for k, (cid, lab) in enumerate(cases):
         for j, (col, c_, nm) in enumerate((("dPL_M1_M0", PAIR, "couplings"), ("dPL_Mlag_M0", GREY, "couplings, 200-ms lag"), ("dPL_shuffle_null", LGREY, "reach-shuffle control"))):
             d.bar(k + (j - 1) * .26, v.loc[cid, col], width=.24, color=c_, label=nm if k == 0 else None)
     d.set_xticks(range(3), [c[1] for c in cases]); d.set_ylabel("held-out gain over\nindependent model (nats/bin)")
     d.legend(loc="upper right"); d.set_title("Gain from couplings only when couplings are real (simulated data)")
-    h0 = pd.read_csv(os.path.join(REPO, "09_claude_science_handoff/assets/tables/h0_results.csv"))
-    e = fig.add_subplot(gs[1, 2]); letter(e, "E"); r_ = h0[h0.scen != "C"]; c_ = h0[h0.scen == "C"]
-    vals = np.r_[h0.true_dI, h0.est_dI]; pad = .1 * np.ptp(vals); lim = [vals.min() - pad, vals.max() + pad]; e.plot(lim, lim, color=LGREY, lw=.8, ls="--")
-    e.scatter(r_.true_dI, r_.est_dI, s=8, color=INK, label="rates change"); e.scatter(c_.true_dI, c_.est_dI, s=12, facecolor="white", edgecolor=GREY, lw=.8, label="couplings change")
-    e.set_xlim(lim); e.set_ylim(lim); e.set_xlabel("true change in multi-information\n(bits per cell)"); e.set_ylabel("estimated change"); e.legend(loc="upper left")
-    e.set_title("Influence measure (simulated)")
     save(fig, "Fig1_model_validation")
+
+def figS3():
+    """Validation of the multi-information measure on simulated data (moved out of Fig. 1)."""
+    h0 = pd.read_csv(os.path.join(REPO, "09_claude_science_handoff/assets/tables/h0_results.csv"))
+    fig, e = plt.subplots(figsize=(2.8, 2.6)); r_ = h0[h0.scen != "C"]; c_ = h0[h0.scen == "C"]
+    vals = np.r_[h0.true_dI, h0.est_dI]; pad = .1 * np.ptp(vals); lim = [vals.min() - pad, vals.max() + pad]; e.plot(lim, lim, color=LGREY, lw=.8, ls="--")
+    e.scatter(r_.true_dI, r_.est_dI, s=8, color=INK); e.scatter(c_.true_dI, c_.est_dI, s=12, facecolor="white", edgecolor=GREY, lw=.8)
+    e.set_xlim(lim); e.set_ylim(lim); e.set_xlabel("true change in multi-information\n(bits per neuron)"); e.set_ylabel("estimated change")
+    e.set_title("Multi-information measure (simulated)")
+    save(fig, "FigS3_multiinformation_validation")
 
 # ============================================================== Figure 2: coordination beyond shared rates
 def fig2():
@@ -280,4 +284,4 @@ def figS2():
     a.set_title("Millisecond synchrony (21 sessions)"); save(fig, "FigS2_ms_synchrony")
 
 if __name__ == "__main__":
-    for f in (fig1, fig2, fig3, fig4, fig5, figS1, figS2, fig_stationary): f()
+    for f in (fig1, fig2, fig3, fig4, fig5, figS1, figS2, figS3, fig_stationary): f()
