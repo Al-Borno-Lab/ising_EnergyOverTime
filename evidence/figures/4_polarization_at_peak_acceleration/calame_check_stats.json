@@ -1,0 +1,31 @@
+{
+ "FT": {
+  "median": -12.415243314774642,
+  "n_neg": 20,
+  "n": 21,
+  "p": 1.9073486328125e-06
+ },
+ "FR": {
+  "median": -3.071780257148321,
+  "n_neg": 13,
+  "n": 21,
+  "p": 0.05469322204589844
+ },
+ "FT_resid": {
+  "median": -8.054057785071986,
+  "n_neg": 20,
+  "n": 21,
+  "p": 1.9073486328125e-06
+ },
+ "rate_Hz": {
+  "median": -3.965696360848866,
+  "n_neg": 13,
+  "n": 21,
+  "p": 0.07598018646240234
+ },
+ "pooled_rate_trough_ms_from_peak_acc": 460,
+ "pooled_rate_trough_Hz": -10.27,
+ "pooled_rate_window_change_Hz": -4.18,
+ "n_cell_conditions": 1092,
+ "median_r_FT_vs_FR": -0.07422295708950556
+}

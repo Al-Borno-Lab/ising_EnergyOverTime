@@ -1,0 +1,300 @@
+{
+ "pk_K_outside_band": "21/26",
+ "h0_A_sign_correct": "20/20",
+ "h0_A_within50pct": "20/20",
+ "h0_A_median_abs_true_dI": 0.001190249836530871,
+ "h0_B_sign_correct": "20/20",
+ "h0_B_within50pct": "20/20",
+ "h0_B_median_abs_true_dI": 0.005293542140768571,
+ "h0_C_sign_correct": "0/20",
+ "h0_C_within50pct": "0/20",
+ "h0_C_median_abs_true_dI": 0.018610369448482753,
+ "h0_D_sign_correct": "7/20",
+ "h0_D_within50pct": "0/20",
+ "h0_D_median_abs_true_dI": 9.976307098045851e-17,
+ "h0_E_sign_correct": "18/20",
+ "h0_E_within50pct": "17/20",
+ "h0_E_median_abs_true_dI": 0.0005637488855712927,
+ "energy_f1_baseline": -0.154,
+ "energy_f1_min_ms": -50,
+ "energy_f1_min": -0.335,
+ "energy_c1_baseline": -0.044,
+ "energy_c1_min_ms": 1220,
+ "energy_c1_min": -0.079,
+ "energy_fs_baseline": -0.131,
+ "energy_fs_min_ms": 1020,
+ "energy_fs_min": -0.155,
+ "energy_cs_baseline": -0.042,
+ "energy_cs_min_ms": 1340,
+ "energy_cs_min": -0.087,
+ "energy_fr_baseline": 0.596,
+ "energy_fr_min_ms": 220,
+ "energy_fr_min": 0.524,
+ "energy_t1_baseline": -0.226,
+ "energy_t1_min_ms": -30,
+ "energy_t1_min": -0.441,
+ "energy_ts_baseline": -0.217,
+ "energy_ts_min_ms": 820,
+ "energy_ts_min": -0.278,
+ "overlay_median_r_FT_vs_FT0": 0.984,
+ "overlay_median_r_FT_vs_POLb": 0.984,
+ "overlay_median_r_FT_vs_FR": -0.074,
+ "fielddip_shuffles": [
+  {
+   "kind": "real",
+   "median_dist_ms": 100.0,
+   "hit_rate": 0.6508,
+   "p_dist_vs_real": NaN,
+   "p_hit_vs_real": NaN
+  },
+  {
+   "kind": "trial_shuffle",
+   "median_dist_ms": 87.3333,
+   "hit_rate": 0.6698,
+   "p_dist_vs_real": 1.0,
+   "p_hit_vs_real": 0.5987
+  },
+  {
+   "kind": "neuron_time_shift",
+   "median_dist_ms": 318.6667,
+   "hit_rate": 0.1492,
+   "p_dist_vs_real": 0.0001,
+   "p_hit_vs_real": 0.0001
+  },
+  {
+   "kind": "label_shuffle",
+   "median_dist_ms": 101.3333,
+   "hit_rate": 0.6127,
+   "p_dist_vs_real": 0.7412,
+   "p_hit_vs_real": 0.3974
+  }
+ ],
+ "burster_pauser": {
+  "n_conditions": 63,
+  "bursters": 24,
+  "pausers": 39,
+  "median_matched_ms": 280.0,
+  "median_other_ms": 420.0,
+  "p_matched_vs_other": 0.1352,
+  "ft_trough_median_ms": -50.0
+ },
+ "energy_shuffles": [
+  {
+   "feature": "coupling_level",
+   "shuffle": "neuronshift",
+   "n": 21,
+   "sessions_beyond_all_20": 19,
+   "median_real": -0.0705,
+   "median_shuffle": -0.0084,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "coupling_level",
+   "shuffle": "popshift",
+   "n": 21,
+   "sessions_beyond_all_20": 6,
+   "median_real": -0.0705,
+   "median_shuffle": -0.0677,
+   "p_wilcoxon": 0.1907
+  },
+  {
+   "feature": "coupling_level",
+   "shuffle": "trial",
+   "n": 21,
+   "sessions_beyond_all_20": 21,
+   "median_real": -0.0705,
+   "median_shuffle": -0.0059,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "field_dip",
+   "shuffle": "neuronshift",
+   "n": 21,
+   "sessions_beyond_all_20": 18,
+   "median_real": -0.1415,
+   "median_shuffle": -0.0032,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "field_dip",
+   "shuffle": "popshift",
+   "n": 21,
+   "sessions_beyond_all_20": 19,
+   "median_real": -0.1415,
+   "median_shuffle": -0.0003,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "field_dip",
+   "shuffle": "trial",
+   "n": 21,
+   "sessions_beyond_all_20": 6,
+   "median_real": -0.1415,
+   "median_shuffle": -0.1477,
+   "p_wilcoxon": 0.2428
+  },
+  {
+   "feature": "fr_change",
+   "shuffle": "neuronshift",
+   "n": 21,
+   "sessions_beyond_all_20": 19,
+   "median_real": 0.0513,
+   "median_shuffle": 0.0041,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "fr_change",
+   "shuffle": "popshift",
+   "n": 21,
+   "sessions_beyond_all_20": 16,
+   "median_real": 0.0513,
+   "median_shuffle": 0.0086,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "fr_change",
+   "shuffle": "trial",
+   "n": 21,
+   "sessions_beyond_all_20": 0,
+   "median_real": 0.0513,
+   "median_shuffle": 0.0513,
+   "p_wilcoxon": NaN
+  },
+  {
+   "feature": "total_dip",
+   "shuffle": "neuronshift",
+   "n": 21,
+   "sessions_beyond_all_20": 19,
+   "median_real": -0.1447,
+   "median_shuffle": -0.0035,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "total_dip",
+   "shuffle": "popshift",
+   "n": 21,
+   "sessions_beyond_all_20": 19,
+   "median_real": -0.1447,
+   "median_shuffle": 0.0002,
+   "p_wilcoxon": 0.0
+  },
+  {
+   "feature": "total_dip",
+   "shuffle": "trial",
+   "n": 21,
+   "sessions_beyond_all_20": 7,
+   "median_real": -0.1447,
+   "median_shuffle": -0.1483,
+   "p_wilcoxon": 0.8382
+  }
+ ],
+ "onems_sessions": 21,
+ "onems_field_min_ms_1ms": -4,
+ "onems_field_min_ms_10ms": -50,
+ "onems_coupling_min_ms_1ms": -371,
+ "onems_coupling_min_ms_10ms": 350,
+ "onems_population_min_ms_1ms": 429,
+ "onems_population_min_ms_10ms": 220,
+ "entropy_block_tests": {
+  "I_stim1-stim0": 0.562,
+  "S_stim1-stim0": 0.338,
+  "I_stim2-stim0": 0.374,
+  "S_stim2-stim0": 0.785,
+  "I_stim2-stim1": 0.32,
+  "S_stim2-stim1": 0.203
+ },
+ "baseline_ref": [
+  {
+   "test": "stim1 vs baseline",
+   "n": 21,
+   "median": 0.0383,
+   "n_pos": 17,
+   "p": 0.0004
+  },
+  {
+   "test": "stim2 vs baseline",
+   "n": 21,
+   "median": 0.0615,
+   "n_pos": 19,
+   "p": 0.0
+  },
+  {
+   "test": "trend within stim0",
+   "n": 21,
+   "median": -0.0843,
+   "n_pos": 7,
+   "p": 0.1907
+  },
+  {
+   "test": "trend within stim1",
+   "n": 21,
+   "median": 0.3617,
+   "n_pos": 18,
+   "p": 0.0055
+  },
+  {
+   "test": "trend within stim2",
+   "n": 21,
+   "median": -0.0029,
+   "n_pos": 10,
+   "p": 0.9187
+  },
+  {
+   "test": "coupling part stim1",
+   "n": 21,
+   "median": -0.002,
+   "n_pos": 9,
+   "p": 0.5168
+  },
+  {
+   "test": "coupling part stim2",
+   "n": 21,
+   "median": -0.0006,
+   "n_pos": 10,
+   "p": 0.9457
+  }
+ ],
+ "reach_lock": [
+  {
+   "signal": "field",
+   "rho_median": 0.0948,
+   "rho_null": -0.0,
+   "rho_gt_null": 13,
+   "p_rho": 0.0421,
+   "dist_ms": 113.3333,
+   "dist_null_ms": 119.2125,
+   "closer": 15,
+   "p_dist": 0.1193,
+   "blocks_p_rho_lt05": 5
+  },
+  {
+   "signal": "total",
+   "rho_median": 0.0378,
+   "rho_null": 0.0013,
+   "rho_gt_null": 16,
+   "p_rho": 0.0595,
+   "dist_ms": 128.3333,
+   "dist_null_ms": 126.465,
+   "closer": 13,
+   "p_dist": 0.179,
+   "blocks_p_rho_lt05": 5
+  }
+ ],
+ "realign": [
+  {
+   "signal": "field",
+   "depth_own": -0.1599,
+   "depth_shuffled": -0.161,
+   "own_deeper": 14,
+   "p": 0.3737
+  },
+  {
+   "signal": "total",
+   "depth_own": -0.1727,
+   "depth_shuffled": -0.1717,
+   "own_deeper": 15,
+   "p": 0.1907
+  }
+ ],
+ "peak_acc_jitter_sd_ms": 54.3
+}
